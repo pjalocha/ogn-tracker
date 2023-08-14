@@ -11,6 +11,8 @@
 
 #include "main.h"
 
+#include "bt.h"
+
 #include "gps.h"
 #include "rf.h"
 #include "proc.h"
@@ -105,14 +107,22 @@ FlashParameters Parameters;  // parameters stored in Flash: address, aircraft ty
 // CONSole UART
 
 void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
-{ Serial.write(Byte); }
+{ Serial.write(Byte);
+#ifdef WITH_BT_SPP
+  BT_SPP_Write(Byte);
+#endif
+}
 
 int  CONS_UART_Free(void)
 { return Serial.availableForWrite(); }
 
 int  CONS_UART_Read (uint8_t &Byte)
-{ int Ret=Serial.read(); if(Ret<0) return 0;
-  Byte=Ret; return 1; }
+{ int Ret=Serial.read();
+  if(Ret>=0) { Byte=Ret; return 1; }
+#ifdef WITH_BT_SPP
+  if(BT_SPP_Read(Byte)>0) return 1;
+#endif
+  return 0; }
 
 // =======================================================================================================
 
@@ -168,7 +178,9 @@ void setup()
 
   NVS_Init();                                // initialize storage in flash like for parameters
   ADC_Init();
+#ifdef WITH_SPIFFS
   SPIFFS_Register();                         // initialize the file system in the Flash
+#endif
 
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
@@ -178,6 +190,10 @@ void setup()
 
   Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
   GPS_UART_Init();
+
+#ifdef WITH_BT_SPP
+  BT_SPP_Init();
+#endif
 
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  2000, NULL, 1, NULL);  // read data from GPS
