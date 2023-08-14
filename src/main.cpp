@@ -11,7 +11,9 @@
 
 #include "main.h"
 
-#include "bt.h"
+#ifdef WITH_BT_SPP
+#include "BluetoothSerial.h"
+#endif
 
 #include "gps.h"
 #include "rf.h"
@@ -106,10 +108,14 @@ FlashParameters Parameters;  // parameters stored in Flash: address, aircraft ty
 // =======================================================================================================
 // CONSole UART
 
+#ifdef WITH_BT_SPP
+static BluetoothSerial BTserial;
+#endif
+
 void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
 { Serial.write(Byte);
 #ifdef WITH_BT_SPP
-  BT_SPP_Write(Byte);
+  BTserial.write(Byte);
 #endif
 }
 
@@ -117,10 +123,9 @@ int  CONS_UART_Free(void)
 { return Serial.availableForWrite(); }
 
 int  CONS_UART_Read (uint8_t &Byte)
-{ int Ret=Serial.read();
-  if(Ret>=0) { Byte=Ret; return 1; }
+{ int Ret=Serial.read(); if(Ret>=0) { Byte=Ret; return 1; }
 #ifdef WITH_BT_SPP
-  if(BT_SPP_Read(Byte)>0) return 1;
+  Ret=BTserial.read(); if(Ret>=0) { Byte=Ret; return 1; }
 #endif
   return 0; }
 
@@ -192,7 +197,7 @@ void setup()
   GPS_UART_Init();
 
 #ifdef WITH_BT_SPP
-  BT_SPP_Init();
+  BTserial.begin(Parameters.BTname);
 #endif
 
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
