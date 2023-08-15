@@ -22,7 +22,7 @@ uint32_t getUniqueAddress(void);
 #define DEFAULT_AcftType        1         // [0..15] default aircraft-type: glider
 #define DEFAULT_GeoidSepar     40         // [m]
 #define DEFAULT_CONbaud    115200         // [bps]
-#define DEFAULT_PPSdelay      150         // [ms]
+#define DEFAULT_PPSdelay      100         // [ms]
 #define DEFAULT_FreqPlan        1
 
 #include "parameters.h"

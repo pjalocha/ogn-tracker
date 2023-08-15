@@ -196,6 +196,9 @@ void setup()
   Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
   GPS_UART_Init();
 
+  Serial.println("OGN-Tracker");
+  // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
+
 #ifdef WITH_BT_SPP
   BTserial.begin(Parameters.BTname);
 #endif
@@ -203,6 +206,7 @@ void setup()
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  2000, NULL, 1, NULL);  // read data from GPS
   xTaskCreate(vTaskPROC   ,  "PROC" ,  2000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
+  xTaskCreate(vTaskRF     ,  "RF"   ,  2000, NULL, 1, NULL);  // transmit/receive packets
 
 }
 

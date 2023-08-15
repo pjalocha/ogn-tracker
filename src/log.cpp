@@ -388,16 +388,22 @@ void vTaskLOG(void* pvParameters)
     bool Flying = Flight.inFlight();                              // if the aircraft flying ?
     size_t Packets = FlashLog_FIFO.Full();                        // how many packets in the queue ?
     if(Flying)                                                    // when flying
-    { if(FlashLog_SaveReq) FlashLog_Reopen();                       // if requested then save the current log (close + reopen)
+    {
+#ifdef WITH_SPIFFS
+      if(FlashLog_SaveReq) FlashLog_Reopen();                       // if requested then save the current log (close + reopen)
+#endif
       TickType_t Tick=xTaskGetTickCount();                          // system tick count now
       if(Packets==0) { PrevTick=Tick; vTaskDelay(100); continue; }  // if none: then give up
       if(Packets>=8) { Copy(); PrevTick=Tick; continue; }           // if 8 or more packets then copy them to the log file
       TickType_t Diff = Tick-PrevTick;                              // time since last log action
       if(Diff>=8000) { Copy(); PrevTick=Tick; continue; }           // if more than 8.0sec than copy the packets
     } else                                                          // when not flying
-    { if(FlashLog_File) { fclose(FlashLog_File); FlashLog_File=0; } // if file open then close it
+    {
+#ifdef WITH_SPIFFS
+      if(FlashLog_File) { fclose(FlashLog_File); FlashLog_File=0; } // if file open then close it
       while(FlashLog_FIFO.Full()>=FlashLog_FIFO.Len/2)              // flush the packet queue but keep it half-full
       { FlashLog_FIFO.Read(); vTaskDelay(1); }
+#endif
     }
     vTaskDelay(100); }
 

@@ -33,3 +33,9 @@ extern FIFO<OGN_TxPacket<OGN_Packet>, 4> RF_TxFIFO;   // buffer for transmitted 
   extern uint16_t RX_OGN_Count64;             // counts received packets for the last 64 seconds
 
   extern RFM_TRX           TRX;               // RF transceiver
+
+#ifdef __cplusplus
+  extern "C"
+#endif
+ void vTaskRF(void* pvParameters);
+
