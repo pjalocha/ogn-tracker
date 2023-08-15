@@ -11,9 +11,9 @@
 #include "freqplan.h"
 #include "fanet.h"
 
-extern uint32_t RX_Random;
+// extern uint32_t RX_Random;
 
-extern FIFO<RFM_FSK_RxPktData, 16> RF_RxFIFO;   // buffer for received packets
+// extern FIFO<Manch_RxPktData, 16> RF_RxFIFO;   // buffer for received packets
 extern FIFO<OGN_TxPacket<OGN_Packet>, 4> RF_TxFIFO;   // buffer for transmitted packets
 
 #ifdef WITH_ADSL
@@ -33,6 +33,7 @@ extern FIFO<OGN_TxPacket<OGN_Packet>, 4> RF_TxFIFO;   // buffer for transmitted 
   extern uint16_t RX_OGN_Count64;             // counts received packets for the last 64 seconds
 
   extern RFM_TRX           TRX;               // RF transceiver
+  // uint32_t &RX_Random = TRX.Random;
 
 #ifdef __cplusplus
   extern "C"

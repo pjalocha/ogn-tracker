@@ -122,7 +122,7 @@ void FlightProcess(void)
   Flight.Process(GPS);
   GPS.InFlight=Flight.inFlight();
   if(Parameters.AddrType!=0) return;
-  uint32_t Random = GPS_Random^RX_Random;
+  uint32_t Random = GPS_Random; // ^TRX.Random;
   if(RndID_TimeToChange==0)
   { if(Parameters.Stealth) RndID_TimeToChange = 57+Random%5; }
   else

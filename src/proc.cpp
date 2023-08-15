@@ -133,8 +133,8 @@ static void PrintRelayQueue(uint8_t Idx)                    // for debug
 
 static bool GetRelayPacket(OGN_TxPacket<OGN_Packet> *Packet)      // prepare a packet to be relayed
 { if(RelayQueue.Sum==0) return 0;                     // if no packets in the relay queue
-  XorShift32(RX_Random);                              // produce a new random number
-  uint8_t Idx=RelayQueue.getRand(RX_Random);          // get weight-random packet from the relay queue
+  XorShift32(TRX.Random);                              // produce a new random number
+  uint8_t Idx=RelayQueue.getRand(TRX.Random);          // get weight-random packet from the relay queue
   if(RelayQueue.Packet[Idx].Rank==0) return 0;        // should not happen ...
   memcpy(Packet->Packet.Byte(), RelayQueue[Idx]->Byte(), OGN_Packet::Bytes); // copy the packet
   Packet->Packet.Header.Relay=1;                      // increment the relay count (in fact we only do single relay)
@@ -438,7 +438,7 @@ static void ProcessRxPacket(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacket
   }
 }
 
-static void DecodeRxPacket(RFM_FSK_RxPktData *RxPkt)
+static void DecodeRxPacket(Manch_RxPktData *RxPkt)
 {
   uint8_t RxPacketIdx  = RelayQueue.getNew();                   // get place for this new packet
   OGN_RxPacket<OGN_Packet> *RxPacket = RelayQueue[RxPacketIdx];
@@ -496,7 +496,7 @@ void vTaskPROC(void* pvParameters)
   for( ; ; )
   { vTaskDelay(1);
 
-    RFM_FSK_RxPktData *RxPkt = RF_RxFIFO.getRead();                     // check for new received packets
+    Manch_RxPktData *RxPkt = TRX.RxFIFO.getRead();                     // check for new received packets
     if(RxPkt)                                                           // if there is a new received packet
     {
 #ifdef DEBUG_PRINT
@@ -510,7 +510,7 @@ void vTaskPROC(void* pvParameters)
       xSemaphoreGive(CONS_Mutex);
 #endif
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
-      RF_RxFIFO.Read(); }                                               // remove this packet from the queue
+      TRX.RxFIFO.Read(); }                                               // remove this packet from the queue
 
     static uint32_t PrevSlotTime=0;                                     // remember previous time slot to detect a change
     uint32_t     Time;                                                  // [sec] time slot
@@ -640,7 +640,7 @@ void vTaskPROC(void* pvParameters)
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex);
 #endif // WITH_ENCRYPT
-      XorShift32(RX_Random);
+      XorShift32(TRX.Random);
       static uint8_t TxBackOff=0;
       if(TxBackOff) TxBackOff--;
       else
@@ -660,20 +660,20 @@ void vTaskPROC(void* pvParameters)
 #endif
         TxBackOff = 0;
         bool FloatAcft = Parameters.AcftType==3 || ( Parameters.AcftType>=0xB && Parameters.AcftType<=0xD);
-        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(RX_Random&0x1);
+        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(TRX.Random&0x1);
         if(TX_Credit<=0) TxBackOff+=1; }
       Position->Sent=1;
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
-      // if( (SlotTime&0x07)==(RX_Random&0x07) )                            // every 8sec
+      // if( (SlotTime&0x07)==(TRX.Random&0x07) )                            // every 8sec
       else if(Parameters.TxFNT && RF_FreqPlan.Plan<=1)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
-        XorShift32(RX_Random);
+        XorShift32(TRX.Random);
         FNT_TxFIFO.Write();
-        FNTbackOff = 8+(RX_Random&0x1); }                                   // every 9 or 10sec
+        FNTbackOff = 8+(TRX.Random&0x1); }                                   // every 9 or 10sec
 #endif // WITH_FANET
 #ifdef WITH_LOOKOUT
       const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime); // process own position, get the most dangerous target
@@ -779,8 +779,8 @@ void vTaskPROC(void* pvParameters)
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex);
 #endif // DEBUG_PRINT
-      XorShift32(RX_Random);
-      if(PosTime && ((RX_Random&0x7)==0) )                              // send if some position in the packet and at 1/8 normal rate
+      XorShift32(TRX.Random);
+      if(PosTime && ((TRX.Random&0x7)==0) )                              // send if some position in the packet and at 1/8 normal rate
         RF_TxFIFO.Write();                                              // complete the write into the TxFIFO
       if(Position) Position->Sent=1;
     }
@@ -794,11 +794,11 @@ void vTaskPROC(void* pvParameters)
 #endif // DEBUG_PRINT
 
 #ifdef WITH_FANET
-    if(Parameters.Pilot[0] && (SlotTime&0xFF)==(RX_Random&0xFF) )              // every 256sec
+    if(Parameters.Pilot[0] && (SlotTime&0xFF)==(TRX.Random&0xFF) )              // every 256sec
     { FANET_Packet *FNTpkt = FNT_TxFIFO.getWrite();
       FNTpkt->setAddress(Parameters.Address);
       FNTpkt->setName(Parameters.Pilot);
-      XorShift32(RX_Random);
+      XorShift32(TRX.Random);
       FNT_TxFIFO.Write(); }
 #endif // WITH_FANET
 
@@ -812,14 +812,14 @@ void vTaskPROC(void* pvParameters)
 
     static uint8_t StatTxBackOff = 16;
     ReadStatus(StatPacket.Packet);                               // read status data and put them into the StatPacket
-    XorShift32(RX_Random);                                       // generate a new random number
+    XorShift32(TRX.Random);                                       // generate a new random number
     if( StatTxBackOff==0 && RF_TxFIFO.Full()<2 )                 // decide whether to transmit the status/info packet
     { OGN_TxPacket<OGN_Packet> *StatusPacket = RF_TxFIFO.getWrite(); // ask for space in the Tx queue
       uint8_t doTx=1;
-      if(Parameters.AddrType && RX_Random&0x10)                  // decide to transmit info or status packet ?
+      if(Parameters.AddrType && TRX.Random&0x10)                  // decide to transmit info or status packet ?
       { doTx=ReadInfo(StatPacket.Packet); }                      // and overwrite the StatPacket with the Info data
       if(doTx)
-      { StatTxBackOff=16+(RX_Random%15);
+      { StatTxBackOff=16+(TRX.Random%15);
 #ifdef WITH_APRS
         APRStx_FIFO.Write(StatPacket);
 #endif // WITH_APRS

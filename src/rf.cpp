@@ -4,11 +4,11 @@
 #include "gps.h"
 #include "timesync.h"
 
-uint32_t RX_Random = 0x12345678;
+// uint32_t RX_Random = 0x12345678;
 
 FreqPlan  RF_FreqPlan;               // frequency hopping pattern calculator
 
-       FIFO<RFM_FSK_RxPktData, 16> RF_RxFIFO;         // buffer for received packets
+       // FIFO<Manch_RxPktData, 16> RF_RxFIFO;         // buffer for received packets
        FIFO<OGN_TxPacket<OGN_Packet>, 4> RF_TxFIFO;   // buffer for transmitted packets
 
 #ifdef WITH_ADSL
@@ -37,7 +37,7 @@ static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
 
  void vTaskRF(void* pvParameters)
 {
-  RF_RxFIFO.Clear();                      // clear receive/transmit packet FIFO's
+  // RF_RxFIFO.Clear();                      // clear receive/transmit packet FIFO's
   RF_TxFIFO.Clear();
 #ifdef WITH_FANET
   FNT_RxFIFO.Clear();
@@ -58,33 +58,23 @@ static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
     { vTaskDelay(1); }
     TRX.ConfigManchFSK(26, OGN_SYNC, 8);                         // configure for OGN
     TRX.setOutputPower(Parameters.TxPower);
-    TRX.setChannel(1);
-    const OGN_TxPacket<OGN_Packet> *TxPkt0 = RF_TxFIFO.getRead();
-    if(TxPkt0)
-    { TRX.TxManchFSK(TxPkt0->Byte(), 26);
-      RF_TxFIFO.Read(); }
+    TRX.setChannel(1, 1);
 
-    // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);                   // ask exclusivity on UART1
-    // Format_String(CONS_UART_Write, "RF: Slot 0\n");
-    // xSemaphoreGive(CONS_Mutex);                                  // give back UART1 to other tasks
+    const uint8_t *TxPktData0=0;
+    const uint8_t *TxPktData1=0;
+    const OGN_TxPacket<OGN_Packet> *TxPkt0 = RF_TxFIFO.getRead(0);             // get 1st packet from TxFIFO
+    const OGN_TxPacket<OGN_Packet> *TxPkt1 = RF_TxFIFO.getRead(1);             // get 2nd packet from TxFIFO
+    if(TxPkt0) TxPktData0=TxPkt0->Byte();                                      // if 1st is not NULL then get its data
+    if(TxPkt1) TxPktData1=TxPkt1->Byte();                                      // if 2nd if not NULL then get its data
+          else TxPktData1=TxPktData0;                                          // but if NULL then take copy of the 1st packet
 
-    vTaskDelay(300);
+    TRX.ManchSlot(400, TxPktData0);
 
-    for( ; TimeSync_msTime()<800; )
-    { vTaskDelay(1); }
-    TRX.setChannel(0);
-    const OGN_TxPacket<OGN_Packet> *TxPkt1 = RF_TxFIFO.getRead();
-    if(TxPkt1)
-    { TRX.TxManchFSK(TxPkt1->Byte(), 26);
-      RF_TxFIFO.Read(); }
-    else if(TxPkt0)
-      TRX.TxManchFSK(TxPkt0->Byte(), 26);
+    TRX.setChannel(0, 1);
+    TRX.ManchSlot(400, TxPktData1);
 
-    // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);                   // ask exclusivity on UART1
-    // Format_String(CONS_UART_Write, "RF: Slot 1\n");
-    // xSemaphoreGive(CONS_Mutex);                                  // give back UART1 to other tasks
-
-    vTaskDelay(400);
+    if(TxPkt0) RF_TxFIFO.Read();
+    if(TxPkt1) RF_TxFIFO.Read();
 
   }
 
