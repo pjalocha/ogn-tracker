@@ -9,10 +9,17 @@
 
 #include <Arduino.h>
 
+#include <Wire.h>             // I2C for pressure sensor and charge controller
+#include <SPI.h>
+
 #include "main.h"
 
 #ifdef WITH_BT_SPP
 #include "BluetoothSerial.h"
+#endif
+
+#ifdef WITH_AXP
+#include <axp20x.h>
 #endif
 
 #include "gps.h"
@@ -29,9 +36,6 @@
 #include "esp_adc_cal.h"
 
 #include "esp_spiffs.h"
-
-#include <Wire.h>             // I2C for pressure sensor and charge controller
-#include <SPI.h>
 
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -71,6 +75,12 @@ int SPIFFS_Register(const char *Path, const char *Label, size_t MaxOpenFiles)
 
 int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
 { return esp_spiffs_info(Label, &Total, &Used); }
+#endif
+
+// =======================================================================================================
+
+#ifdef WITH_AXP
+static AXP20X_Class AXP;
 #endif
 
 // =======================================================================================================
@@ -198,6 +208,33 @@ void setup()
 
   Serial.println("OGN-Tracker");
   // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
+
+  Wire.begin(SDA, SCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
+  Wire.setTimeOut(20);                    // [ms]
+
+#ifdef WITH_AXP
+  if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)==AXP_FAIL)             // or AXP202_SLAVE_ADDRESS
+  { Serial.println("AXP power/charge controller not detected"); }
+  else
+  { AXP.adc1Enable(AXP202_VBUS_VOL_ADC1 |
+                 AXP202_VBUS_CUR_ADC1 |
+                 AXP202_BATT_CUR_ADC1 |
+                 AXP202_BATT_VOL_ADC1,
+                 true);
+    Serial.printf("Vbus: %5.3fV %5.3fA\n",
+            0.001f*AXP.getVbusVoltage(), 0.001f*AXP.getVbusCurrent());
+    Serial.printf("Battery: %5.3fV (%5.3f-%5.3f)A\n",
+            0.001f*AXP.getBattVoltage(), 0.001f*AXP.getBattChargeCurrent(), 0.001f*AXP.getBattDischargeCurrent());
+  }
+#endif
+
+#ifdef WITH_OLED
+  OLED.begin();
+  // OLED.setDisplayRotation(U8G2_R2);
+  OLED.clearBuffer();
+  OLED_DrawLogo(OLED.getU8g2(), 0);
+  OLED.sendBuffer();
+#endif
 
 #ifdef WITH_BT_SPP
   BTserial.begin(Parameters.BTname);
