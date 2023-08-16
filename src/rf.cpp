@@ -6,7 +6,7 @@
 
 // uint32_t RX_Random = 0x12345678;
 
-FreqPlan  RF_FreqPlan;               // frequency hopping pattern calculator
+       // FreqPlan  RF_FreqPlan;               // frequency hopping pattern calculator
 
        // FIFO<Manch_RxPktData, 16> RF_RxFIFO;         // buffer for received packets
        FIFO<OGN_TxPacket<OGN_Packet>, 4> RF_TxFIFO;   // buffer for transmitted packets
@@ -43,11 +43,11 @@ static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
   FNT_RxFIFO.Clear();
   FNT_TxFIFO.Clear();
 #endif
-  TRX.Init();
+  TRX.Init();                                  // check the error returned in case the RF chip is not recognized
 
-  RF_FreqPlan.setPlan(Parameters.FreqPlan);     // 1 = Europe/Africa, 2 = USA/CA, 3 = Australia and South America
-  TRX.BaseFrequency = RF_FreqPlan.BaseFreq;
-  TRX.ChannelSpacing = RF_FreqPlan.ChanSepar;
+  TRX.setPlan(Parameters.FreqPlan);     // 1 = Europe/Africa, 2 = USA/CA, 3 = Australia and South America
+  // TRX.BaseFrequency = RF_FreqPlan.BaseFreq;
+  // TRX.ChannelSpacing = RF_FreqPlan.ChanSepar;
   TRX.FreqCorr = Parameters.RFchipFreqCorr;
 
   vTaskDelay(1000);
@@ -58,7 +58,7 @@ static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
     { vTaskDelay(1); }
     TRX.ConfigManchFSK(26, OGN_SYNC, 8);                         // configure for OGN
     TRX.setOutputPower(Parameters.TxPower);
-    TRX.setChannel(1, 1);
+    // TRX.setCurrentLimit(100);
 
     const uint8_t *TxPktData0=0;
     const uint8_t *TxPktData1=0;
@@ -68,9 +68,10 @@ static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
     if(TxPkt1) TxPktData1=TxPkt1->Byte();                                      // if 2nd if not NULL then get its data
           else TxPktData1=TxPktData0;                                          // but if NULL then take copy of the 1st packet
 
+    TRX.setChanSys(1, 1);
     TRX.ManchSlot(400, TxPktData0);
 
-    TRX.setChannel(0, 1);
+    TRX.setChanSys(0, 1);
     TRX.ManchSlot(400, TxPktData1);
 
     if(TxPkt0) RF_TxFIFO.Read();

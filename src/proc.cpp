@@ -273,9 +273,9 @@ static void ReadStatus(OGN_Packet &Packet)
   if(Parameters.Verbose)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNR,");                                  // NMEA report: radio status
-    Len+=Format_UnsDec(Line+Len, (uint32_t)RF_FreqPlan.Plan);                 // which frequency plan
+    Len+=Format_UnsDec(Line+Len, (uint32_t)TRX.Plan);                         // which frequency plan
     Line[Len++]=',';
-    Len+=Format_UnsDec(Line+Len, (uint32_t)RX_OGN_Count64);                             // number of OGN packets received
+    Len+=Format_UnsDec(Line+Len, (uint32_t)RX_OGN_Count64);                   // number of OGN packets received
     Line[Len++]=',';
     Line[Len++]=',';
     Len+=Format_SignDec(Line+Len, -5*TRX.averRSSI, 2, 1);                     // average RF level (over all channels)
@@ -587,8 +587,8 @@ void vTaskPROC(void* pvParameters)
     if( Position && Position->isReady && (!Position->Sent) && Position->isValid() )
     { int16_t AverSpeed=GPS_AverageSpeed();                             // [0.1m/s] average speed, including the vertical speed
       if(Parameters.FreqPlan==0)
-        RF_FreqPlan.setPlan(Position->Latitude, Position->Longitude);     // set the frequency plan according to the GPS position
-      else RF_FreqPlan.setPlan(Parameters.FreqPlan);
+        TRX.setPlan(Position->Latitude, Position->Longitude);     // set the frequency plan according to the GPS position
+      else TRX.setPlan(Parameters.FreqPlan);
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60);
@@ -646,7 +646,7 @@ void vTaskPROC(void* pvParameters)
       else
       { RF_TxFIFO.Write();                                                // complete the write into the TxFIFO
 #ifdef WITH_ADSL
-        if(RF_FreqPlan.Plan<=1)                                              // ADS-L only in Europe/Africa
+        if(TRX.Plan<=1)                                              // ADS-L only in Europe/Africa
         { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
           Packet->Init();
           Packet->setAddress (Parameters.Address);
@@ -667,7 +667,7 @@ void vTaskPROC(void* pvParameters)
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
       // if( (SlotTime&0x07)==(TRX.Random&0x07) )                            // every 8sec
-      else if(Parameters.TxFNT && RF_FreqPlan.Plan<=1)
+      else if(Parameters.TxFNT && TRX.Plan<=1)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);

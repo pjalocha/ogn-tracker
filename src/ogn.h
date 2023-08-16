@@ -452,13 +452,13 @@ template <class OGNx_Packet=OGN1_Packet>
      Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));                      // XXXXXX 24-bit address: RND, ICAO, FLARM, OGN
      Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
      NMEA[Len++]=',';
-     Len+=Format_UnsDec(NMEA+Len, Packet.DecodeHeading(), 4, 1);          // [deg] heading (by GPS)
+     Len+=Format_UnsDec(NMEA+Len, (uint32_t)Packet.DecodeHeading(), 4, 1);          // [deg] heading (by GPS)
      NMEA[Len++]=',';
-     Len+=Format_SignDec(NMEA+Len, Packet.DecodeTurnRate(), 2, 1);        // [deg/sec] turn rate
+     Len+=Format_SignDec(NMEA+Len, (int32_t)Packet.DecodeTurnRate(), 2, 1);        // [deg/sec] turn rate
      NMEA[Len++]=',';
-     Len+=Format_UnsDec(NMEA+Len, Packet.DecodeSpeed(), 2, 1);            // [approx. m/s] ground speed
+     Len+=Format_UnsDec(NMEA+Len, (uint32_t)Packet.DecodeSpeed(), 2, 1);            // [approx. m/s] ground speed
      NMEA[Len++]=',';
-     Len+=Format_SignDec(NMEA+Len, Packet.DecodeClimbRate(), 2, 1);       // [m/s] climb/sink rate
+     Len+=Format_SignDec(NMEA+Len, (int32_t)Packet.DecodeClimbRate(), 2, 1);       // [m/s] climb/sink rate
      NMEA[Len++]=',';
      NMEA[Len++]=HexDigit(Packet.Position.AcftType);                      // [0..F] aircraft-type: 1=glider, 2=tow plane, etc.
      Len+=NMEA_AppendCheckCRNL(NMEA, Len);

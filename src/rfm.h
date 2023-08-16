@@ -11,6 +11,7 @@
 #include "fifo.h"
 #include "manchester.h"
 #include "timesync.h"
+#include "freqplan.h"
 
 class Manch_RxPktData                 // Manchester encoed packet received by the RF chip
 { public:
@@ -84,7 +85,7 @@ class Manch_RxPktData                 // Manchester encoed packet received by th
 
 } ;
 
-class RFM_TRX:
+class RFM_TRX: public FreqPlan,
 #ifdef WITH_SX1276
    public SX1276
 #endif
@@ -92,8 +93,8 @@ class RFM_TRX:
    public SX1262
 #endif
 { public:
-   uint32_t BaseFrequency;            // [Hz] base frequency = channel #0
-   uint32_t ChannelSpacing;           // [Hz] spacing between channels
+   // uint32_t BaseFrequency;            // [Hz] base frequency = channel #0
+   // uint32_t ChannelSpacing;           // [Hz] spacing between channels
     int16_t FreqCorr;                 // [0.1ppm]
     int16_t Channel;                  // [integer] channel being used
 
@@ -137,11 +138,16 @@ class RFM_TRX:
      for(int Idx=0; Idx<4; Idx++)
        Random = (Random<<8) | randomByte();
      RxFIFO.Clear();
+     setPlan(0);
      return State; }
 
-   void setChannel(int Chan, uint8_t Sys=0)
+   void setChanSys(int Chan, uint8_t Sys=1)
    { Channel=Chan; SysID=Sys;
-     setFrequency(0.000001f*(1.0f+0.0000001*FreqCorr)*(BaseFrequency+ChannelSpacing*Channel)); }
+     float Freq = 0.000001f*(BaseFreq + ChanSepar*Channel);
+     Freq *= 1.0f+0.0000001*FreqCorr;
+     setFrequency(Freq);
+     // Serial.printf("setChanSys: Freq:%5.3fMHz\n", Freq);
+   }
 
 // Errors:
 //   0 => RADIOLIB_ERR_NONE
@@ -151,8 +157,13 @@ class RFM_TRX:
 
    int ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYNClen=8)         // Radio setup for OGN/ADS-L
    { int State=0;
-//     State=config(RADIOLIB_SX127X_FSK_OOK);
-//     State=config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+     standby();
+// #ifdef WITH_SX1276
+//      State=config(RADIOLIB_SX127X_FSK_OOK);
+// #endif
+// #ifdef WITH_SX1262
+//      State=config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+// #endif
      State=setBitRate(100.0);                                    // [kpbs] 100kbps bit rate but we transmit Manchester encoded thus effectively 50 kbps
      State=setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
      State=setRxBandwidth(234.3);                                // [kHz]  250kHz bandwidth
@@ -161,6 +172,9 @@ class RFM_TRX:
      State=setCRC(0, 0);                                         // disable CRC: we do it ourselves
      State=fixedPacketLengthMode(PktLen*2);                      // [bytes] Fixed packet size mode
      State=disableAddressFiltering();                            // don't want any of such features
+#ifdef WITH_SX1276
+     State=setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+#endif
      State=setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before Manchester encoding
 #ifdef WITH_SX1262
      State=setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
@@ -177,24 +191,29 @@ class RFM_TRX:
    { TxManchFSK(Packet, getPktLen()); }
 
    void TxManchFSK(const uint8_t *Packet, uint8_t Len)          // transmit a packet using Manchester encoding
-   { int TxLen=ManchEncode(TxPacket, Packet, Len);              // Manchester encode
+   { // Serial.printf("TxManchFSK: %dB\n", Len);
+     int TxLen=ManchEncode(TxPacket, Packet, Len);              // Manchester encode
      transmit(TxPacket, TxLen); }                               // transmit
 
    void ManchSlot(uint32_t msTimeLen, const uint8_t *TxPacket=0)
-   { uint32_t msStart = millis();
+   { // Serial.printf("ManchSlot: %dms\n", msTimeLen);
+     standby();
+     uint32_t msStart = millis();
      startReceive();
      XorShift32(Random);
      if(TxPacket)
      { int TxTime = 20+Random%(msTimeLen-50);        // random transmission time
        ManchRx(TxTime);
        TxManchFSK(TxPacket);
+       // Serial.printf("ManchSlot: startReceive()\n");
        startReceive();
        uint32_t msTime = millis()-msStart;
        if(msTime<msTimeLen) ManchRx(msTimeLen-msTime); }
      else ManchRx(msTimeLen); }
 
    int ManchRx(uint32_t msTimeLen)                                  // keep receiving packets for a given time [ms]
-   { int Count=0;
+   { // Serial.printf("ManchRx: %dms\n", msTimeLen);
+     int Count=0;
      uint32_t msStart = millis();                                   // [ms] start of the slot
      for( ; ; )
      { vTaskDelay(1);                                               // wait 1ms
@@ -251,7 +270,8 @@ class RFM_TRX:
      // Radio_RxCount[SysID]++;                                                // count packets
      // if(xSemaphoreTake(CONS_Mutex, 50))
      // { Serial.printf("RadioRx: %10d:%4d [%d:%d] %+4.1fdBm\n",
-     //            RxPkt->Time, RxPkt->msTime, SysID, PktLen -0.5*RxPkt->RSSI );
+     //                    RxPkt->Time, RxPkt->msTime, SysID, PktLen -0.5*RxPkt->RSSI );
+     //   Format_String(CONS_UART_Write, "Rx:\n");
      //   xSemaphoreGive(CONS_Mutex); }
      return 1; }
 

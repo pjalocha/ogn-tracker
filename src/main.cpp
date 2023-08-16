@@ -204,9 +204,9 @@ void setup()
 #endif
 
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
-  xTaskCreate(vTaskGPS    ,  "GPS"  ,  2000, NULL, 1, NULL);  // read data from GPS
-  xTaskCreate(vTaskPROC   ,  "PROC" ,  2000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(vTaskRF     ,  "RF"   ,  2000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
+  xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
+  xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
 
 }
 

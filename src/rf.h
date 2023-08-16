@@ -8,7 +8,7 @@
 
 #include "fifo.h"
 
-#include "freqplan.h"
+// #include "freqplan.h"
 #include "fanet.h"
 
 // extern uint32_t RX_Random;
@@ -27,7 +27,7 @@ extern FIFO<OGN_TxPacket<OGN_Packet>, 4> RF_TxFIFO;   // buffer for transmitted 
 
   extern uint8_t RX_OGN_Packets;              // [packets] counts received packets
 
-  extern FreqPlan  RF_FreqPlan;               // frequency hopping pattern calculator
+  // extern FreqPlan  RF_FreqPlan;               // frequency hopping pattern calculator
   extern  int32_t    TX_Credit;               // [ms] counts transmitter time to avoid using more than 1%
 
   extern uint16_t RX_OGN_Count64;             // counts received packets for the last 64 seconds
