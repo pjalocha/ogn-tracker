@@ -24,6 +24,7 @@
 
 #include "gps.h"
 #include "rf.h"
+#include "sens.h"
 #include "proc.h"
 #include "log.h"
 
@@ -81,6 +82,29 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
 
 // =======================================================================================================
 
+uint8_t I2C_Restart(uint8_t Bus)
+{ Wire.end(); Wire.begin(); return 0; }
+
+uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
+{ Wire.beginTransmission(Addr);
+  int Ret=Wire.write(Reg);
+  Wire.endTransmission(false);
+  Ret=Wire.requestFrom(Addr, Len);
+  for(uint8_t Idx=0; Idx<Len; Idx++)
+  { Data[Idx]=Wire.read(); }
+  // Wire.endTransmission();
+  return Ret!=Len; }
+ 
+uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
+{ Wire.beginTransmission(Addr);
+  int Ret=Wire.write(Reg);
+  for(uint8_t Idx=0; Idx<Len; Idx++)
+  { Ret=Wire.write(Data[Idx]); if(Ret!=1) break; }
+  Wire.endTransmission();
+  return Ret!=1; }
+
+// =======================================================================================================
+
 #ifdef WITH_AXP
 static AXP20X_Class AXP;
 #endif
@@ -90,7 +114,7 @@ static AXP20X_Class AXP;
 
 static esp_adc_cal_characteristics_t *ADC_characs =
         (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-static adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_1;
+static adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
 static const adc_atten_t ADC_atten = ADC_ATTEN_DB_11;
 static const adc_unit_t ADC_unit = ADC_UNIT_1;
 #define ADC_Vref 1100
@@ -104,7 +128,10 @@ static int ADC_Init(void)
   return 0; }
 
 uint16_t BatterySense(int Samples)
-{ if(Hardware.AXP192||Hardware.AXP202) return AXP.getBattVoltage();
+{
+#ifdef WITH_AXP
+  if(Hardware.AXP192||Hardware.AXP202) return AXP.getBattVoltage();
+#endif
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
@@ -156,11 +183,15 @@ void  GPS_UART_Write        (char     Byte) {        uart_write_bytes (GPS_UART,
 void  GPS_UART_Flush        (int MaxWait  ) {        uart_wait_tx_done(GPS_UART, MaxWait);     }
 void  GPS_UART_SetBaudrate  (int BaudRate ) {        uart_set_baudrate(GPS_UART, BaudRate);    }
 
+#ifdef GPS_PinPPS
 bool GPS_PPS_isOn(void) { return gpio_get_level((gpio_num_t)GPS_PinPPS); }
+#endif
 
 static void GPS_UART_Init(int BaudRate=9600)
-{ gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
-
+{
+#ifdef GPS_PinPPS
+  gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
+#endif
   uart_config_t GPS_UART_Config =
   { baud_rate : BaudRate,
     data_bits : UART_DATA_8_BITS,
@@ -234,6 +265,8 @@ void setup()
     Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
               0.001f*AXP.getBattVoltage(), 0.001f*AXP.getBattChargeCurrent(), 0.001f*AXP.getBattDischargeCurrent());
   }
+#else
+  ADC_Init();
 #endif
 
   int RadioStat=TRX.Init();
@@ -256,6 +289,9 @@ void setup()
 
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
+#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
+  xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
+#endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
   xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
 

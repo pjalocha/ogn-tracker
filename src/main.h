@@ -27,7 +27,13 @@ uint32_t getUniqueAddress(void);
 
 #include "parameters.h"
 
+#ifdef WITH_TBEAM10
 #include "t-beam-v10-pins.h"
+#endif
+
+#ifdef WITH_TBEAM07
+#include "t-beam-v07-pins.h"
+#endif
 
 extern FlashParameters Parameters;
 
@@ -35,6 +41,17 @@ extern SemaphoreHandle_t CONS_Mutex;
 extern SemaphoreHandle_t I2C_Mutex;
 
 extern uint8_t PowerMode;                 // 0=sleep/minimal power, 1=comprimize, 2=full power
+
+uint8_t I2C_Restart(uint8_t Bus);
+uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait=10);
+uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait=10);
+
+template <class Type>
+ inline uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, Type &Object, uint8_t Wait=10)
+{ return I2C_Write(Bus, Addr, Reg, (uint8_t *)&Object, sizeof(Type), Wait); }
+template <class Type>
+ inline uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, Type &Object, uint8_t Wait=10)
+{ return I2C_Read (Bus, Addr, Reg, (uint8_t *)&Object, sizeof(Type), Wait); }
 
 void LED_PCB_On   (void);                // LED on the PCB for vizual indications
 void LED_PCB_Off  (void);
@@ -49,7 +66,11 @@ int   GPS_UART_Read         (uint8_t &Byte);
 void  GPS_UART_Write        (char     Byte);
 void  GPS_UART_Flush        (int MaxWait  );
 void  GPS_UART_SetBaudrate  (int BaudRate );
+#ifdef GPS_PinPPS
 bool  GPS_PPS_isOn();
+#else
+inline bool  GPS_PPS_isOn() { return 0; }
+#endif
 
 uint16_t BatterySense(int Samples=4); // [mV]
 
