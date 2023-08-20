@@ -52,6 +52,8 @@ uint64_t getUniqueMAC(void)                                  // 48-bit unique ID
 uint64_t getUniqueID(void) { return getUniqueMAC(); }         // get unique serial ID of the CPU/chip
 uint32_t getUniqueAddress(void) { return getUniqueMAC()&0x00FFFFFF; } // get unique OGN address
 
+HardItems Hardware = { 0 };
+
 // =======================================================================================================
 // VS to store parameters and other data
 
@@ -102,7 +104,8 @@ static int ADC_Init(void)
   return 0; }
 
 uint16_t BatterySense(int Samples)
-{ uint32_t RawVoltage=0;
+{ if(Hardware.AXP192||Hardware.AXP202) return AXP.getBattVoltage();
+  uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
   RawVoltage = (RawVoltage+Samples/2)/Samples;
@@ -141,11 +144,11 @@ int  CONS_UART_Read (uint8_t &Byte)
 
 // =======================================================================================================
 
-#define GPS_UART    UART_NUM_1      // UART for GPS
-
-const int GPS_PinTx  = GPIO_NUM_12;
-const int GPS_PinRx  = GPIO_NUM_34;
-const int GPS_PinPPS = GPIO_NUM_37;
+// move to the specific pin-defnition file
+// #define GPS_UART    UART_NUM_1      // UART for GPS
+// const int GPS_PinTx  = GPIO_NUM_12;
+// const int GPS_PinRx  = GPIO_NUM_34;
+// const int GPS_PinPPS = GPIO_NUM_37;
 
 int   GPS_UART_Full         (void)          { size_t Full=0; uart_get_buffered_data_len(GPS_UART, &Full); return Full; }
 int   GPS_UART_Read         (uint8_t &Byte) { return uart_read_bytes  (GPS_UART, &Byte, 1, 0); }  // should be buffered and non-blocking
@@ -192,7 +195,6 @@ void setup()
   I2C_Mutex  = xSemaphoreCreateMutex();      // semaphore for sharing the I2C bus
 
   NVS_Init();                                // initialize storage in flash like for parameters
-  ADC_Init();
 #ifdef WITH_SPIFFS
   SPIFFS_Register();                         // initialize the file system in the Flash
 #endif
@@ -209,24 +211,36 @@ void setup()
   Serial.println("OGN-Tracker");
   // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
 
-  Wire.begin(SDA, SCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
+  Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                    // [ms]
 
 #ifdef WITH_AXP
-  if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)==AXP_FAIL)             // or AXP202_SLAVE_ADDRESS
-  { Serial.println("AXP power/charge controller not detected"); }
+  if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
+  { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+  else if(AXP.begin(Wire, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
+  { Hardware.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
   else
+  { ADC_Init();
+    Serial.println("AXP power/charge chip not detected"); }
+
+  if(Hardware.AXP192||Hardware.AXP202)
   { AXP.adc1Enable(AXP202_VBUS_VOL_ADC1 |
-                 AXP202_VBUS_CUR_ADC1 |
-                 AXP202_BATT_CUR_ADC1 |
-                 AXP202_BATT_VOL_ADC1,
-                 true);
-    Serial.printf("Vbus: %5.3fV %5.3fA\n",
-            0.001f*AXP.getVbusVoltage(), 0.001f*AXP.getVbusCurrent());
-    Serial.printf("Battery: %5.3fV (%5.3f-%5.3f)A\n",
-            0.001f*AXP.getBattVoltage(), 0.001f*AXP.getBattChargeCurrent(), 0.001f*AXP.getBattDischargeCurrent());
+                   AXP202_VBUS_CUR_ADC1 |
+                   AXP202_BATT_CUR_ADC1 |
+                   AXP202_BATT_VOL_ADC1,
+                   true);
+    Serial.printf("  USB:  %5.3fV  %5.3fA\n",
+              0.001f*AXP.getVbusVoltage(), 0.001f*AXP.getVbusCurrent());
+    Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
+              0.001f*AXP.getBattVoltage(), 0.001f*AXP.getBattChargeCurrent(), 0.001f*AXP.getBattDischargeCurrent());
   }
 #endif
+
+  int RadioStat=TRX.Init();
+  if(RadioStat==0)
+  { Hardware.Radio=1; Serial.println("RF chip detected"); }
+  else
+  { Serial.printf("RF chip not detected: %d\n", RadioStat); }
 
 #ifdef WITH_OLED
   OLED.begin();

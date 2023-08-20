@@ -27,6 +27,8 @@ uint32_t getUniqueAddress(void);
 
 #include "parameters.h"
 
+#include "t-beam-v10-pins.h"
+
 extern FlashParameters Parameters;
 
 extern SemaphoreHandle_t CONS_Mutex;
@@ -55,4 +57,19 @@ uint16_t BatterySense(int Samples=4); // [mV]
 int  SPIFFS_Register(const char *Path="/spiffs", const char *Label="intlog", size_t MaxOpenFiles=5);
 int  SPIFFS_Info(size_t &Total, size_t &Used, const char *Label="intlog");
 #endif
+
+typedef union
+{ uint32_t Flags;         // hardware status
+  struct
+  { bool AXP192:1;        // Charge controller chip
+    bool AXP202:1;        // Charge controller chip
+    bool BMP280:1;        // BMP280 pressure sensor
+    bool BME280:1;        // BME280 pressure sensor
+    bool Radio :1;        // SX1276 or SX1262 radio TRX
+    bool GPS   :1;        // GPS receiver
+    bool SPIFFS:1;        // SPIFFS
+  } ;
+} HardItems;
+
+extern HardItems Hardware;
 

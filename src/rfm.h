@@ -13,6 +13,9 @@
 #include "timesync.h"
 #include "freqplan.h"
 
+const uint8_t SysID_OGN  = 1;
+const uint8_t SysID_ADSL = 2;
+
 class Manch_RxPktData                 // Manchester encoed packet received by the RF chip
 { public:
    static const uint8_t MaxBytes=26;  // [bytes] number of bytes in the packet
@@ -114,21 +117,26 @@ class RFM_TRX: public FreqPlan,
 
    RFM_TRX() :
 #ifdef WITH_SX1276
-    SX1276(new Module(LORA_CS, LORA_IRQ, LORA_RST, RADIOLIB_NC))
+    SX1276(new Module(Radio_PinCS, Radio_PinIRQ, Radio_PinRST, -1))
 #endif
 #ifdef WITH_SX1262
-    SX1262(new Module(LORA_CS, LORA_IRQ, LORA_RST, LORA_BUSY))
+    SX1262(new Module(Radio_PinCS, Radio_PinIRQ, Radio_PinRST, Radio_PinBusy))
 #endif
    { RxFIFO.Clear(); BkgRSSI=-100.0f; averRSSI=200; }
+
+#ifdef WITH_SX1276
+   int8_t getTemp(void) { return chipTemp=getTempRaw(); }
+#endif
 
    int Init(void)
    { int State=0;
 #ifdef WITH_SX1276
-     State = beginFSK(868.2,          100.0,           50.0,        234.3,            0,              8);
+     State = beginFSK(868.2,          100.0,           50.0,        234.3,           14,              8);
      chipVer = getChipVersion();
+     getTemp();
 #endif
 #ifdef WITH_SX1262
-     State = beginFSK(868.2,          100.0,           50.0,        234.3,            0,              8,           1.6,         0);
+     State = beginFSK(868.2,          100.0,           50.0,        234.3,           14,              8,           1.6,         0);
      //               Freq[MHz], Bit-rate[kbps], Freq.dev.[kHz], RxBand.[kHz], TxPower[dBm], preamble[bits], TXCO volt.[V], use LDO[bool]
      State = setFrequency(868.2, 1); // calibrate
      // setTCXO(1.6);
@@ -141,19 +149,36 @@ class RFM_TRX: public FreqPlan,
      setPlan(0);
      return State; }
 
-   void setChanSys(int Chan, uint8_t Sys=1)
-   { Channel=Chan; SysID=Sys;
-     float Freq = 0.000001f*(BaseFreq + ChanSepar*Channel);
-     Freq *= 1.0f+0.0000001*FreqCorr;
-     setFrequency(Freq);
-     // Serial.printf("setChanSys: Freq:%5.3fMHz\n", Freq);
-   }
-
 // Errors:
 //   0 => RADIOLIB_ERR_NONE
 //  -1 => RADIOLIB_ERR_UNKNOWN
 //  -2 => RADIOLIB_ERR_CHIP_NOT_FOUND
+// -12 => RADIOLIB_ERR_INVALID_FREQUENCY
+// -13 => RADIOLIB_ERR_INVALID_OUTPUT_POWER
 // -20 => RADIOLIB_ERR_WRONG_MODEM
+
+   int setManchFSK(uint32_t Time, uint8_t SubSlot, int8_t TxPower, uint8_t Sys)
+   { SysID = Sys;
+     Channel = getChannel(Time, SubSlot, Sys);
+     uint8_t PktLen = getPktLen(Sys);    if(PktLen==0) return 0;
+     const uint8_t *SYNC = SysSYNC(Sys); if(SYNC==0) return 0;
+     ConfigManchFSK(PktLen, SYNC+1, 7);
+     float Freq = 0.000001f*(BaseFreq + ChanSepar*Channel);
+     if(FreqCorr!=0) Freq *= 1.0f+0.0000001*FreqCorr;
+     setFrequency(Freq); // for SX1262 use 'false' as second argument to avoid mixer image calibration for SX1262
+     setOutputPower(TxPower);
+     setCurrentLimit(100);
+     return 1; }
+
+   static const uint8_t *SysSYNC(uint8_t Sys=1)
+   { // OGNv1 SYNC:       0x0AF3656C encoded in Manchester
+     static const uint8_t OGN1_SYNC[10] = { 0xAA, 0x66, 0x55, 0xA5, 0x96, 0x99, 0x96, 0x5A, 0x00, 0x00 };
+     // const uint8_t *OGN_SYNC = OGN1_SYNC;
+     // ADS-L SYNC:       0xF5724B18 encoded in Manchester (fixed packet length 0x18 is included)
+     static const uint8_t ADSL_SYNC[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA9, 0x6A, 0x00, 0x00 };
+     if(Sys==SysID_OGN ) return OGN1_SYNC;
+     if(Sys==SysID_ADSL) return ADSL_SYNC;
+     return 0; }
 
    int ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYNClen=8)         // Radio setup for OGN/ADS-L
    { int State=0;
@@ -167,12 +192,17 @@ class RFM_TRX: public FreqPlan,
      State=setBitRate(100.0);                                    // [kpbs] 100kbps bit rate but we transmit Manchester encoded thus effectively 50 kbps
      State=setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
      State=setRxBandwidth(234.3);                                // [kHz]  250kHz bandwidth
+     State=setEncoding(RADIOLIB_ENCODING_NRZ);
      State=setPreambleLength(8);                                 // [bits] minimal preamble
      State=setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
      State=setCRC(0, 0);                                         // disable CRC: we do it ourselves
      State=fixedPacketLengthMode(PktLen*2);                      // [bytes] Fixed packet size mode
      State=disableAddressFiltering();                            // don't want any of such features
 #ifdef WITH_SX1276
+     if(SYNC[0]==0x55)
+       State = mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
+     else if(SYNC[0]==0xAA)
+       State = mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
      State=setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
 #endif
      State=setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before Manchester encoding
@@ -184,7 +214,10 @@ class RFM_TRX: public FreqPlan,
    uint8_t TxPacket[64];                              // Manchester-encoded packet just before transmission
    uint8_t RxPacket[64];                              // Manchester-encoded packet just after reception
 
-   static uint8_t getPktLen(uint8_t SysID) { return SysID<=1?26:24; }
+   static uint8_t getPktLen(uint8_t SysID)
+   { if(SysID==SysID_OGN ) return 26;
+     if(SysID==SysID_ADSL) return 24;
+     return 0; }
    uint8_t getPktLen(void) const { return getPktLen(SysID); }
 
    void TxManchFSK(const uint8_t *Packet)                       // transmit a packet using Manchester encoding
@@ -269,9 +302,9 @@ class RFM_TRX: public FreqPlan,
      RxPkt->Channel = Channel;                                              // Radio channel
      // Radio_RxCount[SysID]++;                                                // count packets
      // if(xSemaphoreTake(CONS_Mutex, 50))
-     // { Serial.printf("RadioRx: %10d:%4d [%d:%d] %+4.1fdBm\n",
-     //                    RxPkt->Time, RxPkt->msTime, SysID, PktLen -0.5*RxPkt->RSSI );
-     //   Format_String(CONS_UART_Write, "Rx:\n");
+     // { Serial.printf("RadioRx: %10d:%4d [%d:%d:%d] %+4.1fdBm %02X%02X%02X%02X\n",
+     //                    RxPkt->Time, RxPkt->msTime, RxPkt->SysID, RxPkt->Channel, RxPkt->Bytes, -0.5*RxPkt->RSSI,
+     //                    RxPkt->Data[3], RxPkt->Data[2], RxPkt->Data[1], RxPkt->Data[0] );
      //   xSemaphoreGive(CONS_Mutex); }
      return 1; }
 
