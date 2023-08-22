@@ -186,11 +186,19 @@ void  GPS_UART_SetBaudrate  (int BaudRate ) {        uart_set_baudrate(GPS_UART,
 #ifdef GPS_PinPPS
 bool GPS_PPS_isOn(void) { return gpio_get_level((gpio_num_t)GPS_PinPPS); }
 #endif
+#ifdef GPS_PinEna
+void GPS_DISABLE(void) { gpio_set_level((gpio_num_t)GPS_PinEna, 0); }
+void GPS_ENABLE (void) { gpio_set_level((gpio_num_t)GPS_PinEna, 1); }
+#endif
 
 static void GPS_UART_Init(int BaudRate=9600)
 {
 #ifdef GPS_PinPPS
   gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
+#endif
+#ifdef GPS_PinEna
+  gpio_set_direction((gpio_num_t)GPS_PinEna, GPIO_MODE_OUTPUT);
+  GPS_ENABLE();
 #endif
   uart_config_t GPS_UART_Config =
   { baud_rate : BaudRate,

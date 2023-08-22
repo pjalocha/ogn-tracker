@@ -2,9 +2,9 @@
 
 // GPS
 #define GPS_UART UART_NUM_1  // UART for GPS
-#define GPS_PinTx     12 // GPIO 14 = Tx-Data
-#define GPS_PinRx     34 // GPIO 13 = Rx-Data
-#define GPS_PinPPS    37 // GPIO 12 = PPS
+#define GPS_PinTx     12 // Tx-Data
+#define GPS_PinRx     34 // Rx-Data
+#define GPS_PinPPS    37 // PPS
 
 // SX1276 or SX1262 RF chip
 #define Radio_PinRST  23 //
@@ -16,6 +16,6 @@
 #define Radio_PinBusy 32 // Busy but only for SX1262
 
 // I2C
-#define I2C_PinSCL    22 // GPIO  1 = SCL
-#define I2C_PinSDA    21 // GPIO  2 = SDA
+#define I2C_PinSCL    22 // SCL
+#define I2C_PinSDA    21 // SDA
 

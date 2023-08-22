@@ -27,12 +27,16 @@ uint32_t getUniqueAddress(void);
 
 #include "parameters.h"
 
+#ifdef WITH_TBEAM07
+#include "t-beam-v07-pins.h"
+#endif
+
 #ifdef WITH_TBEAM10
 #include "t-beam-v10-pins.h"
 #endif
 
-#ifdef WITH_TBEAM07
-#include "t-beam-v07-pins.h"
+#ifdef WITH_TBEAMS3
+#include "t-beam-s3-pins.h"
 #endif
 
 extern FlashParameters Parameters;
@@ -70,6 +74,10 @@ void  GPS_UART_SetBaudrate  (int BaudRate );
 bool  GPS_PPS_isOn();
 #else
 inline bool  GPS_PPS_isOn() { return 0; }
+#endif
+#ifdef GPS_PinEna
+void GPS_ENABLE(void);
+void GPS_DISABLE(void);
 #endif
 
 uint16_t BatterySense(int Samples=4); // [mV]
