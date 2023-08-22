@@ -220,6 +220,9 @@ uint8_t PowerMode = 2;                    // 0=sleep/minimal power, 1=comprimize
 SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
 SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
 
+static char Line[128];
+static void PrintPOGNS(void);
+
 void setup()
 {
   CONS_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the writing to the console
@@ -287,6 +290,14 @@ void setup()
   BTserial.begin(Parameters.BTname);
 #endif
 
+  uint8_t Len=Format_String(Line, "$POGNS,SysStart");
+  Len+=NMEA_AppendCheckCRNL(Line, Len);
+  Line[Len]=0;
+  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  Format_String(CONS_UART_Write, Line);
+  xSemaphoreGive(CONS_Mutex);
+  PrintPOGNS();
+
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
@@ -326,7 +337,9 @@ void PrintTasks(void (*CONS_UART_Write)(char))
 }
 
 static NMEA_RxMsg NMEA;
-static char Line[128];
+#ifdef WITH_GPS_UBX_PASS
+static UBX_RxMsg  UBX;
+#endif
 
 static void PrintParameters(void)                              // print parameters stored in Flash
 { Parameters.Print(Line);
@@ -475,15 +488,33 @@ static int ProcessInput(void)
   for( ; ; )
   { uint8_t Byte; int Err=CONS_UART_Read(Byte); if(Err<=0) break; // get byte from console, if none: exit the loop
     Count++;
+#ifndef WITH_GPS_UBX_PASS
     if(Byte==0x03) ProcessCtrlC();                                // if Ctrl-C received: print parameters
     if(Byte==0x06) ProcessCtrlF();                                // if Ctrl-F received: list files
     if(Byte==0x0C) ProcessCtrlL();                                // if Ctrl-L received: list log files
-    if(Byte==0x18) esp_restart();                                 // Ctrl-X
-
+    if(Byte==0x18)                                                // Ctrl-X
+    {
+#ifdef WITH_SPIFFS
+      FlashLog_SaveReq=1;
+#endif
+      vTaskDelay(1000);
+      esp_restart(); }                                            // if Ctrl-X received then restart
+#endif
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
     if(NMEA.isComplete())                                         // if complete NMEA:
-    { ProcessNMEA();                                              // interpret the NMEA
+    {
+#ifdef WITH_GPS_NMEA_PASS
+      if(NMEA.isChecked())
+        NMEA.Send(GPS_UART_Write);
+#endif
+      ProcessNMEA();                                              // interpret the NMEA
       NMEA.Clear(); }                                             // clear the NMEA processor for the next sentence
+#ifdef WITH_GPS_UBX_PASS
+    UBX.ProcessByte(Byte);
+    if(UBX.isComplete())
+    { UBX.Send(GPS_UART_Write);                                   // is there a need for a Mutex on the GPS UART ?
+      UBX.Clear(); }
+#endif
   }
   return Count; }
 
