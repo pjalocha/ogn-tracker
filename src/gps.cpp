@@ -1161,7 +1161,7 @@ void vTaskGPS(void* pvParameters)
 #ifdef WITH_GPS_MTK
 #ifdef WITH_GPS_ENABLE
         GPS_DISABLE();
-        vTaskDelay(1);
+        vTaskDelay(10);
         GPS_ENABLE();
 #endif
         GPS_UART_Write('\n');

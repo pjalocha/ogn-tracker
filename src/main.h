@@ -92,6 +92,7 @@ typedef union
   struct
   { bool AXP192:1;        // Charge controller chip
     bool AXP202:1;        // Charge controller chip
+    bool AXP210:1;        // Charge controller chip
     bool BMP280:1;        // BMP280 pressure sensor
     bool BME280:1;        // BME280 pressure sensor
     bool Radio :1;        // SX1276 or SX1262 radio TRX

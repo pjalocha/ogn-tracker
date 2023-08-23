@@ -18,6 +18,10 @@
 #include "BluetoothSerial.h"
 #endif
 
+#ifdef WITH_XPOWERS
+#include "XPowersLib.h"
+#endif
+
 #ifdef WITH_AXP
 #include <axp20x.h>
 #endif
@@ -105,6 +109,10 @@ uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
 
 // =======================================================================================================
 
+#ifdef WITH_XPOWERS
+XPowersLibInterface *PMU = 0;
+#endif
+
 #ifdef WITH_AXP
 static AXP20X_Class AXP;
 #endif
@@ -129,6 +137,9 @@ static int ADC_Init(void)
 
 uint16_t BatterySense(int Samples)
 {
+#ifdef WITH_XPOWERS
+  if(PMU) return PMU->getBattVoltage();
+#endif
 #ifdef WITH_AXP
   if(Hardware.AXP192||Hardware.AXP202) return AXP.getBattVoltage();
 #endif
@@ -254,7 +265,7 @@ void setup()
   // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
 
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
-  Wire.setTimeOut(20);                    // [ms]
+  Wire.setTimeOut(20);                                  // [ms]
 
 #ifdef WITH_AXP
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
@@ -262,10 +273,9 @@ void setup()
   else if(AXP.begin(Wire, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
   { Hardware.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
   else
-  { ADC_Init();
-    Serial.println("AXP power/charge chip not detected"); }
+  { Serial.println("AXP power/charge chip NOT detected"); }
 
-  if(Hardware.AXP192||Hardware.AXP202)
+  if(Hardware.AXP192 || Hardware.AXP202)
   { AXP.adc1Enable(AXP202_VBUS_VOL_ADC1 |
                    AXP202_VBUS_CUR_ADC1 |
                    AXP202_BATT_CUR_ADC1 |
@@ -276,9 +286,39 @@ void setup()
     Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
               0.001f*AXP.getBattVoltage(), 0.001f*AXP.getBattChargeCurrent(), 0.001f*AXP.getBattDischargeCurrent());
   }
-#else
-  ADC_Init();
 #endif
+#ifdef WITH_XPOWERS
+  if(PMU==0)
+  { PMU = new XPowersAXP2101(Wire);
+    if(PMU->init())
+    { Hardware.AXP210=1; Serial.println("AXP2101 power/charge chip detected"); }
+    else
+    { delete PMU; PMU=0; Serial.println("AXP2101 power/charge chip NOT detected"); }
+  }
+  if(PMU==0)
+  { PMU = new XPowersAXP192(Wire);
+    if(PMU->init())
+    { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+    else
+    { delete PMU; PMU=0; Serial.println("AXP192 power/charge chip NOT detected"); }
+  }
+  if(Hardware.AXP192 || Hardware.AXP210)
+  { PMU->enableSystemVoltageMeasure();
+    PMU->enableVbusVoltageMeasure();
+    PMU->enableBattVoltageMeasure();
+    // It is necessary to disable the detection function of the TS pin on the board
+    // without the battery temperature detection function, otherwise it will cause abnormal charging
+    PMU->disableTSPinMeasure();
+    Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
+    Serial.printf("  Batt: %5.3fV\n", 0.001f*PMU->getBattVoltage());
+    // Serial.printf("  USB:  %5.3fV  %5.3fA\n",
+    //           0.001f*PMU->getVbusVoltage(), 0.001f*PMU->getVbusCurrent());
+    // Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
+    //           0.001f*PMU->getBattVoltage(), 0.001f*PMU->getBattChargeCurrent(), 0.001f*PMU->getBattDischargeCurrent());
+  }
+#endif
+  if(!Hardware.AXP192 && !Hardware.AXP202 && !Hardware.AXP210)
+  { ADC_Init(); }
 
   int RadioStat=TRX.Init();
   if(RadioStat==0)
