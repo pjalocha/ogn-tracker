@@ -17,6 +17,6 @@
 #define Radio_PinBusy  4 // Busy: only for SX1262
 
 // I2C
-#define I2C_PinSCL    42 // SCL
-#define I2C_PinSDA    41 // SDA
+#define I2C_PinSCL    41 // SCL
+#define I2C_PinSDA    42 // SDA
 

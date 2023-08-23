@@ -267,6 +267,14 @@ void setup()
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                                  // [ms]
 
+  Serial.printf("I2C scan:");
+  uint8_t I2Cdev=0;
+  for(uint8_t Addr=0x01; Addr<128; Addr++)
+  { Wire.beginTransmission(Addr);
+    if(Wire.endTransmission(Addr)==0) { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
+  }
+  Serial.printf(" %d devices\n", I2Cdev);
+
 #ifdef WITH_AXP
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
   { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
@@ -302,14 +310,28 @@ void setup()
     else
     { delete PMU; PMU=0; Serial.println("AXP192 power/charge chip NOT detected"); }
   }
-  if(Hardware.AXP192 || Hardware.AXP210)
+  if(Hardware.AXP210)
   { PMU->enableSystemVoltageMeasure();
     PMU->enableVbusVoltageMeasure();
     PMU->enableBattVoltageMeasure();
     // It is necessary to disable the detection function of the TS pin on the board
     // without the battery temperature detection function, otherwise it will cause abnormal charging
     PMU->disableTSPinMeasure();
-    Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
+#ifdef WITH_TBEAMS3
+    // GNSS RTC PowerVDD 3300mV
+    // PMU->setPowerChannelVoltage(XPOWERS_VBACKUP, 3300);
+    // PMU->enablePowerOutput(XPOWERS_VBACKUP);
+    // RF VDD 3300mV
+    PMU->setPowerChannelVoltage(XPOWERS_ALDO3, 3300);
+    PMU->enablePowerOutput(XPOWERS_ALDO3);
+    // GNSS VDD 3300mV
+    PMU->setPowerChannelVoltage(XPOWERS_ALDO4, 3300);
+    PMU->enablePowerOutput(XPOWERS_ALDO4);
+#endif
+    // set charging LED flashing
+    PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
+  if(Hardware.AXP192 || Hardware.AXP210)
+  { Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
     Serial.printf("  Batt: %5.3fV\n", 0.001f*PMU->getBattVoltage());
     // Serial.printf("  USB:  %5.3fV  %5.3fA\n",
     //           0.001f*PMU->getVbusVoltage(), 0.001f*PMU->getVbusCurrent());
