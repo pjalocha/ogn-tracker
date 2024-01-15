@@ -26,6 +26,8 @@
 #include <axp20x.h>
 #endif
 
+#include "oled.h"
+
 #include "gps.h"
 #include "rf.h"
 #include "sens.h"
