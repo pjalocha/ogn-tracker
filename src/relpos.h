@@ -269,7 +269,7 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
     int32_t Read(ADSL_Packet &Packet, uint32_t RxTime, uint32_t RefTime,
                  int32_t RefLat, int32_t RefLon, int32_t RefAlt, uint16_t LatCos=3000, int16_t GeoidSepar=40, int32_t MaxDist=15000)
    { Flags=0;
-     uint16_t msTime=0;
+      int16_t msTime=0;
      uint32_t PosTime=Packet.getTime(msTime, RxTime);
      if(PosTime) T = PosTime-RefTime;                  // [sec]
             else T =  RxTime-RefTime;

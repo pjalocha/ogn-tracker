@@ -12,6 +12,9 @@ int32_t Coord_UBXtoFNT(int32_t Coord);
 int32_t Coord_CRDtoOGN(int32_t Coord);
 int32_t Coord_OGNtoCRD(int32_t Coord);
 
+int32_t Coord_UBXtoCRD(int32_t Coord);
+int32_t Coord_CRDtoUBX(int32_t Coord);
+
 int32_t FeetToMeters(int32_t Altitude);                               //
 int32_t MetersToFeet(int32_t Altitude);                               //
 

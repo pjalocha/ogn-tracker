@@ -8,7 +8,7 @@
 // #include "intmath.h"
 #include "ognconv.h"
 #include "bitcount.h"
-// #include "format.h"
+#include "format.h"
 // #include "crc1021.h"
 
 class ADSL_Packet
@@ -21,13 +21,13 @@ class ADSL_Packet
    uint8_t SYNC[2];          // two bytes for correct alignment: can contain the last two SYNC bytes
    uint8_t Length;           // [bytes] packet length = 24 = 0x18 (excluding length but including the 24-bit CRC)
    uint8_t Version;          // Version[4]/Sigmature[1]/Key[2]/Reserved[1]
-   union
+   union                     // 20 bytes
    { uint32_t Word[5];       // this part to be scrambled/encrypted, is aligned to 32-bit
      struct                  // this is aligned to 32-bit
      { uint8_t Type;         // 2=iConspicuity, bit #7 = Unicast
        uint8_t Address  [4]; // Address[30]/Reserved[1]/RelayForward[1] (not aligned to 32-bit !)
        union
-       { uint8_t Meta     [2]; // Time[6]/Cat[5]/Emerg[3]/FlightState[2]
+       { uint8_t Meta     [2]; // Time[6]/Cat[5]/Emergency[3]/FlightState[2]
          struct
          { uint8_t TimeStamp   :6; // [0.25sec]
            uint8_t FlightState :2; // 0=unknown, 1=ground, 2=airborne
@@ -170,7 +170,7 @@ class ADSL_Packet
 
 // --------------------------------------------------------------------------------------------------------
 
-   uint32_t getTime(uint16_t &msTime, uint32_t RefTime, int FwdMargin=3) const
+   uint32_t getTime(int16_t &msTime, uint32_t RefTime, int FwdMargin=3) const
    { msTime=250*(TimeStamp&3);
      if(TimeStamp>=60) return 0;
      int Sec=RefTime%15;
@@ -280,7 +280,7 @@ class ADSL_Packet
      Msg[Len++]=',';
      Len+=Format_UnsDec(Msg+Len, (uint32_t)getAddrTable());       // address-type
      Msg[Len++]=',';
-     uint16_t msTime=0;
+      int16_t msTime=0;
      uint32_t Time=getTime(msTime, RxTime);                       // timestamp
      Len+=Format_UnsDec(Msg+Len, Time);
      // Msg[Len++]='.';
@@ -413,7 +413,7 @@ class ADSL_Packet
 
       uint8_t BadBitIdx[MaxBadBits];                                    // bad bit index
       uint8_t BadBitMask[MaxBadBits];                                   // bad bit mask
-      uint32_t Syndrome[MaxBadBits];                                   // bad bit mask
+      uint32_t Syndrome[MaxBadBits];                                    // bad bit mask
       uint8_t BadBits=0;                                                // count the bad bits
       for(uint8_t ByteIdx=0; ByteIdx<Bytes; ByteIdx++)                  // loop over bytes
       { uint8_t Byte=PktErr[ByteIdx];

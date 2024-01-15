@@ -21,10 +21,13 @@ int32_t Coord_UBXtoFNT(int32_t Coord) { return ((int64_t)Coord*5003959  +(1<<21)
 int32_t Coord_CRDtoOGN(int32_t Coord) { return ((int64_t)Coord*421875   +(1<<22))>>23; }    // [32-bit cordic] => [0.0001/60 deg]
 int32_t Coord_OGNtoCRD(int32_t Coord) { return ((int64_t)Coord*83399993 +(1<<21))>>22; }    // [0.0001/60 deg] => [32-bit cordic]
 
+int32_t Coord_UBXtoCRD(int32_t Coord) { return ((int64_t)Coord*640511947+(1<<28))>>29; }
+int32_t Coord_CRDtoUBX(int32_t Coord) { return ((int64_t)Coord*78125+(1<<24))>>25; }
+
 // ==============================================================================================
 
-int32_t FeetToMeters(int32_t Altitude) { return (Altitude*312+512)>>10; }  // [feet] => [m]
-int32_t MetersToFeet(int32_t Altitude) { return (Altitude*3360+512)>>10; } // [m] => [feet]
+int32_t FeetToMeters(int32_t Altitude) { return (Altitude*2497+4096)>>13; } // [feet] => [m]  3 m error at 300'000 ft
+int32_t MetersToFeet(int32_t Altitude) { return (Altitude*6719+1024)>>11; } // [m] => [feet]  8 ft error at 100'000 m
 
 // ==============================================================================================
 

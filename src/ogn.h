@@ -1095,7 +1095,7 @@ class GPS_Position: public GPS_Time
      { Out[Len++]=' '; Len+=Format_SignDec(Out+Len, (int32_t)Temperature, 2, 1); Out[Len++]='C';
        Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, Pressure/4        ); Out[Len++]='P'; Out[Len++]='a';
        Out[Len++]=' '; Len+=Format_SignDec(Out+Len, StdAltitude, 2, 1); Out[Len++]='m'; }
-     Out[Len++]='\n'; Out[Len++]=0; return Len; }
+     Out[Len++]='\n'; Out[Len]=0; return Len; }
 #endif // __AVR__
 
    int8_t ReadUBX(UBX_RxMsg &RxMsg)
