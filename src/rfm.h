@@ -157,7 +157,7 @@ class RFM_TRX: public FreqPlan,
 // -13 => RADIOLIB_ERR_INVALID_OUTPUT_POWER
 // -20 => RADIOLIB_ERR_WRONG_MODEM
 
-   int setManchFSK(uint32_t Time, uint8_t SubSlot, int8_t TxPower, uint8_t Sys)
+   int setManchFSK(uint32_t Time, uint8_t SubSlot, int8_t TxPower, uint8_t Sys=1)  // setup for given RF system
    { SysID = Sys;
      Channel = getChannel(Time, SubSlot, Sys);
      uint8_t PktLen = getPktLen(Sys);    if(PktLen==0) return 0;
@@ -170,7 +170,7 @@ class RFM_TRX: public FreqPlan,
      setCurrentLimit(100);
      return 1; }
 
-   static const uint8_t *SysSYNC(uint8_t Sys=1)
+   static const uint8_t *SysSYNC(uint8_t Sys=1)            // return the SYNC or give RF system
    { // OGNv1 SYNC:       0x0AF3656C encoded in Manchester
      static const uint8_t OGN1_SYNC[10] = { 0xAA, 0x66, 0x55, 0xA5, 0x96, 0x99, 0x96, 0x5A, 0x00, 0x00 };
      // const uint8_t *OGN_SYNC = OGN1_SYNC;
@@ -214,7 +214,7 @@ class RFM_TRX: public FreqPlan,
    uint8_t TxPacket[64];                              // Manchester-encoded packet just before transmission
    uint8_t RxPacket[64];                              // Manchester-encoded packet just after reception
 
-   static uint8_t getPktLen(uint8_t SysID)
+   static uint8_t getPktLen(uint8_t SysID)            // [byte] packet length for ggiven RF system
    { if(SysID==SysID_OGN ) return 26;
      if(SysID==SysID_ADSL) return 24;
      return 0; }
@@ -228,7 +228,7 @@ class RFM_TRX: public FreqPlan,
      int TxLen=ManchEncode(TxPacket, Packet, Len);              // Manchester encode
      transmit(TxPacket, TxLen); }                               // transmit
 
-   void ManchSlot(uint32_t msTimeLen, const uint8_t *TxPacket=0)
+   void ManchSlot(uint32_t msTimeLen, const uint8_t *TxPacket=0) // [ms]
    { // Serial.printf("ManchSlot: %dms\n", msTimeLen);
      standby();
      uint32_t msStart = millis();
@@ -262,7 +262,7 @@ class RFM_TRX: public FreqPlan,
      averRSSI = floorf(-2.0f*BkgRSSI+0.5f);
      return Count; }
 
-   bool readIRQ(void) { return digitalRead(mod->getIrq()); }
+   bool readIRQ(void) { return digitalRead(mod->getIrq()); }    // read IRQ which indicates a newly received packet
 
    int ManchRxPacket(void)
    { if(!readIRQ()) return 0;

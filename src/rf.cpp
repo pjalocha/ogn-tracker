@@ -44,7 +44,7 @@
 
   for( ; ; )
   {
-    for( ; TimeSync_msTime()<400; )
+    for( ; TimeSync_msTime()<400; )                                           // wait for 0.4sec after PPS
     { vTaskDelay(1); }
 #ifdef WITH_SX1276
     TRX.getTemp();

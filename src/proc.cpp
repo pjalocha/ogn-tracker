@@ -585,9 +585,9 @@ void vTaskPROC(void* pvParameters)
     //                                                              else  PosTime=0;
 
     if( Position && Position->isReady && (!Position->Sent) && Position->isValid() )
-    { int16_t AverSpeed=GPS_AverageSpeed();                             // [0.1m/s] average speed, including the vertical speed
+    { int16_t AverSpeed=GPS_AverageSpeed();                           // [0.1m/s] average speed, including the vertical speed
       if(Parameters.FreqPlan==0)
-        TRX.setPlan(Position->Latitude, Position->Longitude);     // set the frequency plan according to the GPS position
+        TRX.setPlan(Position->Latitude, Position->Longitude);         // set the frequency plan according to the GPS position
       else TRX.setPlan(Parameters.FreqPlan);
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
@@ -659,7 +659,7 @@ void vTaskPROC(void* pvParameters)
           ADSL_TxFIFO.Write(); }
 #endif
         TxBackOff = 0;
-        bool FloatAcft = Parameters.AcftType==3 || ( Parameters.AcftType>=0xB && Parameters.AcftType<=0xD);
+        bool FloatAcft = Parameters.AcftType==3 || ( Parameters.AcftType>=0xB && Parameters.AcftType<=0xD);  // heli, balloon or drone
         if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(TRX.Random&0x1);
         if(TX_Credit<=0) TxBackOff+=1; }
       Position->Sent=1;
