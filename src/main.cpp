@@ -100,7 +100,7 @@ uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
   { Data[Idx]=Wire.read(); }
   // Wire.endTransmission();
   return Ret!=Len; }
- 
+
 uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
 { Wire.beginTransmission(Addr);
   int Ret=Wire.write(Reg);
@@ -268,7 +268,7 @@ void setup()
 
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                                  // [ms]
-
+/*
   Serial.printf("I2C scan:");
   uint8_t I2Cdev=0;
   for(uint8_t Addr=0x01; Addr<128; Addr++)
@@ -276,11 +276,25 @@ void setup()
     if(Wire.endTransmission(Addr)==0) { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
   }
   Serial.printf(" %d devices\n", I2Cdev);
+*/
+#ifdef PMU_I2C_PinSCL
+  static TwoWire PMU_I2C = TwoWire(1);
+  PMU_I2C.begin(PMU_I2C_PinSDA, PMU_I2C_PinSCL, (uint32_t)400000);
+  PMU_I2C.setTimeOut(20);
+#endif
 
 #ifdef WITH_AXP
+#ifdef PMU_I2C_PinSCL
+  if(AXP.begin(PMU_I2C, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
+#else
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
+#endif
   { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+#ifdef PMU_I2C_PinSCL
+  else if(AXP.begin(PMU_I2C, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
+#else
   else if(AXP.begin(Wire, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
+#endif
   { Hardware.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
   else
   { Serial.println("AXP power/charge chip NOT detected"); }
@@ -299,14 +313,24 @@ void setup()
 #endif
 #ifdef WITH_XPOWERS
   if(PMU==0)
-  { PMU = new XPowersAXP2101(Wire);
+  {
+#ifdef PMU_I2C_PinSCL
+    PMU = new XPowersAXP2101(PMU_I2C);
+#else
+    PMU = new XPowersAXP2101(Wire);
+#endif
     if(PMU->init())
     { Hardware.AXP210=1; Serial.println("AXP2101 power/charge chip detected"); }
     else
     { delete PMU; PMU=0; Serial.println("AXP2101 power/charge chip NOT detected"); }
   }
   if(PMU==0)
-  { PMU = new XPowersAXP192(Wire);
+  {
+#ifdef PMU_I2C_PinSCL
+    PMU = new XPowersAXP192(PMU_I2C);
+#else
+    PMU = new XPowersAXP192(Wire);
+#endif
     if(PMU->init())
     { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
     else
