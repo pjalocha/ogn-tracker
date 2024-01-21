@@ -90,9 +90,9 @@ int  SPIFFS_Info(size_t &Total, size_t &Used, const char *Label="intlog");
 typedef union
 { uint32_t Flags;         // hardware status
   struct
-  { bool AXP192:1;        // Charge controller chip
-    bool AXP202:1;        // Charge controller chip
-    bool AXP210:1;        // Charge controller chip
+  { bool AXP192:1;        // Charge controller chip AXP192
+    bool AXP202:1;        // Charge controller chip AXP202
+    bool AXP210:1;        // Charge controller chip AXP2101
     bool BMP280:1;        // BMP280 pressure sensor
     bool BME280:1;        // BME280 pressure sensor
     bool Radio :1;        // SX1276 or SX1262 radio TRX

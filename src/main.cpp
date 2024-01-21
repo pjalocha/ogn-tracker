@@ -143,7 +143,7 @@ uint16_t BatterySense(int Samples)
   if(PMU) return PMU->getBattVoltage();
 #endif
 #ifdef WITH_AXP
-  if(Hardware.AXP192||Hardware.AXP202) return AXP.getBattVoltage();
+  if(Hardware.AXP192 || Hardware.AXP202) return AXP.getBattVoltage();
 #endif
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
@@ -347,6 +347,14 @@ void setup()
     // GNSS RTC PowerVDD 3300mV
     // PMU->setPowerChannelVoltage(XPOWERS_VBACKUP, 3300);
     // PMU->enablePowerOutput(XPOWERS_VBACKUP);
+#ifdef WITH_BME280
+    PMU->setPowerChannelVoltage(XPOWERS_ALDO1, 3300);
+    PMU->enablePowerOutput(XPOWERS_ALDO2);
+#endif
+#ifdef WITH_OLED
+    PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
+    PMU->enablePowerOutput(XPOWERS_ALDO2);
+#endif
     // RF VDD 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO3, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO3);
@@ -365,8 +373,8 @@ void setup()
     //           0.001f*PMU->getBattVoltage(), 0.001f*PMU->getBattChargeCurrent(), 0.001f*PMU->getBattDischargeCurrent());
   }
 #endif
-  if(!Hardware.AXP192 && !Hardware.AXP202 && !Hardware.AXP210)
-  { ADC_Init(); }
+  if(!Hardware.AXP192 && !Hardware.AXP202 && !Hardware.AXP210)  // if none of the power controllers detected
+  { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
 
   int RadioStat=TRX.Init();
   if(RadioStat==0)
