@@ -343,6 +343,14 @@ void setup()
     // It is necessary to disable the detection function of the TS pin on the board
     // without the battery temperature detection function, otherwise it will cause abnormal charging
     PMU->disableTSPinMeasure();
+#ifdef WITH_TBEAM20
+    // RF 3300mV
+    PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
+    PMU->enablePowerOutput(XPOWERS_ALDO2);
+    // GPS 3300mV
+    PMU->setPowerChannelVoltage(XPOWERS_ALDO3, 3300);
+    PMU->enablePowerOutput(XPOWERS_ALDO3);
+#endif
 #ifdef WITH_TBEAMS3
     // GNSS RTC PowerVDD 3300mV
     // PMU->setPowerChannelVoltage(XPOWERS_VBACKUP, 3300);

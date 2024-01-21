@@ -35,6 +35,10 @@ uint32_t getUniqueAddress(void);
 #include "t-beam-v10-pins.h"
 #endif
 
+#ifdef WITH_TBEAM20
+#include "t-beam-v10-pins.h"
+#endif
+
 #ifdef WITH_TBEAMS3
 #include "t-beam-s3-pins.h"
 #endif
