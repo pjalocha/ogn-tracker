@@ -268,15 +268,6 @@ void setup()
 
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                                  // [ms]
-/*
-  Serial.printf("I2C scan:");
-  uint8_t I2Cdev=0;
-  for(uint8_t Addr=0x01; Addr<128; Addr++)
-  { Wire.beginTransmission(Addr);
-    if(Wire.endTransmission(Addr)==0) { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
-  }
-  Serial.printf(" %d devices\n", I2Cdev);
-*/
 #ifdef PMU_I2C_PinSCL
   static TwoWire PMU_I2C = TwoWire(1);
   PMU_I2C.begin(PMU_I2C_PinSDA, PMU_I2C_PinSCL, (uint32_t)400000);
@@ -357,7 +348,7 @@ void setup()
     // PMU->enablePowerOutput(XPOWERS_VBACKUP);
 #ifdef WITH_BME280
     PMU->setPowerChannelVoltage(XPOWERS_ALDO1, 3300);
-    PMU->enablePowerOutput(XPOWERS_ALDO2);
+    PMU->enablePowerOutput(XPOWERS_ALDO1);
 #endif
 #ifdef WITH_OLED
     PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
@@ -390,9 +381,17 @@ void setup()
   else
   { Serial.printf("RF chip not detected: %d\n", RadioStat); }
 
+  Serial.printf("I2C scan:");
+  uint8_t I2Cdev=0;
+  for(uint8_t Addr=0x01; Addr<128; Addr++)
+  { Wire.beginTransmission(Addr);
+    if(Wire.endTransmission(Addr)==0) { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
+  }
+  Serial.printf(" %d devices\n", I2Cdev);
+
 #ifdef WITH_OLED
   OLED.begin();
-  // OLED.setDisplayRotation(U8G2_R2);
+  OLED.setDisplayRotation(U8G2_R2);
   OLED.clearBuffer();
   OLED_DrawLogo(OLED.getU8g2(), 0);
   OLED.sendBuffer();

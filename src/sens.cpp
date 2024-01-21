@@ -132,12 +132,13 @@ static void ProcBaro(void)
     TickType_t Start=xTaskGetTickCount();
     uint8_t Err=Baro.AcquireRawTemperature();                             // measure temperature
     if(Err==0) { Baro.CalcTemperature(); AverPress=0; AverCount=0; }      // clear the average
+/*
           else { PipeCount=0;
 	         I2C_Restart(Baro.Bus);
                  vTaskDelay(20);
                  InitBaro(); // try to recover I2C bus and baro
 		 return; }
-
+*/
     TickType_t End=Start;
     for(uint8_t Idx=0; Idx<16; Idx++)
     { uint8_t Err=Baro.AcquireRawPressure();                              // take pressure measurement
