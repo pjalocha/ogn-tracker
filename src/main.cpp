@@ -98,7 +98,6 @@ uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
   Ret=Wire.requestFrom(Addr, Len);
   for(uint8_t Idx=0; Idx<Len; Idx++)
   { Data[Idx]=Wire.read(); }
-  // Wire.endTransmission();
   return Ret!=Len; }
 
 uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
@@ -386,6 +385,7 @@ void setup()
   for(uint8_t Addr=0x01; Addr<128; Addr++)
   { Wire.beginTransmission(Addr);
     if(Wire.endTransmission(Addr)==0) { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
+                                 else { Wire.flush(); }
   }
   Serial.printf(" %d devices\n", I2Cdev);
 

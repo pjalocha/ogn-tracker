@@ -21,14 +21,20 @@ void OLED_DrawLogo(u8g2_t *OLED, const GPS_Position *GPS)  // draw logo and hard
   u8g2_SetFont(OLED, u8g2_font_8x13_tr);
   u8g2_DrawStr(OLED, 69, 43, "Tracker");
 
+#ifdef WITH_GPS_MTK
+  u8g2_DrawStr(OLED,  0, 28 ,"MTK GPS");
+#endif
+#ifdef WITH_GPS_UBX
+  u8g2_DrawStr(OLED,  0, 28 ,"UBX GPS");
+#endif
 #ifdef WITH_SX1262
   u8g2_DrawStr(OLED,  0, 40 ,"SX1262");
 #endif
 #ifdef WITH_SX1276
   u8g2_DrawStr(OLED,  0, 40 ,"SX1276");
 #endif
-#ifdef WITH_BMP280
-  u8g2_DrawStr(OLED,  0, 52 ,"BMP280");
+#ifdef WITH_BME280
+  u8g2_DrawStr(OLED,  0, 52 ,"BME280");
 #endif
 }
 
