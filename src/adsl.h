@@ -31,7 +31,7 @@ class ADSL_Packet
          struct
          { uint8_t TimeStamp   :6; // [0.25sec]
            uint8_t FlightState :2; // 0=unknown, 1=ground, 2=airborne
-           uint8_t AcftCat     :5; // 1=light, 2=small-heavy, 3=heli, 4=glider, 5=baloon/airship, 6=para/hang-glider, 7=skydiver, 
+           uint8_t AcftCat     :5; // 1=light, 2=small-heavy, 3=heli, 4=glider, 5=baloon/airship, 6=para/hang-glider, 7=skydiver,
            uint8_t Emergency   :3; // 1=OK
          } ;
        } ;
@@ -193,9 +193,9 @@ class ADSL_Packet
    { const uint8_t Map[8] = { 63, 63, 45, 15 } ;
      return Map[VertAccuracy]; }
    void setVerAccur(uint8_t Prec)
-   {      if(Prec<=15) HorizAccuracy=3;
-     else if(Prec<=45) HorizAccuracy=2;
-     else HorizAccuracy=1; }
+   {      if(Prec<=15) VertAccuracy=3;
+     else if(Prec<=45) VertAccuracy=2;
+     else VertAccuracy=1; }
 
    static int32_t FNTtoOGN(int32_t Coord) { return ((int64_t)Coord*27000219 +(1<<28))>>29; }    // [FANET cordic] => [0.0001/60 deg]
    static int32_t OGNtoFNT(int32_t Coord) { return ((int64_t)Coord*83399317 +(1<<21))>>22; }    // [0.0001/60 deg] => [FANET cordic]
@@ -225,9 +225,9 @@ class ADSL_Packet
 
    int32_t getAlt(void) const                                                                  // [m]
    { int32_t Word=Position[8]&0x3F; Word<<=8; Word|=Position[7];
-     return UnsVRdecode<int32_t,12>(Word)-316; }
+     return UnsVRdecode<int32_t,12>(Word)-320; }
    void setAlt(int32_t Alt)
-   { Alt+=316; if(Alt<0) Alt=0;
+   { Alt+=320; if(Alt<0) Alt=0;
      int32_t Word=UnsVRencode<uint32_t,12>(Alt);
      Position[7]=Word;
      Position[8] = (Position[8]&0xC0) | (Word>>8); }
