@@ -5,6 +5,23 @@
 
 #include "hal.h"
 
+class TimeSync
+{ public:
+   uint32_t     UTC;       // [sec] UTC Unix time
+   uint32_t sysTime;       // [ms]  system time which corresponds to the above UTC
+
+  public:
+   uint16_t getFracTime(uint32_t msTime)
+   { msTime = msTime+1000-sysTime;
+     if(msTime<1000) return msTime;
+     if(msTime<2000) return msTime-1000;
+     if(msTime<3000) return msTime-2000;
+     return msTime%1000; }
+
+} ;
+
+extern TimeSync GPS_TimeSync;
+
 void TimeSync_HardPPS(TickType_t Tick);                                     // hardware PPS at the give system tick
 void TimeSync_HardPPS(void);
 

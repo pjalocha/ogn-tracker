@@ -8,7 +8,8 @@
 
 #include "ogn.h"                      // OGN packet structures, encoding/decoding/etc.
 
-#include "rf.h"                       // RF task: transmission and reception of radio packets
+// #include "rf.h"                       // RF task: transmission and reception of radio packets
+#include "ogn-radio.h"                // RF task: transmission and reception of radio packets
 #include "gps.h"                      // GPS task: get own time and position, set the GPS baudrate and navigation mode
 
 #include "fifo.h"
@@ -133,8 +134,8 @@ static void PrintRelayQueue(uint8_t Idx)                    // for debug
 
 static bool GetRelayPacket(OGN_TxPacket<OGN_Packet> *Packet)      // prepare a packet to be relayed
 { if(RelayQueue.Sum==0) return 0;                     // if no packets in the relay queue
-  XorShift32(TRX.Random);                              // produce a new random number
-  uint8_t Idx=RelayQueue.getRand(TRX.Random);          // get weight-random packet from the relay queue
+  XorShift32(Random.RX);                              // produce a new random number
+  uint8_t Idx=RelayQueue.getRand(Random.RX);          // get weight-random packet from the relay queue
   if(RelayQueue.Packet[Idx].Rank==0) return 0;        // should not happen ...
   memcpy(Packet->Packet.Byte(), RelayQueue[Idx]->Byte(), OGN_Packet::Bytes); // copy the packet
   Packet->Packet.Header.Relay=1;                      // increment the relay count (in fact we only do single relay)
@@ -255,34 +256,34 @@ static void ReadStatus(OGN_Packet &Packet)
 #endif
 #endif
 
-#ifdef WITH_SX1262
+// #ifdef WITH_SX1262
   if(Packet.Status.Pressure==0) Packet.clrTemperature();
-#else
-  if(Packet.Status.Pressure==0) Packet.EncodeTemperature(TRX.chipTemp*10); // [0.1degC]
-#endif
-  Packet.Status.RadioNoise = TRX.averRSSI;                         // [-0.5dBm] write radio noise to the status packet
+// #else
+  // if(Packet.Status.Pressure==0) Packet.EncodeTemperature(TRX.chipTemp*10); // [0.1degC]
+// #endif
+  Packet.Status.RadioNoise = floorf(-2*Radio_BkgRSSI+0.f); // TRX.averRSSI;                         // [-0.5dBm] write radio noise to the status packet
 
   uint8_t TxPower = Parameters.TxPower-4;
   if(TxPower>15) TxPower=15;
   Packet.Status.TxPower = TxPower;
 
-  uint16_t RxRate = RX_OGN_Count64+1;
+  uint16_t RxRate = floorf(Radio_PktRate*60+0.5f)+1;
   uint8_t RxRateLog2=0; RxRate>>=1; while(RxRate) { RxRate>>=1; RxRateLog2++; }
   Packet.Status.RxRate = RxRateLog2;
 
   if(Parameters.Verbose)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNR,");                                  // NMEA report: radio status
-    Len+=Format_UnsDec(Line+Len, (uint32_t)TRX.Plan);                         // which frequency plan
+    Len+=Format_UnsDec(Line+Len, (uint32_t)Radio_FreqPlan.Plan);              // which frequency plan
     Line[Len++]=',';
-    Len+=Format_UnsDec(Line+Len, (uint32_t)RX_OGN_Count64);                   // number of OGN packets received
+    // Len+=Format_UnsDec(Line+Len, (uint32_t)RX_OGN_Count64);                   // number of OGN packets received
     Line[Len++]=',';
     Line[Len++]=',';
-    Len+=Format_SignDec(Line+Len, -5*TRX.averRSSI, 2, 1);                     // average RF level (over all channels)
+    // Len+=Format_SignDec(Line+Len, -5*TRX.averRSSI, 2, 1);                     // average RF level (over all channels)
     Line[Len++]=',';
-    Len+=Format_SignDec(Line+Len, TX_Credit/100, 2, 1);                       // [sec] transmitter on-air time counter
+    Len+=Format_SignDec(Line+Len, Radio_TxCredit/100, 2, 1);                       // [sec] transmitter on-air time counter
     Line[Len++]=',';
-    Len+=Format_SignDec(Line+Len, (int16_t)TRX.chipTemp);                     // the temperature of the RF chip
+    // Len+=Format_SignDec(Line+Len, (int16_t)TRX.chipTemp);                     // the temperature of the RF chip
     Line[Len++]=',';
     // Len+=Format_SignDec(Line+Len, MCU_Temp, 2, 1);
     Line[Len++]=',';
@@ -446,7 +447,7 @@ static void DecodeRxPacket(Manch_RxPktData *RxPkt)
   // RxPacket->RxRSSI=RxPkt.RSSI;
   // TickType_t ExecTime=xTaskGetTickCount();
 
-  { RX_OGN_Packets++;
+  { // RX_OGN_Packets++;
     uint8_t Check = RxPkt->Decode(*RxPacket, Decoder);
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
@@ -496,7 +497,7 @@ void vTaskPROC(void* pvParameters)
   for( ; ; )
   { vTaskDelay(1);
 
-    Manch_RxPktData *RxPkt = TRX.RxFIFO.getRead();                     // check for new received packets
+    Manch_RxPktData *RxPkt = Manch_RxFIFO.getRead();                     // check for new received packets
     if(RxPkt)                                                           // if there is a new received packet
     {
 #ifdef DEBUG_PRINT
@@ -510,7 +511,7 @@ void vTaskPROC(void* pvParameters)
       xSemaphoreGive(CONS_Mutex);
 #endif
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
-      TRX.RxFIFO.Read(); }                                               // remove this packet from the queue
+      Manch_RxFIFO.Read(); }                                               // remove this packet from the queue
 
     static uint32_t PrevSlotTime=0;                                     // remember previous time slot to detect a change
     uint32_t     Time;                                                  // [sec] time slot
@@ -520,6 +521,7 @@ void vTaskPROC(void* pvParameters)
     if(msTime<340) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 
     if(SlotTime==PrevSlotTime) continue;                                // stil same time slot, go back to RX processing
+
     PrevSlotTime=SlotTime;                                              // new slot started
                                                                         // this part of the loop is executed only once per slot-time
     uint8_t BestIdx; int16_t BestResid;
@@ -587,8 +589,8 @@ void vTaskPROC(void* pvParameters)
     if( Position && Position->isReady && (!Position->Sent) && Position->isValid() )
     { int16_t AverSpeed=GPS_AverageSpeed();                           // [0.1m/s] average speed, including the vertical speed
       if(Parameters.FreqPlan==0)
-        TRX.setPlan(Position->Latitude, Position->Longitude);         // set the frequency plan according to the GPS position
-      else TRX.setPlan(Parameters.FreqPlan);
+        Radio_FreqPlan.setPlan(Position->Latitude, Position->Longitude); // set the frequency plan according to the GPS position
+      else Radio_FreqPlan.setPlan(Parameters.FreqPlan);
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60);
@@ -619,7 +621,7 @@ void vTaskPROC(void* pvParameters)
         Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
 #endif // DEBUG_PRINT
-      OGN_TxPacket<OGN_Packet> *TxPacket = RF_TxFIFO.getWrite();
+      OGN_TxPacket<OGN_Packet> *TxPacket = OGN_TxFIFO.getWrite();
       TxPacket->Packet = PosPacket.Packet;                             // copy the position packet to the TxFIFO
 
 #ifdef WITH_ENCRYPT
@@ -640,13 +642,13 @@ void vTaskPROC(void* pvParameters)
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex);
 #endif // WITH_ENCRYPT
-      XorShift32(TRX.Random);
+      XorShift32(Random.RX);
       static uint8_t TxBackOff=0;
       if(TxBackOff) TxBackOff--;
       else
-      { RF_TxFIFO.Write();                                                // complete the write into the TxFIFO
+      { OGN_TxFIFO.Write();                                                // complete the write into the TxFIFO
 #ifdef WITH_ADSL
-        if(TRX.Plan<=1)                                              // ADS-L only in Europe/Africa
+        if(Radio_FreqPlan.Plan<=1)                                         // ADS-L only in Europe/Africa
         { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
           Packet->Init();
           Packet->setAddress (Parameters.Address);
@@ -660,21 +662,22 @@ void vTaskPROC(void* pvParameters)
 #endif
         TxBackOff = 0;
         bool FloatAcft = Parameters.AcftType==3 || ( Parameters.AcftType>=0xB && Parameters.AcftType<=0xD);  // heli, balloon or drone
-        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(TRX.Random&0x1);
-        if(TX_Credit<=0) TxBackOff+=1; }
+        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
+        if(Radio_TxCredit<=0) TxBackOff+=1; }
       Position->Sent=1;
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
-      // if( (SlotTime&0x07)==(TRX.Random&0x07) )                            // every 8sec
-      else if(Parameters.TxFNT && TRX.Plan<=1)
+      // if( (SlotTime&0x07)==(Random.RX&0x07) )                            // every 8sec
+      else if(Parameters.TxFNT && Radio_FreqPlan.Plan<=1)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
-        XorShift32(TRX.Random);
+        XorShift32(Random.RX);
         FNT_TxFIFO.Write();
-        FNTbackOff = 8+(TRX.Random&0x1); }                                   // every 9 or 10sec
+        FNTbackOff = 8+(Random.RX&0x1); }                                   // every 9 or 10sec
 #endif // WITH_FANET
+
 #ifdef WITH_LOOKOUT
       const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime); // process own position, get the most dangerous target
 #ifdef WITH_PFLAA
@@ -768,7 +771,7 @@ void vTaskPROC(void* pvParameters)
       }
     } else // if GPS position is not complete, contains no valid position, etc.
     { if((SlotTime-PosTime)>=30) { PosPacket.Packet.Position.Time=0x3F; } // if no valid position for more than 30 seconds then set the time as unknown for the transmitted packet
-      OGN_TxPacket<OGN_Packet> *TxPacket = RF_TxFIFO.getWrite();
+      OGN_TxPacket<OGN_Packet> *TxPacket = OGN_TxFIFO.getWrite();
       TxPacket->Packet = PosPacket.Packet;                            // copy the position packet
       TxPacket->Packet.Whiten(); TxPacket->calcFEC();                 // whiten and calculate FEC code
 #ifdef DEBUG_PRINT
@@ -779,14 +782,14 @@ void vTaskPROC(void* pvParameters)
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex);
 #endif // DEBUG_PRINT
-      XorShift32(TRX.Random);
-      if(PosTime && ((TRX.Random&0x7)==0) )                              // send if some position in the packet and at 1/8 normal rate
-        RF_TxFIFO.Write();                                              // complete the write into the TxFIFO
+      XorShift32(Random.RX);
+      if(PosTime && ((Random.RX&0x7)==0) )                              // send if some position in the packet and at 1/8 normal rate
+        OGN_TxFIFO.Write();                                              // complete the write into the TxFIFO
       if(Position) Position->Sent=1;
     }
 #ifdef DEBUG_PRINT
     // char Line[128];
-    Line[0]='0'+RF_TxFIFO.Full(); Line[1]=' ';                  // print number of packets in the TxFIFO
+    Line[0]='0'+OGN_TxFIFO.Full(); Line[1]=' ';                  // print number of packets in the TxFIFO
     RelayQueue.Print(Line+2);                                   // dump the relay queue
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
     Format_String(CONS_UART_Write, Line);
@@ -794,11 +797,11 @@ void vTaskPROC(void* pvParameters)
 #endif // DEBUG_PRINT
 
 #ifdef WITH_FANET
-    if(Parameters.Pilot[0] && (SlotTime&0xFF)==(TRX.Random&0xFF) )              // every 256sec
+    if(Parameters.Pilot[0] && (SlotTime&0xFF)==(Random.RX&0xFF) )              // every 256sec
     { FANET_Packet *FNTpkt = FNT_TxFIFO.getWrite();
       FNTpkt->setAddress(Parameters.Address);
       FNTpkt->setName(Parameters.Pilot);
-      XorShift32(TRX.Random);
+      XorShift32(Random.RX);
       FNT_TxFIFO.Write(); }
 #endif // WITH_FANET
 
@@ -812,14 +815,14 @@ void vTaskPROC(void* pvParameters)
 
     static uint8_t StatTxBackOff = 16;
     ReadStatus(StatPacket.Packet);                               // read status data and put them into the StatPacket
-    XorShift32(TRX.Random);                                       // generate a new random number
-    if( StatTxBackOff==0 && RF_TxFIFO.Full()<2 )                 // decide whether to transmit the status/info packet
-    { OGN_TxPacket<OGN_Packet> *StatusPacket = RF_TxFIFO.getWrite(); // ask for space in the Tx queue
+    XorShift32(Random.RX);                                       // generate a new random number
+    if( StatTxBackOff==0 && OGN_TxFIFO.Full()<2 )                 // decide whether to transmit the status/info packet
+    { OGN_TxPacket<OGN_Packet> *StatusPacket = OGN_TxFIFO.getWrite(); // ask for space in the Tx queue
       uint8_t doTx=1;
-      if(Parameters.AddrType && TRX.Random&0x10)                  // decide to transmit info or status packet ?
+      if(Parameters.AddrType && Random.RX&0x10)                  // decide to transmit info or status packet ?
       { doTx=ReadInfo(StatPacket.Packet); }                      // and overwrite the StatPacket with the Info data
       if(doTx)
-      { StatTxBackOff=16+(TRX.Random%15);
+      { StatTxBackOff=16+(Random.RX%15);
 #ifdef WITH_APRS
         APRStx_FIFO.Write(StatPacket);
 #endif // WITH_APRS
@@ -829,13 +832,13 @@ void vTaskPROC(void* pvParameters)
        *StatusPacket = StatPacket;                               // copy status packet into the Tx queue
         StatusPacket->Packet.Whiten();                           // whiten for transmission
         StatusPacket->calcFEC();                                 // calc. the FEC code
-        RF_TxFIFO.Write();                                       // finalize write into the Tx queue
+        OGN_TxFIFO.Write();                                       // finalize write into the Tx queue
       }
     }
     if(StatTxBackOff) StatTxBackOff--;
 
-    while(RF_TxFIFO.Full()<2)
-    { OGN_TxPacket<OGN_Packet> *RelayPacket = RF_TxFIFO.getWrite();
+    while(OGN_TxFIFO.Full()<2)
+    { OGN_TxPacket<OGN_Packet> *RelayPacket = OGN_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
       // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       // Format_String(CONS_UART_Write, "Relayed: ");
@@ -849,7 +852,7 @@ void vTaskPROC(void* pvParameters)
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex);
 #endif // DEBUG_PRINT
-      RF_TxFIFO.Write();
+      OGN_TxFIFO.Write();
     }
     CleanRelayQueue(SlotTime);
 

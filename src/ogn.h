@@ -1196,7 +1196,7 @@ class GPS_Position: public GPS_Time
      NMEA[Len++]=',';
      if(isValid()) Len+=Format_UnsDec(NMEA+Len, (uint32_t)VDOP, 2, 1);
      Len += NMEA_AppendCheckCRNL(NMEA, Len);
-     NMEA[Len]=0; return Len; }
+     return Len; }
 
    uint8_t WriteRMC(char *NMEA) const
    { uint8_t Len=Format_String(NMEA+Len, "$GPRMC,");
@@ -1235,7 +1235,7 @@ class GPS_Position: public GPS_Time
      NMEA[Len++]=',';
      NMEA[Len++]=isValid()?'A':'N';
      Len += NMEA_AppendCheckCRNL(NMEA, Len);
-     NMEA[Len]=0; return Len; }
+     return Len; }
 
    uint8_t WriteGGA(char *NMEA) const
    { uint8_t Len=Format_String(NMEA+Len, "$GPGGA,");
@@ -1275,7 +1275,7 @@ class GPS_Position: public GPS_Time
      NMEA[Len++]=',';
      NMEA[Len++]=',';
      Len += NMEA_AppendCheckCRNL(NMEA, Len);
-     NMEA[Len]=0; return Len; }
+     return Len; }
 
    int8_t ReadGGA(const char *GGA)
    { if( (memcmp(GGA, "$GPGGA", 6)!=0) && (memcmp(GGA, "$GNGGA", 6)!=0) ) return -1;                                           // check if the right sequence
@@ -1515,7 +1515,7 @@ class GPS_Position: public GPS_Time
     //        else  Packet.clrClimb();
     Packet.setTrack(((uint32_t)Heading*32+112)/225);
     Packet.Integrity[0]=0; Packet.Integrity[1]=0;
-    if((FixQuality>0)&&(FixMode>=2))
+    if(FixQuality>0 && FixMode>0)
     { Packet.setHorAccur((HDOP*2+5)/10);
       Packet.setVerAccur((VDOP*3+5)/10); }
   }

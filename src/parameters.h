@@ -179,14 +179,14 @@ uint16_t StratuxPort;
   union
   { uint16_t TxProtMask;
     struct
-    { bool TxFLR:1;          // FLARM
-      bool TxOGN:1;          // OGN
-      bool TxADSL:1;         // ADS-L
-      bool TxPAW:1;          // PAW
-      bool TxFNT:1;          // FANET
-      bool TxWAN:1;          // LoRaWAN
-      bool TxADSB:1;         // ADS-B
-      bool TxODID:1;         // Open-Drone-ID
+    { bool TxFLR:1;          // #0 FLARM
+      bool TxOGN:1;          // #1 OGN
+      bool TxADSL:1;         // #2 ADS-L
+      bool TxPAW:1;          // #3 PAW
+      bool TxFNT:1;          // #4 FANET
+      bool TxWAN:1;          // #5 LoRaWAN
+      bool TxADSB:1;         // #6 ADS-B
+      bool TxODID:1;         // #7 Open-Drone-ID
     } ;
   } ;
 
@@ -617,9 +617,9 @@ uint16_t StratuxPort;
     Len+=Format_String(Line+Len, ",APport=");
     Len+=Format_UnsDec(Line+Len, (uint32_t)APport);
     Len+=Format_String(Line+Len, ",APtxPwr=");
-    Len+=Format_SignDec(Line+Len, ((int16_t)10*APtxPwr+2)>>2, 2, 1);
+    Len+=Format_SignDec(Line+Len, ((int32_t)10*APtxPwr+2)>>2, 2, 1);
     Len+=Format_String(Line+Len, ",APminSig=");
-    Len+=Format_SignDec(Line+Len, (int16_t)APminSig);
+    Len+=Format_SignDec(Line+Len, (int32_t)APminSig);
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     Line[Len]=0; return Len; }
 #endif
@@ -669,9 +669,9 @@ uint16_t StratuxPort;
       Value[Idx]=0;
     return Val-Inp; }
 
-  static const char *SkipBlanks(const char *Inp)
+  static const char *SkipBlanks(const char *Inp) // skip space and all control codes thus below 32
   { for( ; ; )
-    { char ch=(*Inp); if(ch==0) break;
+    { char ch=(*Inp); if(ch==0) break;           // but stop on NL
       if(ch>' ') break;
       Inp++; }
     return Inp; }
@@ -782,13 +782,13 @@ uint16_t StratuxPort;
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
     { if(strcmp(Name, OGN_Packet::InfoParmName(Idx))==0)
-        return Read_String(InfoParmValue(Idx), Value, 16)<=0; }
+        return Read_String(InfoParmValue(Idx), Value, 16)>=0; }
 #if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
-    if(strcmp(Name, "BTname")==0) return Read_String(BTname, Value, 16)<=0;
+    if(strcmp(Name, "BTname")==0) return Read_String(BTname, Value, 16)>=0;
 #endif
 #ifdef WITH_AP
-    if(strcmp(Name, "APname")==0) return Read_String(APname, Value, 16)<=0;
-    if(strcmp(Name, "APpass")==0) return Read_String(APpass, Value, 16)<=0;
+    if(strcmp(Name, "APname")==0) return Read_String(APname, Value, 16)>=0;
+    if(strcmp(Name, "APpass")==0) return Read_String(APpass, Value, 16)>=0;
     if(strcmp(Name, "APport")==0)
     { int32_t Port; if(Read_Int(Port, Value)<=0) return 0;
       if(Port<=0 || Port>0xFFFF) Port=30011; APport=Port; return 1; }
@@ -800,9 +800,9 @@ uint16_t StratuxPort;
       APtxPwr=TxPwr; return 1; }
 #endif
 #ifdef WITH_STRATUX
-    if(strcmp(Name, "StratuxWIFI")==0) return Read_String(StratuxWIFI, Value, 32)<=0;
-    if(strcmp(Name, "StratuxPass")==0) return Read_String(StratuxPass, Value, 32)<=0;
-    if(strcmp(Name, "StratuxHost")==0) return Read_String(StratuxHost, Value, 32)<=0;
+    if(strcmp(Name, "StratuxWIFI")==0) return Read_String(StratuxWIFI, Value, 32)>=0;
+    if(strcmp(Name, "StratuxPass")==0) return Read_String(StratuxPass, Value, 32)>=0;
+    if(strcmp(Name, "StratuxHost")==0) return Read_String(StratuxHost, Value, 32)>=0;
     if(strcmp(Name, "StratuxPort")==0)
     { int32_t Port; if(Read_Int(Port, Value)<=0) return 0;
       if(Port<=0 || Port>0xFFFF) Port=30011; StratuxPort=Port; return 1; }
@@ -818,13 +818,13 @@ uint16_t StratuxPort;
       if(TxPwr>=80) TxPwr=80;
       StratuxTxPwr=TxPwr; return 1; }
 #endif
-#ifdef WITH_APRS
-    if(strcmp(Name, "WIFIname")==0) return Read_String(WIFIname[0], Value, WIFInameLen)<=0;
-    if(strcmp(Name, "WIFIpass")==0) return Read_String(WIFIpass[0], Value, WIFIpassLen)<=0;
+#ifdef WITH_WIFI
+    if(strcmp(Name, "WIFIname")==0) return Read_String(WIFIname[0], Value, WIFInameLen)>=0;
+    if(strcmp(Name, "WIFIpass")==0) return Read_String(WIFIpass[0], Value, WIFIpassLen)>=0;
     if( (memcmp(Name, "WIFIname", 8)==0) && (strlen(Name)==9) )
-    { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIname[Idx], Value, WIFInameLen)<=0; }
+    { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIname[Idx], Value, WIFInameLen)>=0; }
     if( (memcmp(Name, "WIFIpass", 8)==0) && (strlen(Name)==9) )
-    { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)<=0; }
+    { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
@@ -864,28 +864,28 @@ uint16_t StratuxPort;
     int Lines=ReadFromFile(File);
     fclose(File); return Lines; }
 
-  int Write_Hex(char *Line, const char *Name, uint32_t Value, uint8_t Digits)
+  static int Write_Hex(char *Line, const char *Name, uint32_t Value, uint8_t Digits)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = 0x");
     Len+=Format_Hex(Line+Len, Value, Digits);
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
-  int Write_UnsDec(char *Line, const char *Name, uint32_t Value)
+  static int Write_UnsDec(char *Line, const char *Name, uint32_t Value)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
     Len+=Format_UnsDec(Line+Len, Value);
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
-  int Write_SignDec(char *Line, const char *Name, int32_t Value)
+  static int Write_SignDec(char *Line, const char *Name, int32_t Value)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
     Len+=Format_SignDec(Line+Len, Value);
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
-  int Write_Float1(char *Line, const char *Name, int32_t Value)
+  static int Write_Float1(char *Line, const char *Name, int32_t Value)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
     Len+=Format_SignDec(Line+Len, Value, 2, 1);

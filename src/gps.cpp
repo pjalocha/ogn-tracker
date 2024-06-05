@@ -15,7 +15,7 @@
 #include "sdlog.h"
 #endif
 
-#include "rf.h"
+// #include "rf.h"
 #include "ogn.h"
 
 // #include "ctrl.h"
@@ -61,7 +61,7 @@ static   TickType_t Burst_Tick;            // [msec] System Tick when the data b
           int16_t   GPS_GeoidSepar= 0;     // [0.1m]
          uint16_t   GPS_LatCosine = 3000;  // [1.0/4096]
 
-         uint32_t   GPS_Random = 0x12345678; // random number from the LSB of the GPS data
+         // uint32_t   GPS_Random = 0x12345678; // random number from the LSB of the GPS data
 
          uint16_t   GPS_SatSNR = 0;        // [0.25dB] average SNR from the GSV sentences
          uint8_t    GPS_SatCnt = 0;
@@ -122,12 +122,12 @@ void FlightProcess(void)
   Flight.Process(GPS);
   GPS.InFlight=Flight.inFlight();
   if(Parameters.AddrType!=0) return;
-  uint32_t Random = GPS_Random; // ^TRX.Random;
+  uint32_t Rnd = Random.GPS; // ^TRX.Random;
   if(RndID_TimeToChange==0)
-  { if(Parameters.Stealth) RndID_TimeToChange = 57+Random%5; }
+  { if(Parameters.Stealth) RndID_TimeToChange = 57+Rnd%5; }
   else
   { if(RndID_TimeToChange==1)
-    { Parameters.Address = (Random%0xFFFFFE)+1;
+    { Parameters.Address = (Rnd%0xFFFFFE)+1;
       Parameters.WritePOGNS(Line);
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_String(CONS_UART_Write, Line);
@@ -240,6 +240,7 @@ static void GPS_PPS_On(void)                          // called on rising edge o
   PrevTickCount = PPS_Tick;                           // [ms]
   if(abs((int)Delta-1000)>=20) return;                // [ms] filter out difference away from 1.00sec
   TimeSync_HardPPS(PPS_Tick);                         // [ms] synchronize the UTC time to the PPS at given Tick
+  // GPS_TimeSync.sysTime=;
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
@@ -470,7 +471,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
 }
 
 static void GPS_Random_Update(uint8_t Bit)
-{ GPS_Random = (GPS_Random<<1) | (Bit&1); }
+{ Random.GPS = (Random.GPS<<1) | (Bit&1); }
 
 static void GPS_Random_Update(GPS_Position *Pos)
 { if(Pos==0) return;
@@ -479,7 +480,7 @@ static void GPS_Random_Update(GPS_Position *Pos)
   GPS_Random_Update(Pos->Latitude);
   GPS_Random_Update(Pos->Longitude);
   if(Pos->hasBaro) GPS_Random_Update(Pos->Pressure);
-  XorShift32(GPS_Random); }
+  XorShift32(Random.GPS); }
 
 static void GPS_BurstComplete(void)                                        // when GPS has sent the essential data for position fix
 { GPS_Burst.Complete=1;

@@ -29,7 +29,8 @@
 #include "oled.h"
 
 #include "gps.h"
-#include "rf.h"
+// #include "rf.h"
+#include "ogn-radio.h"
 #include "sens.h"
 #include "proc.h"
 #include "log.h"
@@ -59,7 +60,9 @@ uint64_t getUniqueMAC(void)                                  // 48-bit unique ID
 uint64_t getUniqueID(void) { return getUniqueMAC(); }         // get unique serial ID of the CPU/chip
 uint32_t getUniqueAddress(void) { return getUniqueMAC()&0x00FFFFFF; } // get unique OGN address
 
-HardItems Hardware = { 0 };
+Word32x2 Random = { 0x0123456789ABCDEF };
+
+HardItems HardwareStatus = { 0 };
 
 // =======================================================================================================
 // VS to store parameters and other data
@@ -142,7 +145,7 @@ uint16_t BatterySense(int Samples)
   if(PMU) return PMU->getBattVoltage();
 #endif
 #ifdef WITH_AXP
-  if(Hardware.AXP192 || Hardware.AXP202) return AXP.getBattVoltage();
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202) return AXP.getBattVoltage();
 #endif
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
@@ -253,6 +256,11 @@ void setup()
   SPIFFS_Register();                         // initialize the file system in the Flash
 #endif
 
+#ifdef WITH_OGN
+  Radio_SlotMsg = xQueueCreate(1, sizeof(TimeSync)); // message queue for GPS to signal the new time slot
+#endif
+  Random.Word+=getUniqueID(); XorShift64(Random.Word);
+
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
   { Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
@@ -279,17 +287,17 @@ void setup()
 #else
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
-  { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+  { HardwareStatus.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
 #ifdef PMU_I2C_PinSCL
   else if(AXP.begin(PMU_I2C, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
 #else
   else if(AXP.begin(Wire, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
-  { Hardware.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
+  { HardwareStatus.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
   else
   { Serial.println("AXP power/charge chip NOT detected"); }
 
-  if(Hardware.AXP192 || Hardware.AXP202)
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
   { AXP.adc1Enable(AXP202_VBUS_VOL_ADC1 |
                    AXP202_VBUS_CUR_ADC1 |
                    AXP202_BATT_CUR_ADC1 |
@@ -310,7 +318,7 @@ void setup()
     PMU = new XPowersAXP2101(Wire);
 #endif
     if(PMU->init())
-    { Hardware.AXP210=1; Serial.println("AXP2101 power/charge chip detected"); }
+    { HardwareStatus.AXP210=1; Serial.println("AXP2101 power/charge chip detected"); }
     else
     { delete PMU; PMU=0; Serial.println("AXP2101 power/charge chip NOT detected"); }
   }
@@ -322,11 +330,11 @@ void setup()
     PMU = new XPowersAXP192(Wire);
 #endif
     if(PMU->init())
-    { Hardware.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+    { HardwareStatus.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
     else
     { delete PMU; PMU=0; Serial.println("AXP192 power/charge chip NOT detected"); }
   }
-  if(Hardware.AXP210)
+  if(HardwareStatus.AXP210)
   { PMU->enableSystemVoltageMeasure();
     PMU->enableVbusVoltageMeasure();
     PMU->enableBattVoltageMeasure();
@@ -362,7 +370,7 @@ void setup()
 #endif
     // set charging LED flashing
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
-  if(Hardware.AXP192 || Hardware.AXP210)
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP210)
   { Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
     Serial.printf("  Batt: %5.3fV\n", 0.001f*PMU->getBattVoltage());
     // Serial.printf("  USB:  %5.3fV  %5.3fA\n",
@@ -371,14 +379,14 @@ void setup()
     //           0.001f*PMU->getBattVoltage(), 0.001f*PMU->getBattChargeCurrent(), 0.001f*PMU->getBattDischargeCurrent());
   }
 #endif
-  if(!Hardware.AXP192 && !Hardware.AXP202 && !Hardware.AXP210)  // if none of the power controllers detected
+  if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202 && !HardwareStatus.AXP210)  // if none of the power controllers detected
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
 
-  int RadioStat=TRX.Init();
-  if(RadioStat==0)
-  { Hardware.Radio=1; Serial.println("RF chip detected"); }
-  else
-  { Serial.printf("RF chip not detected: %d\n", RadioStat); }
+  // int RadioStat=TRX.Init();
+  // if(RadioStat==0)
+  // { HardwareStatus.Radio=1; Serial.println("RF chip detected"); }
+  // else
+  // { Serial.printf("RF chip not detected: %d\n", RadioStat); }
 
   Serial.printf("I2C scan:");
   uint8_t I2Cdev=0;
@@ -414,8 +422,9 @@ void setup()
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
   xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
-  xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
+  // xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(Radio_Task     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
 
 }
 

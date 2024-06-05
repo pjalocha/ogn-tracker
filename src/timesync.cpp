@@ -1,7 +1,9 @@
 #include "timesync.h"
 
-static TickType_t TimeSync_RefTick;    // reference point on the system tick
-static uint32_t   TimeSync_RefTime;    // Time which corresponds to the above reference point
+TimeSync GPS_TimeSync;
+
+static TickType_t &TimeSync_RefTick = GPS_TimeSync.sysTime;    // reference point on the system tick
+static uint32_t   &TimeSync_RefTime = GPS_TimeSync.UTC;        // Time which corresponds to the above reference point
 
 void TimeSync_HardPPS(TickType_t Tick)                                     // [ms] hardware PPS at the give system tick
 { TickType_t Incr = (Tick-TimeSync_RefTick+500)/1000;                      // [sec] home many full seconds to step forward

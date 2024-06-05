@@ -50,6 +50,16 @@ extern SemaphoreHandle_t I2C_Mutex;
 
 extern uint8_t PowerMode;                 // 0=sleep/minimal power, 1=comprimize, 2=full power
 
+typedef union
+{ uint64_t Word;
+  struct
+  { uint32_t RX;
+    uint32_t GPS;
+  } ;
+} Word32x2;
+
+extern Word32x2 Random;
+
 uint8_t I2C_Restart(uint8_t Bus);
 uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait=10);
 uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait=10);
@@ -105,5 +115,7 @@ typedef union
   } ;
 } HardItems;
 
-extern HardItems Hardware;
+extern HardItems HardwareStatus;
 
+inline void SysLog_Line(const char *Line, int LineLen, bool Timestamp, int msTimeout) { }
+inline void SysLog_Line(const char *Line, bool Timestamp, int msTimeout)              { }
