@@ -77,10 +77,12 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYN
   // Radio.standby();
   // vTaskDelay(1);
 #ifdef WITH_SX1276
-  State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
+  if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
+    State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
 #endif
 #ifdef WITH_SX1262
-  State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
+  if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_GFSK)
+    State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
 #endif
   if(State) ErrState=State;
   State=Radio.setBitRate(100.0);                                    // [kpbs] 100kbps bit rate but we transmit Manchester encoded thus effectively 50 kbps
@@ -324,14 +326,16 @@ static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a
 static void Radio_ConfigFANET(uint8_t CR=4)                        // setup Radio for FANET
 {                                                                  // first swith to LoRa mode
 #ifdef WITH_SX1262
-  Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+  if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
+    Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
   Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CR, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,      Payload (max) size, Header-Type,                    Invert-IQ
   Radio.setPacketParams(5, RADIOLIB_SX126X_LORA_CRC_ON, 40, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
 #endif
 #ifdef WITH_SX1276
-  Radio.setActiveModem(RADIOLIB_SX127X_LORA);
+  if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
+    Radio.setActiveModem(RADIOLIB_SX127X_LORA);
 #endif
   Radio.explicitHeader();
   Radio.setBandwidth(250.0);
@@ -411,7 +415,8 @@ static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLe
 static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR=4)
 {
 #ifdef WITH_SX1262
-  Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+  if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
+    Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
   Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_125_0, 4+CR, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,                                                Payload (max) size, Header-Type,
@@ -419,7 +424,8 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
                            TX?RADIOLIB_SX126X_LORA_IQ_STANDARD:RADIOLIB_SX126X_LORA_IQ_INVERTED);  // InvertIQ
 #endif
 #ifdef WITH_SX1276
-  Radio.setActiveModem(RADIOLIB_SX127X_LORA);
+  if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
+    Radio.setActiveModem(RADIOLIB_SX127X_LORA);
 #endif
   Radio.explicitHeader();
   Radio.setBandwidth(125.0);
