@@ -23,6 +23,7 @@ class ADSL_Packet
    uint8_t Version;          // Version[4]/Sigmature[1]/Key[2]/Reserved[1]
    union                     // 20 bytes
    { uint32_t Word[5];       // this part to be scrambled/encrypted, is aligned to 32-bit
+     uint8_t  Byte[20];
      struct                  // this is aligned to 32-bit
      { uint8_t Type;         // 0x02=iConspicuity, 0x41=Telemetry, bit #7 = Unicast
        uint8_t Address  [4]; // Address[30]/Reserved[1]/RelayForward[1] (not aligned to 32-bit !)
@@ -217,6 +218,16 @@ class ADSL_Packet
      Len+=Format_Hex(Out+Len, CRC[0]);
      Len+=Format_Hex(Out+Len, CRC[1]);
      Len+=Format_Hex(Out+Len, CRC[2]);
+     return Len; }
+
+   uint8_t DumpBytes(char *Out)
+   { uint8_t Len=0;
+     Out[Len++]='[';
+     Len+=Format_Hex(Out+Len, Length);
+     Out[Len++]=']';
+     Len+=Format_Hex(Out+Len, Version);
+     for(int Idx=0; Idx<20; Idx++)
+       Len+=Format_Hex(Out+Len, Byte[Idx]);
      return Len; }
 
    uint8_t  getRelay(void)     const { return Address[3]&0x80; }
