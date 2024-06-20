@@ -13,7 +13,7 @@
 #define Radio_PinMOSI 11 // MOSI
 #define Radio_PinMISO 13 // MISO
 #define Radio_PinCS   10 // CS
-#define Radio_PinIRQ   1 // IRQ
+#define Radio_PinIRQ1  1 // IRQ
 #define Radio_PinBusy  4 // Busy: only for SX1262
 
 // #define I2C_PinSCL    41 // SCL
