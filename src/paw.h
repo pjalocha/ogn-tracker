@@ -16,44 +16,45 @@ class PAW_Packet
      { union
        { uint32_t AddrWord;
          struct
-         { uint8_t  Sync   : 8; // the first (thus lowest) byte is the "sync" = '$' = 0x24
-           uint32_t Address:24; // 24-bit address: can be ICAO or internally produced
+         { uint8_t  Sync   : 8; // [ 0] the first (thus lowest) byte is the "sync" = '$' = 0x24 (or 0x48)
+           uint32_t Address:24; // [ 1] 24-bit address: can be ICAO or internally produced
          } ;
        } ;
-       float    Longitude;      // [deg]
-       float    Latitude;       // [deg]
-       uint16_t Altitude;       // [m]
+       float    Longitude;      // [ 4] [deg]
+       float    Latitude;       // [ 8] [deg]
+       uint16_t Altitude;       // [12] [m]
        union
-       { uint16_t HeadWord;
+       { uint16_t HeadWord;     // [14]
          struct
-         { uint16_t Heading:9;  // [deg]
-            int8_t  Climb  :7;  // [64fpm]
-         } ;
-       } ;
-       union
-       { uint32_t SeqMsg;
-         struct
-         { uint8_t  Seq;        // sequence number to transmit longer messages
-           uint8_t  Msg[3];     // 3-byte part of the longer message
+         { uint16_t Heading:9;  // [14] [deg]
+           //  int8_t  Climb  :7;  // [64fpm] proposed extension
          } ;
        } ;
        union
-       { uint16_t SpeedWord;
+       { uint32_t SeqMsg;       // [16]
          struct
-         { uint16_t Speed:10;   // [kt]
-           uint8_t  Time : 6;   // [sec]
+         { uint8_t  Seq;        // [16] sequence number to transmit longer messages
+           uint8_t  Msg[3];     // [17] 3-byte part of the longer message
          } ;
        } ;
        union
-       { uint8_t TypeByte;
+       { uint16_t SpeedWord;    // [20]
          struct
-         { uint8_t  AcftType:4; // [] lower nibble is the aircraft-type like for FLARM/OGN, upper nibble possibly retransmit flag
-           bool     Relay   :1; // relay flag (by ground station)
-           bool     OGN     :1; // for packets produced by OGN-Tracker
-           uint8_t  AddrType:2; // address-type for OGN packets (if OGN==1)
+         { uint16_t Speed:10;   // [20] [kt]
+           // uint8_t  Time : 6;   // [sec] proposed extension
          } ;
        } ;
-       uint8_t  CRC;            // internal CRC: a XOR of all bytes
+       union
+       { uint8_t TypeByte;      // [22]
+         struct
+         { uint8_t  AcftType:4; // [22] lower nibble is the aircraft-type like for FLARM/OGN, upper nibble possibly retransmit flag
+           uint8_t  Relay   :4; // [22] to be worked out: 1 or 2 signal some kind of relay
+           // bool     Relay   :1; // relay flag (by ground station)
+           // bool     OGN     :1; // for packets produced by OGN-Tracker - proposed extension
+           // uint8_t  AddrType:2; // address-type for OGN packets (if OGN==1) - proposed extension
+         } ;
+       } ;
+       uint8_t  CRC;            // [24] internal CRC: a XOR of all bytes
     } ;
   } ;
 
@@ -65,16 +66,24 @@ class PAW_Packet
        Byte[Idx]=0; }
 
    uint8_t getAddrType(void) const            // get (or guess) address-type
-   { if(OGN) return AddrType;                 // if OGN-Tracker then AddrType is explicit
+   { // if(OGN) return AddrType;                 // if OGN-Tracker then AddrType is explicit
      if(AcftType==0xF) return 3;              // if fixed object then OGN-type
      if(Address<0xD00000) return 1;           // ICAO-type
      if(Address<0xE00000) return 2;           // FLARM-type
-     return 3; }
+     return 3; }                              // OGN-type
 
+   bool isPos(void) const { return Sync==0x24; }
    // uint32_t getAddress(void) const { return Address>>8; }              // remove the sync '$'
    // void     setAddress(uint32_t Addr) { Address = (Addr<<8) | 0x24; }  // set new address and set the '$' sync char
 
-   int Copy(const OGN1_Packet &Packet, bool Ext=0)
+   int DecodePosition(float &Lat, float &Lon, int &Alt)
+   { if(!isPos()) return 0;
+     Lat = Latitude;
+     Lon = Longitude;
+     Alt = Altitude;
+     return 3; }
+
+   int Copy(const OGN1_Packet &Packet /* , bool Ext=0 */ )         // convert from an OGN packet
    { Clear();
      Address  = Packet.Header.Address;                     // [24-bit]
      if(Packet.Header.NonPos) return 0;                    // encode only position packets
@@ -82,8 +91,9 @@ class PAW_Packet
      Altitude = Packet.DecodeAltitude();                   // [m]
      Heading = Packet.DecodeHeading()/10;                  // [deg]
      Speed = (398*(int32_t)Packet.DecodeSpeed()+1024)>>11; // [0.1m/s] => [kts]
-     Latitude  = 0.0001f/60*Packet.DecodeLatitude();       // [deg]
-     Longitude = 0.0001f/60*Packet.DecodeLongitude();      // [deg]
+     Latitude  = (0.0001f/60)*Packet.DecodeLatitude();     // [deg]
+     Longitude = (0.0001f/60)*Packet.DecodeLongitude();    // [deg]
+/*
      if(Ext)
      { OGN=1;                                              // extended data flag
        AddrType = Packet.Header.AddrType;                  // [2-bit]
@@ -94,10 +104,11 @@ class PAW_Packet
        if(ClimbRate>127) ClimbRate=127;
        else if(ClimbRate<(-127)) ClimbRate=(-127);
        Climb = ClimbRate; }
+*/
      SeqMsg = 0;
      setCRC(); return 1; }
 
-   int WriteJSON(char *JSON) const
+   int WriteStxJSON(char *JSON) const
    { int Len=0;
      Len+=Format_String(JSON+Len, "\"addr\":\"");
      Len+=Format_Hex(JSON+Len, (uint8_t) (Address>>16));
@@ -121,7 +132,7 @@ class PAW_Packet
      // Len+=Format_SignDec(JSON+Len, RxTime, 4, 3, 1);
      Len+=sprintf(JSON+Len, ",\"lat_deg\":%8.7f,\"lon_deg\":%8.7f,\"alt_msl_m\":%d", Latitude, Longitude, Altitude);
      Len+=sprintf(JSON+Len, ",\"track_deg\":%d,\"speed_mps\":%3.1f", Heading, 0.514*Speed);
-     if(OGN) Len+=sprintf(JSON+Len, ",\"climb_mps\":%3.1f", 0.32512*Climb);
+     // if(OGN) Len+=sprintf(JSON+Len, ",\"climb_mps\":%3.1f", 0.32512*Climb);
      return Len; }
 
    uint8_t Dump(char *Out)
@@ -136,7 +147,8 @@ class PAW_Packet
             TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed, Seq, Msg[0], Msg[1], Msg[2]);
      for(int Idx=0; Idx<3; Idx++)
      { printf("%c", Msg[Idx]<' '?'.':Msg[Idx]); }
-     printf("\n"); }
+     // printf(" %c%c%c\n", Relay?'R':'_', OGN?'O':'_', '0'+AddrType);
+       printf(" %04X %04X\n", HeadWord, SpeedWord); }
 
   uint8_t Read(const char *Inp)                                      // read packet from a hex dump
   { uint8_t Len;
@@ -189,7 +201,7 @@ class PAW_Packet
     0x95, 0x92, 0x9b, 0x9c, 0xb1, 0xb6, 0xbf, 0xb8, 0xad, 0xaa, 0xa3, 0xa4,
     0xf9, 0xfe, 0xf7, 0xf0, 0xe5, 0xe2, 0xeb, 0xec, 0xc1, 0xc6, 0xcf, 0xc8,
     0xdd, 0xda, 0xd3, 0xd4, 0x69, 0x6e, 0x67, 0x60, 0x75, 0x72, 0x7b, 0x7c,
-							    0x51, 0x56, 0x5f, 0x58, 0x4d, 0x4a, 0x43, 0x44, 0x19, 0x1e, 0x17, 0x10,
+    0x51, 0x56, 0x5f, 0x58, 0x4d, 0x4a, 0x43, 0x44, 0x19, 0x1e, 0x17, 0x10,
     0x05, 0x02, 0x0b, 0x0c, 0x21, 0x26, 0x2f, 0x28, 0x3d, 0x3a, 0x33, 0x34,
     0x4e, 0x49, 0x40, 0x47, 0x52, 0x55, 0x5c, 0x5b, 0x76, 0x71, 0x78, 0x7f,
     0x6a, 0x6d, 0x64, 0x63, 0x3e, 0x39, 0x30, 0x37, 0x22, 0x25, 0x2c, 0x2b,
@@ -201,9 +213,9 @@ class PAW_Packet
 
 } ;
 
-class PAW_RxPacket          // Received PilotAware packet
+class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
 { public:
-   PAW_Packet Packet;
+   // PAW_Packet Packet;
    // uint8_t  CRC;            // []        external CRC (we assume it is correct)
    uint8_t  CSNR;           // [0.5dB]  carrier Signal-to-Noise Ratio
    uint8_t   SNR;           // [0.25dB]
@@ -212,16 +224,25 @@ class PAW_RxPacket          // Received PilotAware packet
    uint32_t nsTime;         // [nsec]
 
   public:
-   void Print(void)
-   { printf("PAW: %d.%03ds: %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
-            Time, nsTime/1000000, Packet.TypeByte, Packet.Address, Packet.Latitude, Packet.Longitude, Packet.Altitude, Packet.Heading, Packet.Speed,
-            Packet.Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs); }
+   void Print(void) const
+   { printf("%d.%03ds %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
+            Time, nsTime/1000000, TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed,
+            Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs); }
 
-   int WriteJSON(char *JSON) const
-   { int Len = Packet.WriteJSON(JSON);
-     uint32_t PosTime=Time; if(nsTime<300000000) PosTime--;
-     if(Packet.OGN)
-     { }
+   int Print(char *Out) const
+   { return sprintf(Out, "%d.%03ds %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
+            Time, nsTime/1000000, TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed,
+            Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs); }
+
+   uint32_t getSlotTime(void) const
+   { if(nsTime>=150000000) return Time;
+     return Time-1; }
+
+   int WriteStxJSON(char *JSON) const
+   { int Len = PAW_Packet::WriteStxJSON(JSON);
+     uint32_t PosTime=getSlotTime();
+     // if(OGN)
+     // { }
      Len+=Format_String(JSON+Len, ",\"time\":");
      Len+=Format_UnsDec(JSON+Len, PosTime);
      int64_t RxTime=(int64_t)Time-PosTime; RxTime*=1000; RxTime+=nsTime/1000000;

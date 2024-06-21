@@ -172,6 +172,31 @@ static int ReadInfo(OGN1_Packet &Packet)
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
+template <class Type>
+ static uint8_t Limit(Type X, Type Low, Type Upp)
+{ if(X<Low) return Low;
+  if(X>Upp) return Upp;
+  return X; }
+
+static void ReadStatus(ADSL_Packet &Packet, const GPS_Position &GPS)
+{ Packet.Init(0x42);
+  Packet.setAddress    (Parameters.Address);
+  Packet.setAddrTypeOGN(Parameters.AddrType);
+  Packet.setRelay(0);
+  Packet.Telemetry.Header.TelemType=0x00;
+  uint16_t BattVolt = BatterySense();                                        // [mV] measure battery voltage
+  // GPS.EncodeTelemetry(Packet);
+  // uint8_t SNR = (GPS_SatSNR+2)/4;                                   // encode number of satellites and SNR in the Status packet
+  // if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
+  //       else { SNR=0; }
+  // Packet.Telemetry.GPS.SNR=SNR;
+  Packet.Telemetry.Battery.Voltage  = EncodeUR2V8(BattVolt/4);
+  // Packet.Telemetry.Battery.Capacity = Limit((int)floorf(BatteryCapacity*(64.0f/100)), 0, 63);
+  Packet.Telemetry.Radio.RxNoise = Limit(120+(int)floorf(Radio_BkgRSSI+0.5), 0, 63);
+  Packet.Telemetry.Radio.RxRate  = EncodeUR2V4(floorf(Radio_PktRate*4+0.5f));
+  Packet.Telemetry.Radio.TxPower = Limit(Parameters.TxPower-10, 0, 15);
+}
+
 static void ReadStatus(OGN_Packet &Packet)
 {
 // #ifdef WITH_JACEK
@@ -518,7 +543,12 @@ void vTaskPROC(void* pvParameters)
     TickType_t msTime;                                                  // [msec]
     TimeSync_Time(Time, msTime);
     uint32_t SlotTime=Time;
-    if(msTime<340) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+#ifdef WITH_GPS_UBX
+    if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+#endif
+#ifdef WITH_GPS_MTK
+    if(msTime<300) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+#endif
 
     if(SlotTime==PrevSlotTime) continue;                                // stil same time slot, go back to RX processing
 

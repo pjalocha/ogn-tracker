@@ -7,7 +7,7 @@
 
 class FlightMonitor
 { public:
-   // GPS_Position FirstLock;                // first (or almost) GPS lock
+   GPS_Position FirstLock;              // first (or almost) GPS lock
    GPS_Position Takeoff;                // est. takeoff position
    GPS_Position Landing;                // est. landing position
    GPS_Position MaxAltitude;            // est. positon at peak altitude
@@ -15,15 +15,19 @@ class FlightMonitor
    uint32_t FlownDist;                  // distance flown
    static const uint8_t  MinHold  =  5; // [sec] minimum hold time before takeoff declared
    static const uint16_t MinSpeed = 40; // [0.1m/s] minimum horiontal speed to trigger the takeoff (or vertical speed 1/4 of this limit)
-   uint8_t HoldTime;
+   uint8_t HoldTime;                    // [sec]
+   uint8_t FirstInit;                   // [sec]
 
   public:
 
    void Clear(void)
-   { Takeoff.Clear(); FlownDist=0;
+   { FirstLock.Clear();
+     Takeoff.Clear();
+     FlownDist=0;
      Landing.Clear();
      MaxAltitude.Clear();
-     HoldTime=0; }
+     HoldTime=0;
+     FirstInit=0; }
 
    static char Code36(int Num)       // coding of numbers in IGC file names
    { if(Num<=0) return '0';
@@ -65,8 +69,19 @@ class FlightMonitor
 
    bool inFlight(void) const { return Takeoff.isValid() && !Landing.isValid(); }
 
+   int SeekFirstLock(const GPS_Position &Position)
+   { if(!Position.isValid()) return 0;                         // GPS must have a fix
+     if(!FirstLock.isValid()) { FirstLock=Position; return 1; } // if FirstLock not fixed then copy the GPS position
+     FirstInit++;
+     if(Position.Speed>10) return 0;                           // if moving then avoid
+     if(FirstInit>30) return 0;                                // 
+     int8_t Diff = Position.HDOP-FirstLock.HDOP;               // correct FirstFix if better HDOP position withint 30 sec
+     if(Diff<0) { FirstLock=Position; return 1; }
+     return 0; }
+
    int Process(const GPS_Position &Position)                   // precess the GPS positions
    { // Position.Print();
+     SeekFirstLock(Position);
      if(inFlight())                                            // if already in flight
      { // FlownDist += GPS.Speed;                                 // [0.1m]
        int Det=FlightThresh(Position, MinSpeed/2);             // check in-flight criteria with half the limit

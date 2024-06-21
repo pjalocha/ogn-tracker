@@ -242,11 +242,7 @@ class ADSL_Packet
      uint32_t C = Byte[2];
      uint32_t D = Byte[3];
      return A | (B<<8) | (C<<16) | (D<<24); }
-   // { uint32_t Word =Byte[3]; Word<<=8;
-   //            Word|=Byte[2]; Word<<=8;
-   //            Word|=Byte[1]; Word<<=8;
-   //            Word|=Byte[0];
-   //   return Word; }
+
    static void     set4bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; Byte[3]=Word>>24; }
 
    uint32_t getAddress(void) const
