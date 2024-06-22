@@ -15,12 +15,14 @@
 
  FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
 
+ // quques for transmitted packets
  FIFO<OGN_TxPacket<OGN_Packet>, 4> OGN_TxFIFO;
  FIFO<ADSL_Packet,              4> ADSL_TxFIFO;
  // FIFO<ADSL_RID,                 4> RID_TxFIFO;
-
  FIFO<FANET_Packet,             4> FNT_TxFIFO;
+ FIFO<PAW_Packet,               4> PAW_TxFIFO;
 
+ // queues for received packets
  FIFO<Manch_RxPktData,         64> Manch_RxFIFO;
  FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
 
@@ -38,13 +40,13 @@ static const uint8_t RID_SYNC[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA6, 
 // PilotAware SYNC, includes net-address which is always zero, and the packet size which is always 0x18 = 24
 static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18, 0x71, 0x00, 0x00 };
 
-const char *Radio_SysName[5] = { "FLR", "OGN", "ADSL", "RID", "FNT" } ;
+const char *Radio_SysName[6] = { "FLR", "OGN", "ADSL", "RID", "FNT", "PAW" } ;
 
-static const uint8_t *Radio_SYNC[5] = { FLR6_SYNC, OGN_SYNC, ADSL_SYNC, RID_SYNC, 0 };
-static const uint8_t  Radio_PktLen[5] = { 26, 26, 24, 36, 0 };                          // [bytes] packet length, before Manchester encoding
+static const uint8_t *Radio_SYNC[6] = { FLR6_SYNC, OGN_SYNC, ADSL_SYNC, RID_SYNC, 0, PAW_SYNC };
+static const uint8_t  Radio_PktLen[6] = { 26, 26, 24, 36, 0, 26 };                          // [bytes] packet length, before Manchester encoding
 
-uint32_t Radio_TxCount[5] = { 0, 0, 0, 0, 0 } ; // transmitted packet counters
-uint32_t Radio_RxCount[5] = { 0, 0, 0, 0, 0 } ; // received packet counters
+uint32_t Radio_TxCount[6] = { 0, 0, 0, 0, 0, 0 } ; // transmitted packet counters
+uint32_t Radio_RxCount[6] = { 0, 0, 0, 0, 0, 0 } ; // received packet counters
 
 int32_t Radio_TxCredit = 60000;                        // [ms]
 float   Radio_PktRate = 0.0f;                          // [Hz] received packet rate
@@ -273,7 +275,7 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
 
 // =======================================================================================================
 
-static int Radio_ConfigPAW(uint8_t PktLen, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)         // Radio setup for PilotAware
+static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)         // Radio setup for PilotAware
 { int ErrState=0; int State=0;
   // uint32_t Time=millis();
   // Radio.standby();
@@ -321,7 +323,13 @@ static int Radio_ConfigPAW(uint8_t PktLen, const uint8_t *SYNC=PAW_SYNC, uint8_t
 #endif
   // Time = millis()-Time;
   // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
-  return ErrState; }                                                   // this call takes 18-19 ms
+  return ErrState; }                                                // this call takes 18-19 ms
+
+static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
+{ memcpy(Radio_TxPacket, Packet.Byte, Packet.Size);                 // copy packet to the buffer (internal CRC is already set)
+  Packet.Whiten(Radio_TxPacket, Packet.Size);                       // whiten
+  Radio_TxPacket[Packet.Size] = Packet.CRC8(Radio_TxPacket, Packet.Size); // add external CRC
+  return Radio_TxFSK(Radio_TxPacket, Packet.Size+1); }             // send the packet out
 
 // =======================================================================================================
 
@@ -576,7 +584,7 @@ void Radio_Task(void *Parms)
 #ifdef WITH_FANET
     { uint32_t Freq = Radio_FreqPlan.getFreqFNT(TimeRef.UTC);    // frequency to transmit FANET
       Radio_ConfigFANET();
-      Radio.setFrequency(Freq);
+      Radio.setFrequency(1e-6*Freq);
       Radio.startReceive();                                      // start receiving FANET
       for( ; ; )
       { PktCount+=Radio_FANETrxPacket(TimeRef);                  // any packet received ?
@@ -607,6 +615,17 @@ void Radio_Task(void *Parms)
     // { Serial.printf("Radio: %10d:%8d %4dms\n", TimeRef.UTC, TimeRef.sysTime, msTime);
     //   xSemaphoreGive(CONS_Mutex); }
 
+#ifdef WITH_PAW
+    const PAW_Packet *PawPacket = PAW_TxFIFO.getRead();
+    if(PawPacket) PAW_TxFIFO.Read();
+    if(PawPacket)
+    { uint32_t Freq = Radio_FreqPlan.getFreqPAW(TimeRef.UTC);
+      Radio.standby();
+      // Serial.printf("PAW: Freq:%7.3fMHz\n", 1e-6*Freq);
+      Radio_ConfigPAW();
+      Radio.setFrequency(1e-6*Freq);
+      Radio_TxPAW(*PawPacket); }
+#endif
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
     if(OgnPacket1) OGN_TxFIFO.Read();
     const OGN_TxPacket<OGN_Packet> *OgnPacket2 = OGN_TxFIFO.getRead();   // 2nd OGN packet (possibly NULL)

@@ -698,8 +698,7 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
-      // if( (SlotTime&0x07)==(Random.RX&0x07) )                            // every 8sec
-      else if(Parameters.TxFNT && Radio_FreqPlan.Plan<=1)
+      else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
@@ -707,6 +706,16 @@ void vTaskPROC(void* pvParameters)
         FNT_TxFIFO.Write();
         FNTbackOff = 8+(Random.RX&0x1); }                                   // every 9 or 10sec
 #endif // WITH_FANET
+#ifdef WITH_PAW
+      XorShift32(Random.RX);
+      static uint8_t PAW_BackOff=0;
+      if(PAW_BackOff) PAW_BackOff--;
+      else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
+      { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();
+        TxPacket->Copy(PosPacket.Packet);                                // convert OGN position packet to PilotAware
+        PAW_TxFIFO.Write();
+        PAW_BackOff = 3+Random.RX%3; }
+#endif
 
 #ifdef WITH_LOOKOUT
       const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime); // process own position, get the most dangerous target

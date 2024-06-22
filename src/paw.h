@@ -18,11 +18,11 @@ class PAW_Packet
          struct
          { uint8_t  Sync   : 8; // [ 0] the first (thus lowest) byte is the "sync" = '$' = 0x24 (or 0x48)
            uint32_t Address:24; // [ 1] 24-bit address: can be ICAO or internally produced
-         } ;
+         }  __attribute__((packed)) ;
        } ;
        float    Longitude;      // [ 4] [deg]
        float    Latitude;       // [ 8] [deg]
-       uint16_t Altitude;       // [12] [m]
+       uint16_t Altitude;       // [12] [m]    AMSL
        union
        { uint16_t HeadWord;     // [14]
          struct
@@ -35,7 +35,7 @@ class PAW_Packet
          struct
          { uint8_t  Seq;        // [16] sequence number to transmit longer messages
            uint8_t  Msg[3];     // [17] 3-byte part of the longer message
-         } ;
+         }  __attribute__((packed)) ;
        } ;
        union
        { uint16_t SpeedWord;    // [20]
@@ -54,9 +54,9 @@ class PAW_Packet
            // uint8_t  AddrType:2; // address-type for OGN packets (if OGN==1) - proposed extension
          } ;
        } ;
-       uint8_t  CRC;            // [24] internal CRC: a XOR of all bytes
-    } ;
-  } ;
+       uint8_t  CRC;            // [23] internal CRC: a XOR of all bytes
+     }  __attribute__((packed)) ;
+   }  __attribute__((packed)) ;
 
   public:
    void Copy(const uint8_t *Data) { memcpy(Byte, Data, Size); }
@@ -250,6 +250,6 @@ class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
      Len+=Format_SignDec(JSON+Len, RxTime, 4, 3, 1);
      return Len; }
 
-} ;
+}  __attribute__((packed)) ;
 
 #endif // __PAW_H__
