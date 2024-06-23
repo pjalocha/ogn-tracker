@@ -18,6 +18,10 @@
 #include "BluetoothSerial.h"
 #endif
 
+#ifdef WITH_AP
+#include "ap.h"
+#endif
+
 #ifdef WITH_XPOWERS
 #include "XPowersLib.h"
 #endif
@@ -417,6 +421,16 @@ void setup()
   xSemaphoreGive(CONS_Mutex);
   PrintPOGNS();
 
+#ifdef WITH_AP
+#ifdef WITH_AP_BUTTON
+    bool StartAP = Button_isPressed() && Parameters.APname[0]; // start WiFi AP when button pressed during startup and APname non-empty
+#else
+    bool StartAP = Parameters.APname[0]; // start WiFi AP when APname non-empty
+#endif
+#else  // WITH_AP
+    const bool StartAP=0;
+#endif // WITH_AP
+
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
@@ -425,6 +439,10 @@ void setup()
   xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
   // xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
   xTaskCreate(Radio_Task     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
+#ifdef WITH_AP
+  if(StartAP)
+    xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
+#endif
 
 }
 
