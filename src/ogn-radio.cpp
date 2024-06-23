@@ -275,7 +275,7 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
 
 // =======================================================================================================
 
-static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)         // Radio setup for PilotAware
+static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)  // Radio setup for PilotAware
 { int ErrState=0; int State=0;
   // uint32_t Time=millis();
   // Radio.standby();
@@ -308,14 +308,14 @@ static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYN
   State=Radio.disableAddressFiltering();                            // don't want any of such features
 #ifdef WITH_SX1276
   // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
-  if(SYNC[0]==0x55)
-    State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
-  else if(SYNC[0]==0xAA)
+  // if(SYNC[0]==0x55)
+  //   State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
+  // else if(SYNC[0]==0xAA)
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
   State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
-  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before Manchester encoding
+  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 2 bytes, the rest we have to do in software
   if(State) ErrState=State;
 #ifdef WITH_SX1262
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
@@ -331,6 +331,18 @@ static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit 
   Radio_TxPacket[Packet.Size] = Packet.CRC8(Radio_TxPacket, Packet.Size); // add external CRC
   return Radio_TxFSK(Radio_TxPacket, Packet.Size+1); }             // send the packet out
 
+/*
+static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
+{ memcpy(Radio_TxPacket, PAW_SYNC+2, 6);
+  memcpy(Radio_TxPacket+6, Packet.Byte, Packet.Size);               // copy packet to the buffer (internal CRC is already set)
+  // Serial.printf("TxPAW[6+%d] ", Packet.Size);
+  // for(int Idx=0; Idx<Packet.Size+6; Idx++)
+  // { Serial.printf("%02X", Radio_TxPacket[Idx]); }
+  // Serial.printf("\n");
+  Packet.Whiten(Radio_TxPacket+6, Packet.Size);                     // whiten
+  Radio_TxPacket[Packet.Size+6] = Packet.CRC8(Radio_TxPacket+6, Packet.Size); // add external CRC
+  return Radio_TxFSK(Radio_TxPacket, Packet.Size+1+6); }            // send the packet out
+*/
 // =======================================================================================================
 
 #ifdef WITH_FANET
@@ -621,8 +633,8 @@ void Radio_Task(void *Parms)
     if(PawPacket)
     { uint32_t Freq = Radio_FreqPlan.getFreqPAW(TimeRef.UTC);
       Radio.standby();
-      // Serial.printf("PAW: Freq:%7.3fMHz\n", 1e-6*Freq);
-      Radio_ConfigPAW();
+      int Ret=Radio_ConfigPAW();
+      // Serial.printf("PAW: Freq:%7.3fMHz (%d)\n", 1e-6*Freq, Ret);
       Radio.setFrequency(1e-6*Freq);
       Radio_TxPAW(*PawPacket); }
 #endif
