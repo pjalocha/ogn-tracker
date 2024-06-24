@@ -1328,27 +1328,27 @@ static esp_err_t log_get_handler(httpd_req_t *Req)
 
   Html_End(Req);
   return ESP_OK; }
-/*
+
 static esp_err_t logo_get_handler(httpd_req_t *Req)
-{ extern const uint8_t OGN_logo_jpg[]   asm("_binary_OGN_logo_240x240_jpg_start");
-  extern const uint8_t OGN_logo_end[]   asm("_binary_OGN_logo_240x240_jpg_end");
+{ extern const uint8_t OGN_logo_jpg[]   asm("_binary_src_OGN_logo_240x240_jpg_start");
+  extern const uint8_t OGN_logo_end[]   asm("_binary_src_OGN_logo_240x240_jpg_end");
   const int OGN_logo_size = OGN_logo_end-OGN_logo_jpg;
   httpd_resp_set_type(Req, "image/jpeg");
   httpd_resp_send(Req, (const char *)OGN_logo_jpg, OGN_logo_size);
   return ESP_OK; }
-*/
+
 static const httpd_uri_t HTTPtop =
 { .uri       = "/",
   .method    = HTTP_GET,
   .handler   = top_get_handler,
   .user_ctx  = 0 };
-/*
+
 static const httpd_uri_t HTTPlogo =
 { .uri       = "/logo.jpeg",
   .method    = HTTP_GET,
   .handler   = logo_get_handler,
   .user_ctx  = 0 };
-*/
+
 static const httpd_uri_t HTTPparm =
 { .uri       = "/parm.html",
   .method    = HTTP_GET,
@@ -1379,7 +1379,7 @@ esp_err_t HTTP_Start(int MaxSockets, int Port)
   httpd_register_uri_handler(HTTPserver, &HTTPparm); // parameters URL
   httpd_register_uri_handler(HTTPserver, &HTTPparmPost); // parameters URL
   httpd_register_uri_handler(HTTPserver, &HTTPlog);  // log files URL
-  // httpd_register_uri_handler(HTTPserver, &HTTPlogo); // OGN logo
+  httpd_register_uri_handler(HTTPserver, &HTTPlogo); // OGN logo
   return Err; }
 
 void HTTP_Stop(void)
