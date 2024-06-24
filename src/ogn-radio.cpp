@@ -636,6 +636,7 @@ void Radio_Task(void *Parms)
       int Ret=Radio_ConfigPAW();
       // Serial.printf("PAW: Freq:%7.3fMHz (%d)\n", 1e-6*Freq, Ret);
       Radio.setFrequency(1e-6*Freq);
+      Radio.setOutputPower(Parameters.TxPower);
       Radio_TxPAW(*PawPacket); }
 #endif
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)

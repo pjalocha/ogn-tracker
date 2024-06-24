@@ -431,7 +431,9 @@ void setup()
     const bool StartAP=0;
 #endif // WITH_AP
 
+#ifdef WITH_LOG
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
+#endif
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
   xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
@@ -544,10 +546,13 @@ static void ListLogFile(void)
 }
 #endif
 
-static void ProcessNMEA(void)     // process a valid NMEA that got to the console
+static void ProcessNMEA(void)     // process a valid NMEA that we got to the console
 {
 #ifdef WITH_CONFIG
   if(NMEA.isPOGNS()) ReadParameters();
+#endif
+#ifdef WITH_LOG
+  if(NMEA.isPOGNL()) ListLogFile();
 #endif
 }
 

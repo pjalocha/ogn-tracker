@@ -360,7 +360,7 @@ void vTaskLOG(void* pvParameters)
 {
   FlashLog_FIFO.Clear();
 
-#ifdef DEBUG_PRINT
+// #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   Format_String(CONS_UART_Write, "TaskLOG() ");
 #ifdef WITH_SPIFFS
@@ -374,7 +374,7 @@ void vTaskLOG(void* pvParameters)
 #endif
   Format_String(CONS_UART_Write, "\n");
   xSemaphoreGive(CONS_Mutex);
-#endif
+// #endif
 
 #ifdef WITH_SD
 #ifdef WITH_SPIFFS
