@@ -438,18 +438,6 @@ void setup()
   OLED.sendBuffer();
 #endif
 
-#ifdef WITH_BT_SPP
-  BTserial.begin(Parameters.BTname);
-#endif
-
-  uint8_t Len=Format_String(Line, "$POGNS,SysStart");
-  Len+=NMEA_AppendCheckCRNL(Line, Len);
-  Line[Len]=0;
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, Line);
-  xSemaphoreGive(CONS_Mutex);
-  PrintPOGNS();
-
 #ifdef WITH_AP
 #ifdef WITH_AP_BUTTON
     bool StartAP = Button_isPressed() && Parameters.APname[0]; // start WiFi AP when button pressed during startup and APname non-empty
@@ -460,6 +448,19 @@ void setup()
     const bool StartAP=0;
 #endif // WITH_AP
 
+#ifdef WITH_BT_SPP
+  if(!StartAP)
+    BTserial.begin(Parameters.BTname);
+#endif
+
+  uint8_t Len=Format_String(Line, "$POGNS,SysStart");
+  Len+=NMEA_AppendCheckCRNL(Line, Len);
+  Line[Len]=0;
+  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  Format_String(CONS_UART_Write, Line);
+  xSemaphoreGive(CONS_Mutex);
+  PrintPOGNS();
+
 #ifdef WITH_LOG
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
 #endif
@@ -469,7 +470,7 @@ void setup()
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
   // xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
-  xTaskCreate(Radio_Task     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(Radio_Task     ,  "RF"   ,  3000, NULL, 2, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
