@@ -156,6 +156,16 @@ uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
 #ifdef WITH_ST7735
 static SPIClass TFT_SPI(1); // 1=VSPI, 2=HSPI
 static Adafruit_ST7735 TFT = Adafruit_ST7735(&TFT_SPI, TFT_PinCS, TFT_PinDC, TFT_PinRST);
+
+static const int TFT_BL_Chan = 0;
+static const int TFT_BL_Freq = 5000;
+
+static void TFT_BL_Init(void)
+{ ledcSetup(TFT_BL_Chan, TFT_BL_Freq, 8);  // set for 8-bit resolution
+  ledcAttachPin(TFT_PinBL, TFT_BL_Chan); }
+
+static void TFT_BL(uint8_t Lev)
+{ ledcWrite(TFT_BL_Chan, Lev); }
 #endif
 
 // =======================================================================================================
@@ -293,7 +303,7 @@ static void GPS_UART_Init(int BaudRate=9600)
 static void LED_PCB_Init(void)  { pinMode(LED_PCB_Pin, OUTPUT); }
        void LED_PCB_On(bool ON) { digitalWrite(LED_PCB_Pin, ON); }
        void LED_PCB_Off(void)   { return LED_PCB_On(0); }
-       void LED_PCB_Flash(uint8_t Time) { }
+       void LED_PCB_Flash(uint8_t Time) { LED_PCB_On(1); delay(1); LED_PCB_On(0); }
 #else
 static void LED_PCB_Init (void)    { }
        void LED_PCB_On   (bool ON) { }
@@ -530,8 +540,8 @@ void setup()
     TFT.setTextSize(1);
     TFT.setCursor(0, 72);
     TFT.print(Line); }
-  pinMode(TFT_PinBL, OUTPUT);     // LCD backlight control
-  digitalWrite(TFT_PinBL, HIGH);  // turn the backlight ON - this takes 20mA on the HTIT-Tracker
+  TFT_BL_Init();
+  TFT_BL(128);
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
