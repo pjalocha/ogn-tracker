@@ -169,12 +169,21 @@ static AXP20X_Class AXP;
 #endif
 
 // =======================================================================================================
+
+#ifdef Button_Pin
+bool Button_isPressed(void) { digitalRead(Button_Pin)==0; }
+#endif
+
+// =======================================================================================================
 // ADC to sense battery voltage
 
 static esp_adc_cal_characteristics_t *ADC_characs =
         (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-// static const adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
+#ifdef BATT_ADC_CHANNEL
 static const adc1_channel_t ADC_Chan_Batt = BATT_ADC_CHANNEL;  // ADC1_CHANNEL_0 for GPIO 1 or ADC1_CHANNEL_3 for GPIO 4
+#else
+static const adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
+#endif
 static const adc_atten_t ADC_atten = ADC_ATTEN_DB_11;
 static const adc_unit_t ADC_unit = ADC_UNIT_1;
 #define ADC_Vref 1100
@@ -280,9 +289,17 @@ static void GPS_UART_Init(int BaudRate=9600)
 
 // =======================================================================================================
 
-void LED_PCB_On   (void) { }                // LED on the PCB for visual indications
-void LED_PCB_Off  (void) { }
-void LED_PCB_Flash(uint8_t Time) { }
+#ifdef LED_PCB_Pin
+static void LED_PCB_Init(void)  { pinMode(LED_PCB_Pin, OUTPUT); }
+       void LED_PCB_On(bool ON) { digitalWrite(LED_PCB_Pin, ON); }
+       void LED_PCB_Off(void)   { return LED_PCB_On(0); }
+       void LED_PCB_Flash(uint8_t Time) { }
+#else
+static void LED_PCB_Init (void)    { }
+       void LED_PCB_On   (bool ON) { }
+       void LED_PCB_Off  (void)    { }
+       void LED_PCB_Flash(uint8_t Time) { }
+#endif
 
 // =======================================================================================================
 
@@ -304,10 +321,13 @@ void setup()
   SPIFFS_Register();                         // initialize the file system in the Flash
 #endif
 
-#ifdef WITH_OGN
-  Radio_SlotMsg = xQueueCreate(1, sizeof(TimeSync)); // message queue for GPS to signal the new time slot
-#endif
+// #ifdef WITH_OGN
+//   Radio_SlotMsg = xQueueCreate(1, sizeof(TimeSync)); // message queue for GPS to signal the new time slot
+// #endif
   Random.Word+=getUniqueID(); XorShift64(Random.Word);
+
+  LED_PCB_Init();
+  // LED_PCB_On();
 
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
@@ -486,11 +506,11 @@ void setup()
     TFT.setTextSize(1);
     TFT.setCursor(0, 72);
     TFT.print(Line); }
-  pinMode(TFT_PinBL, OUTPUT);
-  digitalWrite(TFT_PinBL, HIGH);
+  pinMode(TFT_PinBL, OUTPUT);     // LCD backlight control
+  digitalWrite(TFT_PinBL, HIGH);  // turn the backlight ON - this takes 20mA on the HTIT-Tracker
 #endif
 
-#ifdef WITH_AP
+#ifdef WITH_AP                    // with WiFi Access Point
 #ifdef WITH_AP_BUTTON
     bool StartAP = Button_isPressed() && Parameters.APname[0]; // start WiFi AP when button pressed during startup and APname non-empty
 #else
@@ -521,7 +541,6 @@ void setup()
   xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  // xTaskCreate(vTaskRF     ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
   xTaskCreate(Radio_Task     ,  "RF"   ,  3000, NULL, 2, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)

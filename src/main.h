@@ -78,7 +78,7 @@ template <class Type>
  uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, Type &Object, uint8_t Wait=10)
 { return I2C_Read (Bus, Addr, Reg, (uint8_t *)&Object, sizeof(Type), Wait); }
 
-void LED_PCB_On   (void);                // LED on the PCB for vizual indications
+void LED_PCB_On   (bool ON=1);           // LED on the PCB for vizual indications
 void LED_PCB_Off  (void);
 void LED_PCB_Flash(uint8_t Time=100);    // Flash the PCB LED for a period of [ms]
 
