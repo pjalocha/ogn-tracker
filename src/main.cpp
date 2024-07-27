@@ -53,6 +53,12 @@
 #include "esp_vfs_fat.h"
 #include "esp_spiffs.h"
 
+#ifdef WITH_ST7735
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7735.h>
+#endif
+
 // =======================================================================================================
 
 uint64_t getUniqueMAC(void)                                  // 48-bit unique ID of the ESP32 chip
@@ -143,6 +149,13 @@ uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
   { Ret=Wire.write(Data[Idx]); if(Ret!=1) break; }
   Wire.endTransmission();
   return Ret!=1; }
+
+// =======================================================================================================
+
+#ifdef WITH_ST7735
+static SPIClass TFT_SPI(1); // 1=VSPI, 2=HSPI
+static Adafruit_ST7735 TFT = Adafruit_ST7735(&TFT_SPI, TFT_PinCS, TFT_PinDC, TFT_PinRST);
+#endif
 
 // =======================================================================================================
 
@@ -306,8 +319,15 @@ void setup()
   Serial.println("OGN-Tracker");
   // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
 
+#ifdef Vext_PinEna
+  pinMode(Vext_PinEna, OUTPUT);
+  digitalWrite(Vext_PinEna, HIGH);
+#endif
+
+#ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                                  // [ms]
+#endif
 #ifdef PMU_I2C_PinSCL
   static TwoWire PMU_I2C = TwoWire(1);
   PMU_I2C.begin(PMU_I2C_PinSDA, PMU_I2C_PinSCL, (uint32_t)400000);
@@ -420,7 +440,7 @@ void setup()
   // { HardwareStatus.Radio=1; Serial.println("RF chip detected"); }
   // else
   // { Serial.printf("RF chip not detected: %d\n", RadioStat); }
-
+/*
   Serial.printf("I2C scan:");
   uint8_t I2Cdev=0;
   for(uint8_t Addr=0x01; Addr<128; Addr++)
@@ -429,13 +449,26 @@ void setup()
                                  else { Wire.flush(); }
   }
   Serial.printf(" %d devices\n", I2Cdev);
-
+*/
 #ifdef WITH_OLED
   OLED.begin();
   OLED.setDisplayRotation(U8G2_R2);
   OLED.clearBuffer();
   OLED_DrawLogo(OLED.getU8g2(), 0);
   OLED.sendBuffer();
+#endif
+#ifdef WITH_ST7735
+  TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
+  TFT_SPI.setFrequency(TFT_SckFreq);
+  TFT.initR(TFT_MODEL);
+  TFT.setRotation(1);
+  TFT.fillScreen(ST77XX_BLACK);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setTextSize(2);
+  TFT.setCursor(0, 0);
+  TFT.print("OGN-Tracker");
+  pinMode(TFT_PinBL, OUTPUT);
+  digitalWrite(TFT_PinBL, HIGH);
 #endif
 
 #ifdef WITH_AP
