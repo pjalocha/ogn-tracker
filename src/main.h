@@ -7,8 +7,11 @@ uint64_t getUniqueMAC(void);
 uint64_t getUniqueID(void);
 uint32_t getUniqueAddress(void);
 
+#define QUOTE(name) #name
+#define STR(macro) QUOTE(macro)
+
 #ifndef VERSION
-#define VERSION 0.0.0
+#define VERSION 0.1.9
 #endif
 
 #define HARDWARE_ID 0x04

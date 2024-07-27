@@ -57,6 +57,7 @@
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
+#define ST77XX_DARKBLUE 0x0011
 #endif
 
 // =======================================================================================================
@@ -172,7 +173,8 @@ static AXP20X_Class AXP;
 
 static esp_adc_cal_characteristics_t *ADC_characs =
         (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-static adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
+// static const adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
+static const adc1_channel_t ADC_Chan_Batt = BATT_ADC_CHANNEL;  // ADC1_CHANNEL_0 for GPIO 1 or ADC1_CHANNEL_3 for GPIO 4
 static const adc_atten_t ADC_atten = ADC_ATTEN_DB_11;
 static const adc_unit_t ADC_unit = ADC_UNIT_1;
 #define ADC_Vref 1100
@@ -462,11 +464,28 @@ void setup()
   TFT_SPI.setFrequency(TFT_SckFreq);
   TFT.initR(TFT_MODEL);
   TFT.setRotation(1);
-  TFT.fillScreen(ST77XX_BLACK);
-  TFT.setTextColor(ST77XX_WHITE);
-  TFT.setTextSize(2);
-  TFT.setCursor(0, 0);
-  TFT.print("OGN-Tracker");
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  { char Line[128];
+    TFT.setTextColor(ST77XX_WHITE);
+    TFT.setTextSize(2);
+    TFT.setCursor(0, 0);
+    Parameters.Print(Line); Line[10]=0;
+    TFT.print(Line);
+    if(Parameters.Reg[0])
+    { TFT.setCursor(0, 16);
+      TFT.print(Parameters.Reg); }
+    if(Parameters.Pilot[0])
+    { TFT.setCursor(0, 32);
+      TFT.print(Parameters.Pilot); }
+    uint64_t ID=getUniqueID();
+    uint8_t Len=Format_String(Line, "#");
+    Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
+    Len+=Format_Hex(Line+Len, (uint32_t)ID);
+    Len+=Format_String(Line+Len, " v"STR(VERSION));
+    Line[Len]=0;
+    TFT.setTextSize(1);
+    TFT.setCursor(0, 72);
+    TFT.print(Line); }
   pinMode(TFT_PinBL, OUTPUT);
   digitalWrite(TFT_PinBL, HIGH);
 #endif

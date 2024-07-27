@@ -4,6 +4,8 @@
 
 #define Vext_PinEna    3 // put high to enable power to GPS and TFT
 
+#define BATT_ADC_CHANNEL ADC1_CHANNEL_0 // GPIO 1
+
 // GPS
 #define GPS_UART UART_NUM_1  // UART for GPS
 #define GPS_PinTx     34 // Tx-Data
