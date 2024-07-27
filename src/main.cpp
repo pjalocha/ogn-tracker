@@ -472,6 +472,22 @@ void setup()
   }
   Serial.printf(" %d devices\n", I2Cdev);
 */
+
+#ifdef WITH_AP                    // with WiFi Access Point
+#ifdef WITH_AP_BUTTON
+    bool StartAP = Button_isPressed() && Parameters.APname[0]; // start WiFi AP when button pressed during startup and APname non-empty
+#else
+    bool StartAP = Parameters.APname[0]; // start WiFi AP when APname non-empty
+#endif
+#else  // WITH_AP
+    const bool StartAP=0;
+#endif // WITH_AP
+
+#ifdef WITH_BT_SPP
+  if(!StartAP)
+    BTserial.begin(Parameters.BTname);
+#endif
+
 #ifdef WITH_OLED
   OLED.begin();
   OLED.setDisplayRotation(U8G2_R2);
@@ -493,10 +509,18 @@ void setup()
     TFT.print(Line);
     if(Parameters.Reg[0])
     { TFT.setCursor(0, 16);
-      TFT.print(Parameters.Reg); }
+      sprintf(Line, "Reg: %s", Parameters.Reg);
+      TFT.print(Line); }
     if(Parameters.Pilot[0])
     { TFT.setCursor(0, 32);
-      TFT.print(Parameters.Pilot); }
+      sprintf(Line, "Plt: %s", Parameters.Pilot);
+      TFT.print(Line); }
+#ifdef WITH_AP
+    if(StartAP)
+    { TFT.setCursor(0, 48);
+      sprintf(Line, "AP: %s", Parameters.APname);
+      TFT.print(Line); }
+#endif
     uint64_t ID=getUniqueID();
     uint8_t Len=Format_String(Line, "#");
     Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
@@ -508,21 +532,6 @@ void setup()
     TFT.print(Line); }
   pinMode(TFT_PinBL, OUTPUT);     // LCD backlight control
   digitalWrite(TFT_PinBL, HIGH);  // turn the backlight ON - this takes 20mA on the HTIT-Tracker
-#endif
-
-#ifdef WITH_AP                    // with WiFi Access Point
-#ifdef WITH_AP_BUTTON
-    bool StartAP = Button_isPressed() && Parameters.APname[0]; // start WiFi AP when button pressed during startup and APname non-empty
-#else
-    bool StartAP = Parameters.APname[0]; // start WiFi AP when APname non-empty
-#endif
-#else  // WITH_AP
-    const bool StartAP=0;
-#endif // WITH_AP
-
-#ifdef WITH_BT_SPP
-  if(!StartAP)
-    BTserial.begin(Parameters.BTname);
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
