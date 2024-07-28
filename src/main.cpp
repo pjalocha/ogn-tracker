@@ -195,20 +195,20 @@ static void TFT_DrawID(bool WithAP)
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);
   TFT.setTextSize(1);
-  TFT.setCursor(0, 16);
+  TFT.setCursor(2, 16);
   Parameters.Print(Line); Line[10]=0;
   TFT.print(Line);
   if(Parameters.Reg[0])
-  { TFT.setCursor(0, 32);
+  { TFT.setCursor(2, 32);
     sprintf(Line, "Reg: %s", Parameters.Reg);
     TFT.print(Line); }
   if(Parameters.Pilot[0])
-  { TFT.setCursor(0, 48);
+  { TFT.setCursor(2, 48);
     sprintf(Line, "Plt: %s", Parameters.Pilot);
     TFT.print(Line); }
 #ifdef WITH_AP
   if(WithAP)
-  { TFT.setCursor(0, 64);
+  { TFT.setCursor(2, 64);
     sprintf(Line, "AP: %s", Parameters.APname);
     TFT.print(Line); }
 #endif
@@ -220,7 +220,7 @@ static void TFT_DrawID(bool WithAP)
   Line[Len]=0;
   TFT.setFont(0);
   TFT.setTextSize(1);
-  TFT.setCursor(0, 72);
+  TFT.setCursor(2, 72);
   TFT.print(Line); }
 
 static void TFT_DrawGPS(const GPS_Position *GPS)
@@ -240,7 +240,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   { Format_UnsDec (Line+ 6, (uint32_t)GPS->Hour,  2, 0);
     Format_UnsDec (Line+ 9, (uint32_t)GPS->Min,   2, 0);
     Format_UnsDec (Line+12, (uint32_t)GPS->Sec,   2, 0); }
-  TFT.setCursor(0, 16); TFT.print(Line);
+  TFT.setCursor(2, 16); TFT.print(Line);
 
   Len=0;
   Len+=Format_String(Line+Len, "Lat: ");
@@ -249,7 +249,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
     Line[Len++]=0xB0; }
   else Len+=Format_String(Line+Len, "---.-----");
   Line[Len]=0;
-  TFT.setCursor(0, 32); TFT.print(Line);
+  TFT.setCursor(2, 32); TFT.print(Line);
   Len=0;
   Len+=Format_String(Line+Len, "Lon:");
   if(GPS && GPS->isValid())
@@ -257,7 +257,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
     Line[Len++]=0xB0; }
   else Len+=Format_String(Line+Len, "----.-----");
   Line[Len]=0;
-  TFT.setCursor(0, 48); TFT.print(Line);
+  TFT.setCursor(2, 48); TFT.print(Line);
   Len=0;
   Len+=Format_String(Line+Len, "Alt: ");
   if(GPS && GPS->isValid())
@@ -268,7 +268,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   }
   else Len+=Format_String(Line+Len, "-----.-  ");
   Line[Len]=0;
-  TFT.setCursor(0, 64); TFT.print(Line); }
+  TFT.setCursor(2, 64); TFT.print(Line); }
 
 #endif
 
@@ -467,10 +467,10 @@ void setup()
   Button_Init();
 #endif
   LED_PCB_Init();
-
+#ifdef WITH_HTIT_TRACKER
   Vext_Init();
   Vext_ON();
-
+#endif
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
   { Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
@@ -915,13 +915,14 @@ void loop()
   Button.loop();
 #endif
   if(ProcessInput()==0) vTaskDelay(1);
-
+#ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();
   if(GPS!=PrevGPS)
   { if(GPS)
     { TFT_DrawGPS(GPS); }
     PrevGPS=GPS; }
+#endif
 
 }
 
