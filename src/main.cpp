@@ -159,7 +159,7 @@ uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
 // =======================================================================================================
 
 #ifdef WITH_ST7735
-static SPIClass TFT_SPI(1); // 1=VSPI, 2=HSPI
+static SPIClass TFT_SPI(1); // 0, 1, 2, VSPI, HSPI ?
 static Adafruit_ST7735 TFT = Adafruit_ST7735(&TFT_SPI, TFT_PinCS, TFT_PinDC, TFT_PinRST);
 
 static const int TFT_BL_Chan = 0;
@@ -169,8 +169,7 @@ static void TFT_BL_Init(void)
 { ledcSetup(TFT_BL_Chan, TFT_BL_Freq, 8);  // set for 8-bit resolution
   ledcAttachPin(TFT_PinBL, TFT_BL_Chan); }
 
-static void TFT_BL(uint8_t Lev)
-{ ledcWrite(TFT_BL_Chan, Lev); }
+static void TFT_BL(uint8_t Lev) { ledcWrite(TFT_BL_Chan, Lev); }
 #endif
 
 // =======================================================================================================
@@ -185,6 +184,8 @@ static AXP20X_Class AXP;
 
 // =======================================================================================================
 
+uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprimize, 2=full power
+
 #ifdef Vext_PinEna
 static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
 static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
@@ -192,12 +193,20 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 
 #ifdef Button_Pin
 static Button2 Button(Button_Pin);
-static bool Button_isPressed(void) { digitalRead(Button_Pin)==0; }
+static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
 static void Button_Single(Button2 Butt) { }
 static void Button_Double(Button2 Butt) { }
 static void Button_Long(Button2 Butt)
-{ Vext_ON(0); esp_deep_sleep_start(); }
+{
+#ifdef WITH_SLEEP
+  Parameters.PowerON=0;
+  Parameters.WriteToNVS();
+  PowerMode=0;
+  Vext_ON(0);
+  esp_deep_sleep_start();
+#endif
+}
 
 static void Button_Init(void)
 { pinMode(Button_Pin, INPUT);
@@ -336,8 +345,6 @@ static void LED_PCB_Init (void)    { }
 
 // =======================================================================================================
 
-uint8_t PowerMode = 2;                    // 0=sleep/minimal power, 1=comprimize, 2=full power
-
 SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
 SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
 
@@ -362,8 +369,10 @@ void setup()
 #ifdef Button_Pin
   Button_Init();
 #endif
-
   LED_PCB_Init();
+
+  Vext_Init();
+  Vext_ON();
 
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
@@ -380,8 +389,38 @@ void setup()
   Serial.println("OGN-Tracker");
   // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
 
-  Vext_Init();
-  Vext_ON();
+#ifdef WITH_ST7735
+  TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
+  TFT_SPI.setFrequency(TFT_SckFreq);
+  TFT.initR(TFT_MODEL);
+  TFT.setRotation(1);
+  TFT.fillScreen(ST77XX_BLUE);
+  TFT_BL_Init();
+  TFT_BL(128);
+#ifdef WITH_SLEEP
+  if(!Parameters.PowerON)
+  { TFT.setTextColor(ST77XX_WHITE);
+    TFT.setTextSize(2);
+    TFT.setCursor(32, 16);
+    TFT.print("Confirm");
+    TFT.setCursor(30, 48);
+    TFT.print("Power-ON");
+    int Pressed=0;
+    for(int Wait=0; Wait<2000; Wait++)
+    { delay(1);
+      if(!Button_isPressed()) { Pressed=0; continue; }
+      Pressed++;
+      if(Pressed>=20) { Parameters.PowerON=1; break; }
+    }
+    if(Parameters.PowerON)
+    { Parameters.WriteToNVS(); }
+    else
+    { TFT_BL(0);
+      Vext_ON(0);
+      esp_deep_sleep_start(); }
+  }
+#endif
+#endif
 
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
@@ -533,10 +572,6 @@ void setup()
   OLED.sendBuffer();
 #endif
 #ifdef WITH_ST7735
-  TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
-  TFT_SPI.setFrequency(TFT_SckFreq);
-  TFT.initR(TFT_MODEL);
-  TFT.setRotation(1);
   TFT.fillScreen(ST77XX_DARKBLUE);
   { char Line[128];
     TFT.setTextColor(ST77XX_WHITE);
@@ -567,8 +602,6 @@ void setup()
     TFT.setTextSize(1);
     TFT.setCursor(0, 72);
     TFT.print(Line); }
-  TFT_BL_Init();
-  TFT_BL(128);
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
