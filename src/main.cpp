@@ -30,6 +30,11 @@
 #include <axp20x.h>
 #endif
 
+#ifdef Button_Pin
+#include <esp_sleep.h>
+#include "Button2.h"
+#endif
+
 #include "oled.h"
 
 #include "gps.h"
@@ -180,8 +185,26 @@ static AXP20X_Class AXP;
 
 // =======================================================================================================
 
+#ifdef Vext_PinEna
+static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
+static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
+#endif
+
 #ifdef Button_Pin
-bool Button_isPressed(void) { digitalRead(Button_Pin)==0; }
+static Button2 Button(Button_Pin);
+static bool Button_isPressed(void) { digitalRead(Button_Pin)==0; }
+
+static void Button_Single(Button2 Butt) { }
+static void Button_Double(Button2 Butt) { }
+static void Button_Long(Button2 Butt)
+{ Vext_ON(0); esp_deep_sleep_start(); }
+
+static void Button_Init(void)
+{ pinMode(Button_Pin, INPUT);
+  Button.setLongClickTime(1000);
+  Button.setClickHandler(Button_Single);
+  Button.setDoubleClickHandler(Button_Double);
+  Button.setLongClickDetectedHandler(Button_Long); }
 #endif
 
 // =======================================================================================================
@@ -336,8 +359,11 @@ void setup()
 // #endif
   Random.Word+=getUniqueID(); XorShift64(Random.Word);
 
+#ifdef Button_Pin
+  Button_Init();
+#endif
+
   LED_PCB_Init();
-  // LED_PCB_On();
 
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
@@ -345,16 +371,17 @@ void setup()
   if(Parameters.CONbaud<2400 || Parameters.CONbaud>921600 || Parameters.CONbaud%2400)
   { Parameters.CONbaud=115200; Parameters.WriteToNVS(); }
 
+#ifdef ARDUINO_USB_MODE
+  Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
+#endif
   Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
   GPS_UART_Init();
 
   Serial.println("OGN-Tracker");
   // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
 
-#ifdef Vext_PinEna
-  pinMode(Vext_PinEna, OUTPUT);
-  digitalWrite(Vext_PinEna, HIGH);
-#endif
+  Vext_Init();
+  Vext_ON();
 
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
@@ -782,8 +809,11 @@ static int ProcessInput(void)
   return Count; }
 
 void loop()
-{ if(ProcessInput()==0) vTaskDelay(1);
-
+{
+#ifdef Button_Pin
+  Button.loop();
+#endif
+  if(ProcessInput()==0) vTaskDelay(1);
 }
 
 // =======================================================================================================
