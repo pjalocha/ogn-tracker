@@ -62,6 +62,7 @@
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
+#include <Fonts/FreeMono9pt7b.h>
 #define ST77XX_DARKBLUE 0x0011
 #endif
 
@@ -158,6 +159,23 @@ uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t
 
 // =======================================================================================================
 
+#ifdef WITH_XPOWERS
+XPowersLibInterface *PMU = 0;
+#endif
+
+#ifdef WITH_AXP
+static AXP20X_Class AXP;
+#endif
+
+uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprimize, 2=full power
+
+#ifdef Vext_PinEna
+static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
+static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
+#endif
+
+// =======================================================================================================
+
 #ifdef WITH_ST7735
 static SPIClass TFT_SPI(1); // 0, 1, 2, VSPI, HSPI ?
 static Adafruit_ST7735 TFT = Adafruit_ST7735(&TFT_SPI, TFT_PinCS, TFT_PinDC, TFT_PinRST);
@@ -170,26 +188,91 @@ static void TFT_BL_Init(void)
   ledcAttachPin(TFT_PinBL, TFT_BL_Chan); }
 
 static void TFT_BL(uint8_t Lev) { ledcWrite(TFT_BL_Chan, Lev); }
+
+static void TFT_DrawID(bool WithAP)
+{ char Line[128];
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);
+  TFT.setTextSize(1);
+  TFT.setCursor(0, 16);
+  Parameters.Print(Line); Line[10]=0;
+  TFT.print(Line);
+  if(Parameters.Reg[0])
+  { TFT.setCursor(0, 32);
+    sprintf(Line, "Reg: %s", Parameters.Reg);
+    TFT.print(Line); }
+  if(Parameters.Pilot[0])
+  { TFT.setCursor(0, 48);
+    sprintf(Line, "Plt: %s", Parameters.Pilot);
+    TFT.print(Line); }
+#ifdef WITH_AP
+  if(WithAP)
+  { TFT.setCursor(0, 64);
+    sprintf(Line, "AP: %s", Parameters.APname);
+    TFT.print(Line); }
+#endif
+  uint64_t ID=getUniqueID();
+  uint8_t Len=Format_String(Line, "#");
+  Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
+  Len+=Format_Hex(Line+Len, (uint32_t)ID);
+  Len+=Format_String(Line+Len, " v"STR(VERSION));
+  Line[Len]=0;
+  TFT.setFont(0);
+  TFT.setTextSize(1);
+  TFT.setCursor(0, 72);
+  TFT.print(Line); }
+
+static void TFT_DrawGPS(const GPS_Position *GPS)
+{ char Line[32];
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
+  TFT.setTextSize(1);
+
+  uint8_t Len=0;
+  strcpy(Line, "--.-- --:--:--");
+  if(GPS && GPS->isDateValid())
+  { Format_UnsDec (Line+ 0, (uint32_t)GPS->Day,   2, 0);
+    Format_UnsDec (Line+ 3, (uint32_t)GPS->Month, 2, 0);
+  }
+  if(GPS && GPS->isTimeValid())
+  { Format_UnsDec (Line+ 6, (uint32_t)GPS->Hour,  2, 0);
+    Format_UnsDec (Line+ 9, (uint32_t)GPS->Min,   2, 0);
+    Format_UnsDec (Line+12, (uint32_t)GPS->Sec,   2, 0); }
+  TFT.setCursor(0, 16); TFT.print(Line);
+
+  Len=0;
+  Len+=Format_String(Line+Len, "Lat: ");
+  if(GPS && GPS->isValid())
+  { Len+=Format_SignDec(Line+Len,  GPS->Latitude /6, 7, 5);
+    Line[Len++]=0xB0; }
+  else Len+=Format_String(Line+Len, "---.-----");
+  Line[Len]=0;
+  TFT.setCursor(0, 32); TFT.print(Line);
+  Len=0;
+  Len+=Format_String(Line+Len, "Lon:");
+  if(GPS && GPS->isValid())
+  { Len+=Format_SignDec(Line+Len,  GPS->Longitude /6, 8, 5);
+    Line[Len++]=0xB0; }
+  else Len+=Format_String(Line+Len, "----.-----");
+  Line[Len]=0;
+  TFT.setCursor(0, 48); TFT.print(Line);
+  Len=0;
+  Len+=Format_String(Line+Len, "Alt: ");
+  if(GPS && GPS->isValid())
+  { int32_t Alt = GPS->Altitude;
+    if(Alt>=0) Line[Len++]=' ';
+    Len+=Format_SignDec(Line+Len,  Alt, 1, 1, 1);               // [0.1m]
+    Line[Len++]='m'; Line[Len++]=' ';
+  }
+  else Len+=Format_String(Line+Len, "-----.-  ");
+  Line[Len]=0;
+  TFT.setCursor(0, 64); TFT.print(Line); }
+
 #endif
 
 // =======================================================================================================
-
-#ifdef WITH_XPOWERS
-XPowersLibInterface *PMU = 0;
-#endif
-
-#ifdef WITH_AXP
-static AXP20X_Class AXP;
-#endif
-
-// =======================================================================================================
-
-uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprimize, 2=full power
-
-#ifdef Vext_PinEna
-static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
-static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
-#endif
 
 #ifdef Button_Pin
 static Button2 Button(Button_Pin);
@@ -236,6 +319,10 @@ static int ADC_Init(void)
   adc1_config_width(ADC_WIDTH_BIT_12);
   adc1_config_channel_atten(ADC_Chan_Batt, ADC_atten);
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_unit, ADC_atten, ADC_WIDTH_BIT_12, ADC_Vref, ADC_characs); // calibrate ADC1
+#ifdef ADC_BattSenseEna
+  pinMode(ADC_BattSenseEna, OUTPUT);
+  digitalWrite(ADC_BattSenseEna, HIGH);
+#endif
   return 0; }
 
 uint16_t BatterySense(int Samples)
@@ -246,13 +333,23 @@ uint16_t BatterySense(int Samples)
 #ifdef WITH_AXP
   if(HardwareStatus.AXP192 || HardwareStatus.AXP202) return AXP.getBattVoltage();
 #endif
+// #ifdef ADC_BattSenseEna
+//   digitalWrite(ADC_BattSenseEna, HIGH);
+// #endif
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
   RawVoltage = (RawVoltage+Samples/2)/Samples;
+#ifdef WITH_HTIT_TRACKER
+  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs)*5;  // HTIT-Tracker has 1:4.9 voltage divider
+#else
   uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs)*2;
-  // const uint16_t Bias = 80;  // apparently, there is 80mV bias in the battery voltage measurement
-  // if(Volt>=Bias) Volt-=Bias;
+#endif
+  const uint16_t Bias = 50;  // apparently, there is 80mV bias in the battery voltage measurement
+  if(Volt>=Bias) Volt-=Bias;
+// #ifdef ADC_BattSenseEna
+//   digitalWrite(ADC_BattSenseEna, LOW);
+// #endif
   return Volt; } // [mV]
 
 // =======================================================================================================
@@ -572,36 +669,7 @@ void setup()
   OLED.sendBuffer();
 #endif
 #ifdef WITH_ST7735
-  TFT.fillScreen(ST77XX_DARKBLUE);
-  { char Line[128];
-    TFT.setTextColor(ST77XX_WHITE);
-    TFT.setTextSize(2);
-    TFT.setCursor(0, 0);
-    Parameters.Print(Line); Line[10]=0;
-    TFT.print(Line);
-    if(Parameters.Reg[0])
-    { TFT.setCursor(0, 16);
-      sprintf(Line, "Reg: %s", Parameters.Reg);
-      TFT.print(Line); }
-    if(Parameters.Pilot[0])
-    { TFT.setCursor(0, 32);
-      sprintf(Line, "Plt: %s", Parameters.Pilot);
-      TFT.print(Line); }
-#ifdef WITH_AP
-    if(StartAP)
-    { TFT.setCursor(0, 48);
-      sprintf(Line, "AP: %s", Parameters.APname);
-      TFT.print(Line); }
-#endif
-    uint64_t ID=getUniqueID();
-    uint8_t Len=Format_String(Line, "#");
-    Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
-    Len+=Format_Hex(Line+Len, (uint32_t)ID);
-    Len+=Format_String(Line+Len, " v"STR(VERSION));
-    Line[Len]=0;
-    TFT.setTextSize(1);
-    TFT.setCursor(0, 72);
-    TFT.print(Line); }
+  TFT_DrawID(StartAP);
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
@@ -847,6 +915,14 @@ void loop()
   Button.loop();
 #endif
   if(ProcessInput()==0) vTaskDelay(1);
+
+  static GPS_Position *PrevGPS=0;
+  GPS_Position *GPS = GPS_getPosition();
+  if(GPS!=PrevGPS)
+  { if(GPS)
+    { TFT_DrawGPS(GPS); }
+    PrevGPS=GPS; }
+
 }
 
 // =======================================================================================================

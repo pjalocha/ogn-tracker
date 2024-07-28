@@ -7,8 +7,8 @@
 #define Button_Pin     0 // user button: LOW when pushed
 
 #define BATT_ADC_CHANNEL ADC1_CHANNEL_0 // GPIO 1
-#define ADC_BattSense  1 // 390:100 kohm divider
-#define ADC_BattEna    2 // enable battery sense by GPIO1
+#define ADC_BattSense     1 // 390:100 kohm divider
+#define ADC_BattSenseEna  2 // enable battery sense by GPIO1
 
 #define LED_PCB_Pin   18 //
 
