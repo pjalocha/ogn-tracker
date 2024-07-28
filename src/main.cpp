@@ -293,7 +293,7 @@ static void Button_Long(Button2 Butt)
 
 static void Button_Init(void)
 { pinMode(Button_Pin, INPUT);
-  Button.setLongClickTime(1000);
+  Button.setLongClickTime(2000);
   Button.setClickHandler(Button_Single);
   Button.setDoubleClickHandler(Button_Double);
   Button.setLongClickDetectedHandler(Button_Long); }
