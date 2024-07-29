@@ -325,7 +325,7 @@ static int ADC_Init(void)
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_unit, ADC_atten, ADC_WIDTH_BIT_12, ADC_Vref, ADC_characs); // calibrate ADC1
 #ifdef ADC_BattSenseEna
   pinMode(ADC_BattSenseEna, OUTPUT);
-  digitalWrite(ADC_BattSenseEna, HIGH);
+  digitalWrite(ADC_BattSenseEna, LOW);
 #endif
   return 0; }
 
@@ -504,7 +504,7 @@ void setup()
   TFT.setRotation(1);
   TFT.fillScreen(ST77XX_BLUE);
   TFT_BL_Init();
-  TFT_BL(128);
+  TFT_BL(64);
 #ifdef WITH_SLEEP
   if(!Parameters.PowerON)
   { TFT.setTextColor(ST77XX_WHITE);
@@ -928,11 +928,12 @@ static int ProcessInput(void)
   return Count; }
 
 void loop()
-{
+{ vTaskDelay(1);
 #ifdef Button_Pin
   Button.loop();
 #endif
-  if(ProcessInput()==0) vTaskDelay(1);
+  // if(ProcessInput()==0) vTaskDelay(1);
+  while(ProcessInput()>0);
 #ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();
