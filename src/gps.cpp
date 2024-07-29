@@ -359,7 +359,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           CFG_MSG.msgID    = 0x03;                                        // ID for GSV
           UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
         }
-#endif
+#endif // WITH_GPS_UBX
 #ifdef WITH_GPS_MTK
         Format_String(GPS_UART_Write, "\r\n\r\n");                     // apparently this is needed, otherwise the next command is missed
         if(Parameters.NavRate)
@@ -368,9 +368,9 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           uint16_t OneSec = 1000;
           Len += Format_UnsDec(GPS_Cmd+Len, (uint32_t)OneSec/Parameters.NavRate);
           Len += Format_String(GPS_Cmd+Len, ",0,0,0,0");
-          Len += NMEA_AppendCheck(GPS_Cmd, Len);
-          GPS_Cmd[Len++]='\r';
-          GPS_Cmd[Len++]='\n';
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          // GPS_Cmd[Len++]='\r';
+          // GPS_Cmd[Len++]='\n';
           GPS_Cmd[Len]=0;
           // Format_String(CONS_UART_Write, GPS_Cmd, Len, 0); // for debug
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0);
@@ -378,9 +378,9 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         if(Parameters.NavMode)
         { uint8_t Len = Format_String(GPS_Cmd, "$PMTK886,");                                        // MTK command to change the navigation mode
           GPS_Cmd[Len++]='0'+Parameters.NavMode;
-          Len += NMEA_AppendCheck(GPS_Cmd, Len);
-          GPS_Cmd[Len++]='\r';
-          GPS_Cmd[Len++]='\n';
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          // GPS_Cmd[Len++]='\r';
+          // GPS_Cmd[Len++]='\n';
           GPS_Cmd[Len]=0;
           // Format_String(CONS_UART_Write, GPS_Cmd, Len, 0);  // for debug
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0);
@@ -396,13 +396,13 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           GPS_Cmd[Len++]='0';                        // GALILEO full mode (whatever it is ?)  (not supported yet)
           GPS_Cmd[Len++]=',';
           GPS_Cmd[Len++]='0'+Parameters.EnableBEI;   // search (or not) for BAIDOU satellites (not supported yet ?)
-          Len += NMEA_AppendCheck(GPS_Cmd, Len);
-          GPS_Cmd[Len++]='\r';
-          GPS_Cmd[Len++]='\n';
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          // GPS_Cmd[Len++]='\r';
+          // GPS_Cmd[Len++]='\n';
           GPS_Cmd[Len]=0;
           // Format_String(CONS_UART_Write, GPS_Cmd, Len, 0); // for debug
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
-#endif
+#endif // WITH_GPS_MTK
       }
       if(!GPS_Status.BaudConfig)                                             // if GPS baud config is not done yet
       { // Format_String(CONS_UART_Write, "CFG_PRT query...\n");
@@ -434,9 +434,9 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         { strcpy(GPS_Cmd, "$PMTK251,");                                        // MTK command to change the baud rate
           uint8_t Len = strlen(GPS_Cmd);
           Len += Format_UnsDec(GPS_Cmd+Len, GPS_TargetBaudRate);
-          Len += NMEA_AppendCheck(GPS_Cmd, Len);
-          GPS_Cmd[Len++]='\r';                                                 // this is apparently needed but it should not, as ESP32 does auto-CR ??
-          GPS_Cmd[Len++]='\n';
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          // GPS_Cmd[Len++]='\r';                                                 // this is apparently needed but it should not, as ESP32 does auto-CR ??
+          // GPS_Cmd[Len++]='\n';
           GPS_Cmd[Len]=0;
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
 #ifdef DEBUG_PRINT
@@ -453,9 +453,9 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         Len += Format_UnsDec(GPS_Cmd+Len, GPS_TargetBaudRate);
         strcpy(GPS_Cmd+Len, ",8,1,0");
         Len = strlen(GPS_Cmd);
-        Len += NMEA_AppendCheck(GPS_Cmd, Len);
-        GPS_Cmd[Len++]='\r';                                                 // this is apparently needed but it should not, as ESP32 does auto-CR ??
-        GPS_Cmd[Len++]='\n';
+        Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+        // GPS_Cmd[Len++]='\r';                                                 // this is apparently needed but it should not, as ESP32 does auto-CR ??
+        // GPS_Cmd[Len++]='\n';
         GPS_Cmd[Len]=0;
         Format_String(GPS_UART_Write, GPS_Cmd, Len, 0);
 #endif // WITH_GPS_SRF
