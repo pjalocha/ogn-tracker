@@ -2,6 +2,7 @@
 #define __FIFO_H__
 
 #include <stdint.h>
+#include <stdlib.h>
 
 template <class Type, const size_t Size=8> // size must be (!) a power of 2 like 4, 8, 16, 32, etc.
  class FIFO
