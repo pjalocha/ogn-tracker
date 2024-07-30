@@ -42,4 +42,4 @@
 #define TFT_Width  160
 #define TFT_Height  80
 #define TFT_MODEL   INITR_MINI160x80_PLUGIN
-#define TFT_SckFreq 40000000
+#define TFT_SckFreq 80000000

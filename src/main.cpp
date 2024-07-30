@@ -504,7 +504,7 @@ void setup()
   TFT.setRotation(1);
   TFT.fillScreen(ST77XX_BLUE);
   TFT_BL_Init();
-  TFT_BL(64);
+  TFT_BL(128);
 #ifdef WITH_SLEEP
   if(!Parameters.PowerON)
   { TFT.setTextColor(ST77XX_WHITE);
@@ -939,7 +939,10 @@ void loop()
   GPS_Position *GPS = GPS_getPosition();
   if(GPS!=PrevGPS)
   { if(GPS)
-    { TFT_DrawGPS(GPS); }
+    { // TFT_BL(0);
+      TFT_DrawGPS(GPS);
+      // TFT_BL(128);
+    }
     PrevGPS=GPS; }
 #endif
 #ifdef WITH_BLE_SPP

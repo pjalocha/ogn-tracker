@@ -93,7 +93,7 @@ const int GPS_BurstTimeout = 100; // [ms]
 
 static uint32_t GPS_BaudRate = 4800;     // [bps] current baudrate on the GPS port
 static uint32_t GPS_nextBaudRate(void)   // produce next (possible) GPS baudrate (for autobaud)
-{ if(GPS_BaudRate>=230400) GPS_BaudRate=4800;
+{ if(GPS_BaudRate>=460800) GPS_BaudRate=4800;
   else if(GPS_BaudRate==38400) GPS_BaudRate=57600;
   else GPS_BaudRate<<=1;
   return GPS_BaudRate; }
