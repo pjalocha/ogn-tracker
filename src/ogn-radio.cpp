@@ -146,23 +146,27 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 #ifdef WITH_SX1276
 static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 { // LED_OGN_Blue();
+  // Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_PAYLOAD_LENGTH_FSK, Len);
   int State=Radio.startTransmit((const char *)Packet, Len);
-  uint32_t usStart = micros();
-  uint32_t usTxTime=Radio.getTimeOnAir(Len);                           // [usec]
+  uint32_t usStart = micros();                                         // [usec] when transmission started
+  uint32_t usTxTime=Radio.getTimeOnAir(Len);                           // [usec] predicted transmission time
+   int32_t usLeft = usTxTime;                                          // [usec]
   Radio_TxCredit-=usTxTime/1000;
-   int32_t usLeft = usTxTime;
   for( ; ; )
-  { uint32_t usTime = micros()-usStart;
-    usLeft = usTxTime-usTime;
+  { uint32_t usTime = micros()-usStart;                                // [usec] time since transmission started
+    usLeft = usTxTime-usTime;                                          // [usec] time left till the end of packet
     if(Radio_IRQ()) break;                                 // raised IRQ => end-of-data
     // uint16_t Flags=Radio.getIRQFlags(); if(Flags & RADIOLIB_SX127X_CLEAR_IRQ_FLAG_TX_DONE) break;
     if(usLeft>1500) { delay(1); continue; }
-    if(usLeft<(-1000)) break;
+    if(usLeft<(-40)) break;
     taskYIELD(); }
-  // State=Radio.finishTransmit();                         // adds a long delay and leaves a significant tail
-  Radio.clearIRQFlags();
-  Radio.standby();
-  // Serial.printf("Radio_TxFSK(, %d) usTxTime:%d, usLeft:%d\n", Len, usTxTime, usLeft);
+  State=Radio.finishTransmit();                         // adds a long delay and leaves a significant tail
+  // Radio.clearIRQFlags();
+  // Radio.standby();
+  // uint8_t RegPktLen = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PAYLOAD_LENGTH_FSK);
+  // uint8_t RegFixed = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PACKET_CONFIG_1);
+  // uint8_t RegDIO1 = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_DIO_MAPPING_1);
+  // Serial.printf("Radio_TxFSK(, %d) usTxTime:%d, usLeft:%d [%d:%02X:%02X]\n", Len, usTxTime, usLeft, RegPktLen, RegFixed, RegDIO1);
   // LED_OGN_Off();
   return State; }
 #endif
@@ -555,6 +559,9 @@ void Radio_Task(void *Parms)
 #endif
 
   SPI.begin(Radio_PinSCK, Radio_PinMISO, Radio_PinMOSI);  // CLK, MISO, MOSI, CS given by the Radio contructor
+#ifdef Radio_SckFreq
+  SPI.setFrequency(Radio_SckFreq);
+#endif
 
 #ifdef WITH_SX1276
   int State = Radio.beginFSK(868.2,          100.0,           50.0,        234.3,           14,              8);
