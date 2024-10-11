@@ -70,10 +70,8 @@ class FlashParameters
    { uint16_t Flags;
      struct
      { bool SaveToFlash:1;   // Save parameters from the config file to Flash
-       bool PowerON    :1;
-       bool SpareBit   :1;
-       // bool       hasBT:1;   // has BT interface on the console
-       // bool       BT_ON:1;   // BT on after power up
+       bool PowerON    :1;   // stay ON or OFF - to prevent accidential turn-ON
+       bool WiFiON     :1;   // start WiFi (if not then start BT)
        bool manGeoidSepar:1; // GeoidSepar is manually configured as the GPS or MAVlink are not able to deliver it
        bool     Encrypt:1;   // encrypt the position packets
        uint8_t  NavMode:3;   // GPS navigation mode/model
