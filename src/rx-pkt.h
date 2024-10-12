@@ -1,6 +1,6 @@
 class Manch_RxPktData                 // Manchester encoed packet received by the RF chip
 { public:
-   static const uint8_t MaxBytes=26;  // [bytes] number of bytes in the packet
+   static const uint8_t MaxBytes=40;  // [bytes] number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
    uint16_t msTime;                   // [ms] reception time since the PPS[Time]
    // uint32_t PosTime;                  // [ms] position timestamp in terms of the system time
@@ -9,7 +9,7 @@ class Manch_RxPktData                 // Manchester encoed packet received by th
     int8_t SNR;                       // [0.25dB]
     int8_t FreqErr;                   // [0.1kHz]
    uint8_t Bytes;                     // []
-   uint8_t SysID;                     // [] 1=OGN, 2=ADS-L
+   uint8_t SysID;                     // [] 1=OGN, 2=ADS-L, ...
    uint8_t Data[MaxBytes];            // Manchester decoded data bits/bytes
    uint8_t Err [MaxBytes];            // Manchester decoding errors
 

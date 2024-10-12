@@ -58,6 +58,10 @@ class FreqPlan
    { if(Plan<=1) return 869525000;
      return 0; }
 
+   uint32_t getFreqOBAND(uint32_t Time)
+   { if(Plan<=1) return 869525000;
+     return 0; }
+
    uint32_t getFreqFNT(uint32_t Time)
    { if(Plan<=1) return BaseFreq;                                          // Europe and default is 868.2MHz
      uint32_t Freq1 = getFrequency(Time, 0, 0);

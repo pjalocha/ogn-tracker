@@ -37,6 +37,9 @@ static const uint8_t *OGN_SYNC = OGN1_SYNC;
 static const uint8_t ADSL_SYNC[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA9, 0x6A, 0x00, 0x00 };
 // RID SYNC:         0xF5724B24 encoded in Manchester (fixed packet length 0x24 is included)
 static const uint8_t RID_SYNC[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA6, 0x9A, 0x00, 0x00 };
+// O-Band SYNC
+static const uint8_t OBAND_SYNC[10] = { 0xF5, 0x72, 0x4B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } ;
+
 // PilotAware SYNC, includes net-address which is always zero, and the packet size which is always 0x18 = 24
 static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18, 0x71, 0x00, 0x00 };
 
@@ -279,7 +282,8 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
 
 // =======================================================================================================
 
-static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)  // Radio setup for PilotAware
+// Radio setup for PilotAware: GFSK, 38.4kbps, +/-9.6kHz
+static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)
 { int ErrState=0; int State=0;
   // uint32_t Time=millis();
   // Radio.standby();
@@ -347,6 +351,59 @@ static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit 
   Radio_TxPacket[Packet.Size+6] = Packet.CRC8(Radio_TxPacket+6, Packet.Size); // add external CRC
   return Radio_TxFSK(Radio_TxPacket, Packet.Size+1+6); }            // send the packet out
 */
+// =======================================================================================================
+
+static int Radio_ConfigOBAND(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=3) // Radio setup for O-band ADS-L
+{ int ErrState=0; int State=0;
+#ifdef WITH_SX1276
+  State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
+#endif
+#ifdef WITH_SX1262
+  State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
+#endif
+  if(State) ErrState=State;
+  State=Radio.setBitRate(200.0);                                    // [kpbs] 
+  if(State) ErrState=State;
+  State=Radio.setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
+  if(State) ErrState=State;
+  State=Radio.setRxBandwidth(234.3);                                // [kHz]  250kHz bandwidth
+  if(State) ErrState=State;
+  State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
+  if(State) ErrState=State;
+#ifdef WITH_SX1276
+  State=Radio.setPreambleLength(8);                                 // [bits] minimal preamble
+#endif
+#ifdef WITH_SX1262
+  State=Radio.setPreambleLength(8);                                 // [bits] minimal preamble
+#endif
+  if(State) ErrState=State;
+  State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
+  if(State) ErrState=State;
+  State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
+  if(State) ErrState=State;
+  State=Radio.variablePacketLengthMode();                           // variable packet length mode
+  if(State) ErrState=State;
+  State=Radio.disableAddressFiltering();                            // don't want any of such features
+#ifdef WITH_SX1276
+  // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
+  if(SYNC[0]==0x55)
+    State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polar>
+  else if(SYNC[0]==0xAA)
+    State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polar>
+  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  if(State) ErrState=State;
+#endif
+  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before M>
+  if(State) ErrState=State;
+#ifdef WITH_SX1262
+  State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
+  if(State) ErrState=State;
+#endif
+  return ErrState; }                                                // this call takes 18-19 ms
+
+static int Radio_TxOBAND(uint8_t *Packet, uint8_t Len)              // transmit a packet on the O-Band
+{ return Radio_TxFSK(Packet, Len); }
+
 // =======================================================================================================
 
 #ifdef WITH_FANET
@@ -601,9 +658,10 @@ void Radio_Task(void *Parms)
     // msTime = TimeRef.getFracTime(millis());
 
 #ifdef WITH_FANET
-    { uint32_t Freq = Radio_FreqPlan.getFreqFNT(TimeRef.UTC);    // frequency to transmit FANET
-      Radio_ConfigFANET();
-      Radio.setFrequency(1e-6*Freq);
+    uint32_t FreqFNT = Radio_FreqPlan.getFreqFNT(TimeRef.UTC);    // frequency to transmit FANET
+    if(FreqFNT)
+    { Radio_ConfigFANET();
+      Radio.setFrequency(1e-6*FreqFNT);
       Radio.startReceive();                                      // start receiving FANET
       for( ; ; )
       { PktCount+=Radio_FANETrxPacket(TimeRef);                  // any packet received ?
@@ -616,7 +674,7 @@ void Radio_Task(void *Parms)
       XorShift64(Random.Word);
       int32_t msSlot = 400-msTime;                               //
       // Serial.printf("Pre-slot: %d [sec]  %d Slot:%d [ms]\n", TimeRef.UTC, msTime, msSlot);
-      if(msSlot>40) PktCount+=Radio_FANETslot(Freq, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
+      if(msSlot>40) PktCount+=Radio_FANETslot(FreqFNT, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
     }
 
     // if(msTime<350)
@@ -637,13 +695,13 @@ void Radio_Task(void *Parms)
 #ifdef WITH_PAW
     const PAW_Packet *PawPacket = PAW_TxFIFO.getRead();
     if(PawPacket) PAW_TxFIFO.Read();
-    if(PawPacket)
-    { uint32_t Freq = Radio_FreqPlan.getFreqPAW(TimeRef.UTC);
-      Radio.standby();
+    uint32_t FreqPAW = Radio_FreqPlan.getFreqPAW(TimeRef.UTC);
+    if(PawPacket && FreqPAW)                         // if there is a packet to be transmitted and the frequency plan allows it
+    { Radio.standby();
       int Ret=Radio_ConfigPAW();
       // Serial.printf("PAW: Freq:%7.3fMHz (%d)\n", 1e-6*Freq, Ret);
-      Radio.setFrequency(1e-6*Freq);
-      Radio.setOutputPower(Parameters.TxPower);
+      Radio.setFrequency(1e-6*FreqPAW);
+      Radio.setOutputPower(Parameters.TxPower+6); // we can transmit PAW with higher power
       Radio_TxPAW(*PawPacket); }
 #endif
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
