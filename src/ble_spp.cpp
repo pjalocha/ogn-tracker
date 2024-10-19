@@ -1,7 +1,7 @@
 
-#include "ble.h"
+#include "ble_spp.h"
 
-FIFO<char, 1024> BLE_TxFIFO;
+FIFO<char, 1024> BLE_SPP_TxFIFO;
 
 #ifdef WITH_BLE_SPP
 
@@ -33,16 +33,16 @@ static void BLE_UART_Written(BLEDevice Dev, BLECharacteristic Chars)
   // Chars.readValue(Buff, 64);
 }
 
-void BLE_Check(void)
+void BLE_SPP_Check(void)
 { BLE.poll();
   char *Data=0;
-  int Len=BLE_TxFIFO.getReadBlock(Data);
+  int Len=BLE_SPP_TxFIFO.getReadBlock(Data);
   if(Len>0 && Data)
   { UARTcharacteristic.writeValue(Data, (size_t)Len);
-    BLE_TxFIFO.flushReadBlock(Len); }
+    BLE_SPP_TxFIFO.flushReadBlock(Len); }
 }
 
-void BLE_Start(const char *DevName)
+void BLE_SPP_Start(const char *DevName)
 { BLE.begin();
   BLE.setLocalName(DevName);
   BLE.setDeviceName(DevName);

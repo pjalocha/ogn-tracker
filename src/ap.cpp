@@ -56,7 +56,7 @@ void vTaskAP(void* pvParameters)
   xSemaphoreGive(CONS_Mutex);
 #endif
 
-  Err=WIFI_StartAP(Parameters.APname, Parameters.APpass);
+  Err=WIFI_StartAP(Parameters.APname, Parameters.APpass, Parameters.APchan);
   WIFI_setTxPower(Parameters.APtxPwr);
   WIFI_setPowerSave(1);
 

@@ -19,7 +19,7 @@
 #endif
 
 #ifdef WITH_BLE_SPP
-#include "ble.h"
+#include "ble_spp.h"
 #endif
 
 #ifdef WITH_AP
@@ -377,7 +377,7 @@ void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
   BTserial.write(Byte);
 #endif
 #ifdef WITH_BLE_SPP
-  BLE_TxFIFO.Write(Byte);
+  BLE_SPP_TxFIFO.Write(Byte);
 #endif
 }
 
@@ -676,7 +676,7 @@ void setup()
 #endif
 
 #ifdef WITH_BLE_SPP
-  if(!StartAP) BLE_Start(Parameters.BTname);
+  if(!StartAP) BLE_SPP_Start(Parameters.BTname);
 #endif
 
 #ifdef WITH_OLED
@@ -822,6 +822,21 @@ static void ProcessNMEA(void)     // process a valid NMEA that we got to the con
 #endif
 }
 
+#ifdef WITH_LORAWAN
+static void PrintLoRaWAN()
+{ if(!xSemaphoreTake(CONS_Mutex, 100)) return;
+  bool Joined = (WANdev.State>>1)&1;
+  const char *State = Joined?"Conn.":"not-Conn.";
+  if(!WANdev.Enable) State = "Disabled";
+  Serial.printf("LoRaWAN: %s", State);
+  if(Joined) Serial.printf(" %08X:%08X", WANdev.HomeNetID, WANdev.DevAddr);
+  Serial.printf(" Nonce:%08X Up:%u Dn:%d Tx:%u Rx:%u %ddBm %+4.1fdB",
+           WANdev.DevNonce, WANdev.UpCount, WANdev.DnCount, WANdev.TxCount, WANdev.RxCount,
+           WANdev.RxRSSI, 0.25*WANdev.RxSNR);
+  Serial.printf("\n");
+  xSemaphoreGive(CONS_Mutex); }
+#endif
+
 static void ProcessCtrlF(void)                                  // list log files to the console
 { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
 #ifdef WITH_SPIFFS
@@ -892,23 +907,38 @@ static void ProcessCtrlL(void)                                    // print syste
 #endif
 }
 
+static void ProcessCtrlO(void)                                    // print system state to the console
+{
+#ifdef WITH_LORAWAN
+  PrintLoRaWAN();
+#endif
+}
+
 static int ProcessInput(void)
-{ int Count=0;
+{
+  const uint8_t CtrlC = 'C'-'@';
+  const uint8_t CtrlF = 'F'-'@';
+  const uint8_t CtrlL = 'L'-'@';
+  const uint8_t CtrlO = 'O'-'@';
+  const uint8_t CtrlX = 'X'-'@';
+
+  int Count=0;
   for( ; ; )
   { uint8_t Byte; int Err=CONS_UART_Read(Byte); if(Err<=0) break; // get byte from console, if none: exit the loop
     Count++;
-#ifndef WITH_GPS_UBX_PASS
-    if(Byte==0x03) ProcessCtrlC();                                // if Ctrl-C received: print parameters
-    if(Byte==0x06) ProcessCtrlF();                                // if Ctrl-F received: list files
-    if(Byte==0x0C) ProcessCtrlL();                                // if Ctrl-L received: list log files
-    if(Byte==0x18)                                                // Ctrl-X
+#ifndef WITH_GPS_UBX_PASS                                          // when transparency to the GPS not requested
+    if(Byte==CtrlC) ProcessCtrlC();                                // if Ctrl-C received: print parameters
+    if(Byte==CtrlF) ProcessCtrlF();                                // if Ctrl-F received: list files
+    if(Byte==CtrlC) ProcessCtrlL();                                // if Ctrl-L received: list log files
+    if(Byte==CtrlO) ProcessCtrlO();                                // if Ctrl-O received: print LoRaWAN status
+    if(Byte==CtrlX)                                                // Ctrl-X
     {
 #ifdef WITH_SPIFFS
       FlashLog_SaveReq=1;
 #endif
       vTaskDelay(1000);
       esp_restart(); }                                            // if Ctrl-X received then restart
-#endif
+#endif // of WITH_GPS_UBX_PASS
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
     if(NMEA.isComplete())                                         // if complete NMEA:
     {
@@ -946,7 +976,7 @@ void loop()
     PrevGPS=GPS; }
 #endif
 #ifdef WITH_BLE_SPP
-  BLE_Check();
+  BLE_SPP_Check();
 #endif
 }
 

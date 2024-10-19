@@ -4,10 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// #if defined(WITH_STM32) || defined(WITH_ESP32)
-// #include "hal.h"
-// #endif
-
 #include "ogn.h"
 
 #ifdef WITH_ESP32
@@ -141,7 +137,8 @@ class FlashParameters
 
 #ifdef WITH_AP
    char APname[32];
-   char APpass[32];
+   char APpass[31];
+   uint8_t APchan;
 uint16_t APport;
   int8_t APminSig;
   int8_t APtxPwr;
@@ -171,7 +168,7 @@ uint16_t StratuxPort;
   uint32_t EncryptKey[4];    // encryption key
 #endif
 #ifdef WITH_LORAWAN
-  uint8_t AppKey[16];
+  uint8_t AppKey[16];        // application Key for TTN or Heliuem or other
 #endif
 
   union
@@ -224,9 +221,9 @@ uint16_t StratuxPort;
    static const uint32_t CheckInit = 0x89ABCDEF;
 
 #ifdef WITH_LORAWAN
-   bool hasAppKey(void) const
+   bool hasAppKey(void) const                                                                 // check if AppKey!=0
    { for(int Idx=0; Idx<16; Idx++)
-     { if(AppKey[Idx]) return 1; }
+     { if(AppKey[Idx]) return 1; }                                                            // if any byte is non-zero => 1
      return 0; }
 
    void clrAppKey(void) { for(int Idx=0; Idx<16; Idx++) AppKey[Idx]=0x00; }                   // set AppKey to all-zero
@@ -314,8 +311,9 @@ uint16_t StratuxPort;
 #endif
 #ifdef WITH_AP
    getAprsCall(APname);
-   APpass[0]=0;
-   APport  = 2000;
+   APpass[0]= 0;
+   APchan   = 6;
+   APport   = 2000;
    APminSig = -70; // [dBm]
    APtxPwr  =  40; // [0.25dBm]
 #endif
@@ -571,26 +569,34 @@ uint16_t StratuxPort;
   uint8_t WritePOGNS_Pilot(char *Line)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNS,Pilot=");
-    Len+=Format_String(Line+Len, Pilot);
+    // Len+=Format_String(Line+Len, Pilot);
+    Len+=Write_StringEsc(Line+Len, Pilot, 16);
     Len+=Format_String(Line+Len, ",Crew=");
-    Len+=Format_String(Line+Len, Crew);
+    // Len+=Format_String(Line+Len, Crew);
+    Len+=Write_StringEsc(Line+Len, Crew, 16);
     Len+=Format_String(Line+Len, ",Reg=");
-    Len+=Format_String(Line+Len, Reg);
+    // Len+=Format_String(Line+Len, Reg);
+    Len+=Write_StringEsc(Line+Len, Reg, 16);
     Len+=Format_String(Line+Len, ",Base=");
-    Len+=Format_String(Line+Len, Base);
+    // Len+=Format_String(Line+Len, Base);
+    Len+=Write_StringEsc(Line+Len, Base, 16);
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     Line[Len]=0; return Len; }
 
   uint8_t WritePOGNS_Acft(char *Line)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNS,Manuf=");
-    Len+=Format_String(Line+Len, Manuf);
+    // Len+=Format_String(Line+Len, Manuf);
+    Len+=Write_StringEsc(Line+Len, Manuf, 16);
     Len+=Format_String(Line+Len, ",Model=");
-    Len+=Format_String(Line+Len, Model);
+    // Len+=Format_String(Line+Len, Model);
+    Len+=Write_StringEsc(Line+Len, Model, 16);
     Len+=Format_String(Line+Len, ",Type=");
-    Len+=Format_String(Line+Len, Type);
+    // Len+=Format_String(Line+Len, Type);
+    Len+=Write_StringEsc(Line+Len, Type, 16);
     Len+=Format_String(Line+Len, ",SN=");
-    Len+=Format_String(Line+Len, SN);
+    // Len+=Format_String(Line+Len, SN);
+    Len+=Write_StringEsc(Line+Len, SN, 16);
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     Line[Len]=0; return Len; }
 
@@ -656,16 +662,23 @@ uint16_t StratuxPort;
     return 0; }
 
   static int8_t Read_String(char *Value, const char *Inp, uint8_t MaxLen)
-  { const char *Val = SkipBlanks(Inp);
+  { const char *Str = SkipBlanks(Inp);
+    // if(Str[0]=='\"') return (Str-Inp) + Read_QuotedString(Value, Str, MaxLen);
     uint8_t Idx;
     for(Idx=0; Idx<MaxLen; Idx++)
-    { char ch=(*Val); if(ch==0) break;
+    { char ch=(*Str); if(ch==0) break;
+      if(ch=='\\' && Str[1]=='x')
+      { int8_t H=Read_Hex1(Str[2]);
+        int8_t L=Read_Hex1(Str[3]);
+        if(H>=0 && L>=0)
+        { Value[Idx] = (H<<4) | L;
+          Str+=4; continue; }
+      }
       if(!isStringChar(ch)) break;
-      Value[Idx] = ch;
-      Val++; }
+      Value[Idx] = ch; Str++; }
     for( ; Idx<MaxLen; Idx++)
       Value[Idx]=0;
-    return Val-Inp; }
+    return Str-Inp; }                            // return number of characters read
 
   static const char *SkipBlanks(const char *Inp) // skip space and all control codes thus below 32
   { for( ; ; )
@@ -787,6 +800,12 @@ uint16_t StratuxPort;
 #ifdef WITH_AP
     if(strcmp(Name, "APname")==0) return Read_String(APname, Value, 16)>=0;
     if(strcmp(Name, "APpass")==0) return Read_String(APpass, Value, 16)>=0;
+    if(strcmp(Name, "APchan")==0)
+    { int32_t Chan; if(Read_Int(Chan, Value)<=0) return 0;
+      if(Chan<=0 || Chan>13) Chan=6; APchan=Chan; return 1; }
+    if(strcmp(Name, "APminSig")==0)
+    { int32_t Sig; if(Read_Int(Sig, Value)<=0) return 0;
+      if(Sig<=(-100) || Sig>(-20)) Sig=-70; APminSig=Sig; return 1; }
     if(strcmp(Name, "APport")==0)
     { int32_t Port; if(Read_Int(Port, Value)<=0) return 0;
       if(Port<=0 || Port>0xFFFF) Port=30011; APport=Port; return 1; }
@@ -862,7 +881,8 @@ uint16_t StratuxPort;
     int Lines=ReadFromFile(File);
     fclose(File); return Lines; }
 
-  static int Write_Hex(char *Line, const char *Name, uint32_t Value, uint8_t Digits)
+  template <class Type>
+   static int Write_Hex(char *Line, const char *Name, Type Value, uint8_t Digits)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = 0x");
     Len+=Format_Hex(Line+Len, Value, Digits);
@@ -873,6 +893,13 @@ uint16_t StratuxPort;
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
     Len+=Format_UnsDec(Line+Len, Value);
+    Len+=Format_String(Line+Len, ";");
+    Line[Len]=0; return Len; }
+
+  static int Write_Bool(char *Line, const char *Name, bool Value)
+  { uint8_t Len=Format_String(Line, Name, 14, 0);
+    Len+=Format_String(Line+Len, " = ");
+    Line[Len++] = '0'+Value;
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
@@ -890,18 +917,28 @@ uint16_t StratuxPort;
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
-  int Write_String(char *Line, const char *Name, char *Value, uint8_t MaxLen=16)
+  static int Write_String(char *Line, const char *Name, const char *Value, uint8_t MaxLen)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
-    Len+=Format_String(Line+Len, Value, 0, MaxLen);
+    // Len+=Format_String(Line+Len, Value, 0, MaxLen);
+    Len+=Write_StringEsc(Line+Len, Value, MaxLen);
     Line[Len]=0; return Len; }
+
+  static int Write_StringEsc(char *Line, const char *Str, uint8_t MaxLen)
+  { int Len=0;
+    for(uint8_t Idx=0; Idx<MaxLen; Idx++)
+    { char ch = Str[Idx]; if(ch==0) break;
+      if(isStringChar(ch)) { Line[Len++] = ch; continue; }
+      Line[Len++]='\\'; Line[Len++]='x'; Line[Len++]=HexDigit(ch>>4); Line[Len++]=HexDigit(ch&0x0F);
+    }
+    return Len; }
 
   int WriteToFile(FILE *File)
   { char Line[80];
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "Stealth"   ,          Stealth,        1); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Bool   (Line, "Stealth"   ,          Stealth          ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "CONbaud"   ,          CONbaud          ); strcat(Line, " #  [  bps]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -933,14 +970,15 @@ uint16_t StratuxPort;
     Write_UnsDec (Line, "Bluetooth" ,          BT_ON            ); strcat(Line, " #  [  1|0]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
-    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx)); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
+    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx), 16); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
 #if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_AP
     strcpy(Line, "APname         = "); strcat(Line, APname); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     strcpy(Line, "APpass         = "); strcat(Line, APpass); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_UnsDec (Line, "APport"  ,  (uint32_t)APport ); strcat(Line, " #  [port]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_UnsDec (Line, "APport"  ,  (uint32_t)APport );     strcat(Line, " #  [port]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_UnsDec (Line, "APchan"   , (uint32_t)APchan);      strcat(Line, " #  [chan]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Float1(Line, "APtxPwr"  ,  (int32_t)10*APtxPwr/4); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_STRATUX
@@ -971,7 +1009,7 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "Stealth"   ,          Stealth,        1); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
+    Write_Bool   (Line, "Stealth"   ,          Stealth          ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "CONbaud"   ,          CONbaud          ); strcat(Line, " #  [  bps]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); Format_String(Output, Line);
@@ -1008,11 +1046,12 @@ uint16_t StratuxPort;
 #ifdef WITH_AP
     strcpy(Line, "APname         = "); strcat(Line, APname); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
     strcpy(Line, "APpass         = "); strcat(Line, APpass); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
-    Write_UnsDec (Line, "APport", (uint32_t)APport    ); strcat(Line, " #  [port]\n"); Format_String(Output, Line);
-    Write_Float1 (Line, "APtxPwr", (int32_t)10*APtxPwr/4); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
+    Write_UnsDec (Line, "APport", (uint32_t)APport    ); strcat(Line,     " #  [port]\n"); Format_String(Output, Line);
+    Write_UnsDec (Line, "APchan", (uint32_t)APchan    ); strcat(Line,     " #  [chan]\n"); Format_String(Output, Line);
+    Write_Float1 (Line, "APtxPwr", (int32_t)10*APtxPwr/4); strcat(Line,   " #  [ dBm]\n"); Format_String(Output, Line);
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
-    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx)); strcat(Line, "; #  [char]\n"); Format_String(Output, Line); }
+    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx), 16); strcat(Line, "; #  [char]\n"); Format_String(Output, Line); }
 #ifdef WITH_STRATUX
     strcpy(Line, "StratuxWIFI    = "); strcat(Line, StratuxWIFI); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
     strcpy(Line, "StratuxPass    = "); strcat(Line, StratuxPass); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
