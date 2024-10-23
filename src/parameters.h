@@ -168,7 +168,10 @@ uint16_t StratuxPort;
   uint32_t EncryptKey[4];    // encryption key
 #endif
 #ifdef WITH_LORAWAN
-  uint8_t AppKey[16];        // application Key for TTN or Heliuem or other
+  uint8_t AppKey[16];        // for OTAA: Application Key for TTN or Heliuem or other
+  uint8_t AppSesKey[16];     // for ABP:
+  uint8_t NetSesKey[16];
+  uint32_t DevAddr;
 #endif
 
   union
@@ -221,14 +224,27 @@ uint16_t StratuxPort;
    static const uint32_t CheckInit = 0x89ABCDEF;
 
 #ifdef WITH_LORAWAN
-   bool hasAppKey(void) const                                                                 // check if AppKey!=0
+   static void clrKey(uint8_t *Key) { for(int Idx=0; Idx<16; Idx++) Key[Idx]=0x00; }
+
+   static bool hasKey(const uint8_t *Key)                                                     // check if Key!=0
    { for(int Idx=0; Idx<16; Idx++)
-     { if(AppKey[Idx]) return 1; }                                                            // if any byte is non-zero => 1
+     { if(Key[Idx]) return 1; }                                                            // if any byte is non-zero => 1
      return 0; }
 
-   void clrAppKey(void) { for(int Idx=0; Idx<16; Idx++) AppKey[Idx]=0x00; }                   // set AppKey to all-zero
-   void cpyAppKey(uint8_t *Key) { memcpy(Key, AppKey, 16); }                                  // copy AppKey from given pointer
-   bool sameAppKey(const uint8_t *RefKey) const { return memcmp(AppKey, RefKey, 16)==0; }     // is AppKey same as given ?
+   bool hasAppKey(void)    const   { return hasKey(AppKey); }
+   bool hasAppSesKey(void) const   { return hasKey(AppSesKey); }
+   bool hasNetSesKey(void) const   { return hasKey(NetSesKey); }
+
+   void clrAppKey(void)    { clrKey(AppKey); }                                                // set AppKey to all-zero
+   void clrAppSesKey(void) { clrKey(AppSesKey); }
+   void clrNetSesKey(void) { clrKey(NetSesKey); }
+
+   void  cpyAppKey   (uint8_t *Key) { memcpy(Key, AppKey, 16); }                                    // copy AppKey from given pointer
+   bool sameAppKey   (const uint8_t *RefKey) const { return memcmp(AppKey, RefKey, 16)==0; }        // is AppKey same as given ?
+   void  cpyAppSesKey(uint8_t *Key) { memcpy(Key, AppSesKey, 16); }                                 // copy AppKey from given pointer
+   bool sameAppSesKey(const uint8_t *RefKey) const { return memcmp(AppSesKey, RefKey, 16)==0; }     // is AppKey same as given ?
+   void  cpyNetSesKey(uint8_t *Key) { memcpy(Key, NetSesKey, 16); }                                 // copy AppKey from given pointer
+   bool sameNetSesKey(const uint8_t *RefKey) const { return memcmp(NetSesKey, RefKey, 16)==0; }     // is AppKey same as given ?
 #endif
 
    uint32_t static calcCheckSum(volatile uint32_t *Word, uint32_t Words)                      // calculate check-sum of pointed data
@@ -301,6 +317,9 @@ uint16_t StratuxPort;
       InfoParmValue(Idx)[0] = 0;
 #ifdef WITH_LORAWAN
     clrAppKey();
+    clrAppSesKey();
+    clrNetSesKey();
+    DevAddr=0;
 #endif
 #ifdef WITH_ENCRYPT
     for(uint8_t Idx=0; Idx<4; Idx++) EncryptKey[Idx]=0;
@@ -687,6 +706,16 @@ uint16_t StratuxPort;
       Inp++; }
     return Inp; }
 
+  static int Read_Key(uint8_t *Key, const char *Inp, int Size=16)
+  { if(Inp[0]=='0' && Inp[1]=='x') Inp+=2;                     // skip initial 0x if present
+    for(uint8_t Idx=0; Idx<Size; Idx++)                                // read 16 hex bytes
+    { uint8_t Byte;
+      uint8_t Len=Read_Hex(Byte, Inp);
+      if(Len!=2) break;
+      Key[Idx]=Byte;
+      Inp+=2; }
+    return 0; }
+
   bool ReadParam(const char *Name, const char *Value)                           // interprete "Name = Value" line
   { if(strcmp(Name, "Address")==0)
     { uint32_t Addr=0; if(Read_Int(Addr, Value)<=0) return 0;
@@ -759,13 +788,16 @@ uint16_t StratuxPort;
       Verbose=Mode; return 1; }
 #ifdef WITH_LORAWAN
     if(strcmp(Name, "AppKey")==0)
-    { if(Value[0]=='0' && Value[1]=='x') Value+=2;                     // skip initial 0x if present
-      for(uint8_t Idx=0; Idx<16; Idx++)                                // read 16 hex bytes
-      { uint8_t Byte;
-        uint8_t Len=Read_Hex(Byte, Value);
-        if(Len!=2) break;
-        AppKey[Idx]=Byte;
-        Value+=2; }
+    { Read_Key(AppKey, Value);
+      return 1; }
+    if(strcmp(Name, "DevAddr")==0)
+    { uint64_t Addr; if(Read_Int(Addr, Value)<=0) return 0;
+      DevAddr=Addr; return 1; }
+    if(strcmp(Name, "AppSesKey")==0)
+    { Read_Key(AppSesKey, Value);
+      return 1; }
+    if(strcmp(Name, "NetSesKey")==0)
+    { Read_Key(NetSesKey, Value);
       return 1; }
 #endif
 #ifdef WITH_ENCRYPT

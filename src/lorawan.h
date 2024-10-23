@@ -28,14 +28,14 @@ class LoRaWANnode
       uint32_t DevNonce;      // unique counter kept by the device for Join-Requests
                               // the four items above need to be kept stored permanently per each device
                               // the other elements below are obtained when join-accept is received from the LoRaWAN network
-      uint8_t  NetSesKey[16]; // from Join-Accept: Network Session Key
-      uint8_t  AppSesKey[16]; // from Join-Accept: App Session Key
+      uint8_t  NetSesKey[16]; // from Join-Accept or ABP: Network Session Key
+      uint8_t  AppSesKey[16]; // from Join-Accept or ABP: App Session Key
       uint32_t JoinNonce;     // from Join-Accept: unique must not be reused
       uint32_t HomeNetID;     // from Join-Accept: Home Network ID
-      uint32_t DevAddr;       // from Join-Accept: Device Address
+      uint32_t DevAddr;       // from Join-Accept or ABP: Device Address
       uint8_t  DLsetting;     // from Join-Accept: DownLink configuration: OptNeg:1 | RX1 data rate offset:3 | RX2 data rate:4
       uint8_t  RxDelay;       // from Join-Accept: RFU:4 | Del:4  Del=1..15s for the RX1, RX2 delay is Del+1
-      uint8_t  State;         // 0:disconencted, 1:join-request sent, 2:join-accept received, 3:uplink-packet sent
+      uint8_t  State;         // 0:not-joined, 1:join-request-sent, 2:joined, 3:uplink-packet-sent, wait for a possible reply
       uint8_t  Chan;          // [0..7] Current channel being used
       uint32_t UpCount;       // [seq] Uplink frame counter: reset when joining the network
       uint32_t DnCount;       // [seq] Downlink frame counter: reset when joining the network
@@ -48,11 +48,14 @@ class LoRaWANnode
       union
       { uint8_t  Flags;
         struct
-        { bool RxACK :1;      // received ACK
-          bool TxACK :1;      // ACK to be transmitted
-          bool RxPend:1;      // more frames pending for reception
-          bool Enable:1;      // Enable/disable operation
+        { bool RxACK  :1;     // received ACK
+          bool TxACK  :1;     // ACK to be transmitted
+          bool RxPend :1;     // more frames pending for reception
+          bool Enable :1;     // Enable/disable operation
           bool SaveReq:1;     // Request to save the node state
+          bool Spare1 :1;
+          bool Spare2 :1;
+          bool ABP    :1;     // Activation-By-Personalization, not Over-The-Air-Activation and there is "join" phase
         } ;
       } ;
       uint8_t  RxSilent;      // count non-receptions <- 112 bytes up to (and including) this point
