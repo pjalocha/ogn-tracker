@@ -347,14 +347,22 @@ uint16_t BatterySense(int Samples)
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
-  RawVoltage = (RawVoltage+Samples/2)/Samples;
-#ifdef WITH_HTIT_TRACKER
-  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs)*5;  // HTIT-Tracker has 1:4.9 voltage divider
+  RawVoltage = (RawVoltage)/Samples;
+
+  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs);
+#ifdef BATT_ADC_RATIO
+  Volt = Volt*BATT_ADC_RATIO;
 #else
-  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs)*2;
+  Volt = Volt*2;
 #endif
+  
+#ifdef BATT_ADC_BIAS
+  if(Volt>=BATT_ADC_BIAS) Volt-=BATT_ADC_BIAS;
+#else
   const uint16_t Bias = 50;  // apparently, there is 80mV bias in the battery voltage measurement
   if(Volt>=Bias) Volt-=Bias;
+#endif
+
 // #ifdef ADC_BattSenseEna
 //   digitalWrite(ADC_BattSenseEna, LOW);
 // #endif
