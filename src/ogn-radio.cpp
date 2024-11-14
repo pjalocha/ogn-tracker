@@ -736,6 +736,7 @@ void Radio_Task(void *Parms)
     if(AdslPacket1) ADSL_TxFIFO.Read();
     const ADSL_Packet *AdslPacket2 = ADSL_TxFIFO.getRead();              // 2nd ADS-L packet (posisbly empty)
     if(AdslPacket2) { ADSL_TxFIFO.Read(); if(Random.RX&8) Swap(AdslPacket1, AdslPacket2); } // randomly swap
+               else { AdslPacket2=AdslPacket1; }
     // if(AdslPacket1) Serial.printf("ADSL-1 for TX\n");
     // if(AdslPacket2) Serial.printf("ADSL-2 for TX\n");
 
