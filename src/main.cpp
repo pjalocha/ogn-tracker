@@ -603,7 +603,7 @@ void setup()
     // It is necessary to disable the detection function of the TS pin on the board
     // without the battery temperature detection function, otherwise it will cause abnormal charging
     PMU->disableTSPinMeasure();
-#ifdef WITH_TBEAM20
+#ifdef WITH_TBEAM12
     // RF 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO2);
