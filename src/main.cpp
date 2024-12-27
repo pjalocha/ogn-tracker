@@ -333,7 +333,7 @@ static int ADC_Init(void)
 static void BatterySenseEnable(bool ON=1) { digitalWrite(ADC_BattSenseEna, ON); }
 #endif
 
-uint16_t BatterySense(int Samples)
+uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-control chip or from an ADC channel
 {
 #ifdef WITH_XPOWERS
   if(PMU) return PMU->getBattVoltage();
@@ -549,13 +549,13 @@ void setup()
 #else
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
-  { HardwareStatus.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+  { HardwareStatus.AXP192=1; Serial.println("Power/charge chip AXP192 detected"); }
 #ifdef PMU_I2C_PinSCL
   else if(AXP.begin(PMU_I2C, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
 #else
   else if(AXP.begin(Wire, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
-  { HardwareStatus.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
+  { HardwareStatus.AXP202=1; Serial.println("Power/charge chip AX202 detected"); }
   else
   { Serial.println("AXP power/charge chip NOT detected"); }
 
@@ -580,9 +580,9 @@ void setup()
     PMU = new XPowersAXP2101(Wire);
 #endif
     if(PMU->init())
-    { HardwareStatus.AXP210=1; Serial.println("AXP2101 power/charge chip detected"); }
+    { HardwareStatus.AXP210=1; Serial.println("Power/charge chip AXP2101 detected"); }
     else
-    { delete PMU; PMU=0; Serial.println("AXP2101 power/charge chip NOT detected"); }
+    { delete PMU; PMU=0; Serial.println("Power/charge chip AXP2101 NOT detected"); }
   }
   if(PMU==0)
   {
@@ -592,9 +592,9 @@ void setup()
     PMU = new XPowersAXP192(Wire);
 #endif
     if(PMU->init())
-    { HardwareStatus.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+    { HardwareStatus.AXP192=1; Serial.println("Power/charge chip AXP192 detected"); }
     else
-    { delete PMU; PMU=0; Serial.println("AXP192 power/charge chip NOT detected"); }
+    { delete PMU; PMU=0; Serial.println("Power/charge chip AXP192 NOT detected"); }
   }
   if(HardwareStatus.AXP210)
   { PMU->enableSystemVoltageMeasure();
@@ -634,7 +634,7 @@ void setup()
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
   if(HardwareStatus.AXP192 || HardwareStatus.AXP210)
   { Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
-    Serial.printf("  Batt: %5.3fV\n", 0.001f*PMU->getBattVoltage());
+    Serial.printf("  Batt: %5.3fV %d%%\n", 0.001f*PMU->getBattVoltage(), PMU->getBatteryPercent());
     // Serial.printf("  USB:  %5.3fV  %5.3fA\n",
     //           0.001f*PMU->getVbusVoltage(), 0.001f*PMU->getVbusCurrent());
     // Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
@@ -900,6 +900,20 @@ static void ProcessCtrlC(void)                                  // print system 
 
   xSemaphoreGive(CONS_Mutex); }
 
+static void ProcessCtrlX(void)
+{ static uint32_t LastTime=0;
+  uint32_t Time=millis();
+  uint32_t Diff=Time-LastTime;
+  if(Diff<1000)
+  { // SysLog_Line("Restart from console", 1, 50);
+    // ShutDownReq=1;
+#ifdef WITH_SPIFFS
+    FlashLog_SaveReq=1;
+#endif
+    vTaskDelay(2000);
+    ESP.restart(); }
+  LastTime=Time; }
+
 static void ProcessCtrlL(void)                                    // print system state to the console
 {
 #ifdef WITH_SPIFFS
@@ -916,6 +930,7 @@ static void ProcessCtrlO(void)                                    // print syste
 
 static int ProcessInput(void)
 {
+  const uint8_t CtrlB = 'B'-'@';
   const uint8_t CtrlC = 'C'-'@';
   const uint8_t CtrlF = 'F'-'@';
   const uint8_t CtrlL = 'L'-'@';
@@ -931,14 +946,15 @@ static int ProcessInput(void)
     if(Byte==CtrlF) ProcessCtrlF();                                // if Ctrl-F received: list files
     if(Byte==CtrlC) ProcessCtrlL();                                // if Ctrl-L received: list log files
     if(Byte==CtrlO) ProcessCtrlO();                                // if Ctrl-O received: print LoRaWAN status
-    if(Byte==CtrlX)                                                // Ctrl-X
-    {
-#ifdef WITH_SPIFFS
-      FlashLog_SaveReq=1;
-#endif
-      vTaskDelay(1000);
-      esp_restart(); }                                            // if Ctrl-X received then restart
+    if(Byte==CtrlX) ProcessCtrlX();                                // Ctrl-X
+//     {
+// #ifdef WITH_SPIFFS
+//       FlashLog_SaveReq=1;
+// #endif
+//       vTaskDelay(1000);
+//       esp_restart(); }                                            // if Ctrl-X received then restart
 #endif // of WITH_GPS_UBX_PASS
+
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
     if(NMEA.isComplete())                                         // if complete NMEA:
     {
