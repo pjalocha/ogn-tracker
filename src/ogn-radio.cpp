@@ -62,10 +62,12 @@ const float Radio_BkgUpdate = 0.05;                    // weight to update the b
 #ifdef WITH_SX1276
 static SX1276 Radio = new Module(Radio_PinCS, Radio_PinIRQ, Radio_PinRST, -1);                // create SX1276 RF module
 static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ); }
+static const char *RF_ChipType = "SX1276";
 #endif
 #ifdef WITH_SX1262
 static SX1262 Radio = new Module(Radio_PinCS, Radio_PinIRQ1, Radio_PinRST, Radio_PinBusy);    // create sx1262 RF module
 static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ1); }
+static const char *RF_ChipType = "SX1262";
 #endif
 
 // =======================================================================================================
@@ -662,9 +664,14 @@ void Radio_Task(void *Parms)
   TimeSync &TimeRef = GPS_TimeSync;
   char Line[120];
 
+  int Len=sprintf(Line, "RF chip %s%s detected", RF_ChipType, HardwareStatus.Radio?"":" NOT");
+  if(xSemaphoreTake(CONS_Mutex, 20))
+  { Serial.println(Line);
+    xSemaphoreGive(CONS_Mutex); }
+
   for( ; ; )
   { int PktCount=0;
-    char Line[120];
+    // char Line[120];
 
     // xQueueReceive(Radio_SlotMsg, &TimeRef, 2000);              // wait for "new time slot" from the GPS
 
