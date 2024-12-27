@@ -944,7 +944,7 @@ static int ProcessInput(void)
 #ifndef WITH_GPS_UBX_PASS                                          // when transparency to the GPS not requested
     if(Byte==CtrlC) ProcessCtrlC();                                // if Ctrl-C received: print parameters
     if(Byte==CtrlF) ProcessCtrlF();                                // if Ctrl-F received: list files
-    if(Byte==CtrlC) ProcessCtrlL();                                // if Ctrl-L received: list log files
+    if(Byte==CtrlL) ProcessCtrlL();                                // if Ctrl-L received: list log files
     if(Byte==CtrlO) ProcessCtrlO();                                // if Ctrl-O received: print LoRaWAN status
     if(Byte==CtrlX) ProcessCtrlX();                                // Ctrl-X
 //     {
