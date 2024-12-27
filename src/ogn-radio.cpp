@@ -758,6 +758,7 @@ void Radio_Task(void *Parms)
     XorShift32(Hash);
     Hash *= 48271;
     bool Odd = Count1s(Hash)&1;
+    bool OGNonly = Radio_FreqPlan.Plan>1;
 
     msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     uint32_t SlotLen = 800-msTime;
@@ -766,7 +767,8 @@ void Radio_Task(void *Parms)
     // Serial.printf("%5.3fs Slot #0: %dms\n", 1e-3*millis(), SlotLen);
     // the first time-slot
              // Send OGN packet (if there) and receive OGN packets
-    if(!Odd) PktCount+=Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1), Parameters.TxPower, SlotLen,
+    if(!Odd || OGNonly)
+             PktCount+=Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1), Parameters.TxPower, SlotLen,
                                        OgnPacket1?OgnPacket1->Byte():0, Radio_SysID_OGN,
                                        Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1), Radio_SysID_OGN, TimeRef);
              // Send ADS-L packet (if there) and receive ADS-L packets
@@ -809,7 +811,8 @@ void Radio_Task(void *Parms)
     // Serial.printf("%5.3fs Slot #1: %dms\n", 1e-3*millis(), SlotLen);
     // the second time-slot
              // Send OGN packet (if there) and receive OGN packets
-    if( Odd) PktCount+=Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Parameters.TxPower, SlotLen,
+    if( Odd || OGNonly)
+             PktCount+=Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Parameters.TxPower, SlotLen,
                                        OgnPacket2?OgnPacket2->Byte():0, Radio_SysID_OGN,
                                        Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Radio_SysID_OGN, TimeRef);
              // Send ADS-L packet (if there) and receive ADS-L packets
