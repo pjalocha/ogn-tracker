@@ -73,7 +73,7 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
 
   esp_http_client_close(Client);
   esp_http_client_cleanup(Client);
-  return Err<0 ? -3:FileSize; }
+  return Err>=0 && StatCode==200 ? FileSize:-3; }
 
 static char LocalFile[64];
 static char RemoteFile[128];
@@ -155,8 +155,9 @@ void vTaskUPLOAD(void* pvParameters)
 
   for( ; ; )
   { vTaskDelay(60000);
-    if(Parameters.UploadURL[0]==0) continue;                         // don't attempt to upload if URL not defined
-    if(Flight.inFlight()) continue;                                  // don't attempt to unload if airborne
+    if(Parameters.UploadURL[0]==0) continue;                         // don't upload if URL not defined
+    if(Flight.inFlight()) continue;                                  // don't unload if airborne
+    if(FlashLog_FileName[0]) continue;                               // don't upload if a log file is being written
 
     uint32_t Oldest=0;
     int Files=FlashLog_FindOldestFile(Oldest);
