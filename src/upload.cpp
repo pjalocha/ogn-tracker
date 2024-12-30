@@ -4,16 +4,15 @@
 
 #include "socket.h"
 #include "wifi.h"
+#include "log.h"
+#include "gps.h"
 
-static Socket UploadSocket;                                          // socket to talk to the server
-
-static const char *UploadHost = "aprs.glidernet.org";                // server address
-static const char *UploadPort = "14580";                             // server socket
+#define DEBUG_PRINT
 
 static wifi_ap_record_t AP[8];                        // lists of Access Points from the WiFi scan
 static uint16_t APs=0;
 
-static const int MaxLineLen=512;
+static const int MaxLineLen=1024;
 static char Line[MaxLineLen];                         // for printing and buffering
 
 static void AP_Print(void (*Output)(char))            // print lists of AP's
@@ -23,7 +22,97 @@ static void AP_Print(void (*Output)(char))            // print lists of AP's
     Format_String(Output, Line); }
 }
 
-#define DEBUG_PRINT
+// ----------------------------------------------------------------------------------------------
+
+#include "esp_http_client.h"
+
+static esp_err_t HTTP_event_handler(esp_http_client_event_t *evt)
+{ switch (evt->event_id)
+  { case HTTP_EVENT_ON_DATA:
+      ESP_LOGI(TAG, "Data received: %.*s", evt->data_len, (char *)evt->data);
+      break;
+    default:
+      break;
+  }
+  return ESP_OK; }
+
+// static const char *UploadURL = "http://ogn3.glidernet.org:8084/upload";
+
+static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
+{ FILE *File = fopen(LocalFileName, "rb"); if(File==0) return -1;
+
+  esp_http_client_config_t Config =
+  { .url = Parameters.UploadURL,
+    .event_handler = HTTP_event_handler };
+  esp_http_client_handle_t Client = esp_http_client_init(&Config);
+  esp_http_client_set_method(Client, HTTP_METHOD_POST);
+  esp_http_client_set_header(Client, "Content-Type", "application/octet-stream");
+  esp_http_client_set_header(Client, "X-File-Name", RemoteFileName);
+
+  esp_err_t Err = esp_http_client_open(Client, -1); // start the HTTP request: -1 means chunked transfer
+  if(Err!=ESP_OK)
+  { fclose(File);
+    esp_http_client_cleanup(Client);
+    return -2; }
+
+  int FileSize=0;
+  for( ; ; )
+  { int Read=fread(Line, 1, MaxLineLen, File); if(Read<=0) break;
+    FileSize+=Read;
+    Err = esp_http_client_write(Client, Line, Read);
+    if(Err<0) break; }
+
+  fclose(File);
+
+  int ContLen = esp_http_client_fetch_headers(Client);
+  int StatCode=0;
+  int RespLen=0;
+  if(ContLen>0)
+  { StatCode = esp_http_client_get_status_code(Client);
+    RespLen = esp_http_client_read_response(Client, Line, MaxLineLen); }
+
+  esp_http_client_close(Client);
+  esp_http_client_cleanup(Client);
+  return Err<0 ? -3:FileSize; }
+
+static char LocalFile[64];
+static char RemoteFile[128];
+
+static int RemoteLogFileName(char *Name, uint32_t Time)
+{ uint64_t ID=getUniqueID();
+  int Len=Format_Hex(Name, (uint16_t)(ID>>32)); Len+=Format_Hex(Name+Len, (uint32_t)ID);
+  Name[Len++]='_';
+  Len+=Format_Hex(Name+Len, Parameters.AcftID);
+  Name[Len++]='_';
+  Len+=FlashLog_ShortFileName(Name+Len, Time);
+  return Len; }
+
+static int UploadOldestFile(bool Delete=1)
+{ uint32_t Oldest=0;
+  int Files=FlashLog_FindOldestFile(Oldest);
+  if(Files==0 || Oldest==0) return 0;
+  FlashLog_FullFileName(LocalFile, Oldest);                  // local file name, including the path
+  RemoteLogFileName(RemoteFile, Oldest);                     // remote file name, including tracker MAC and ID
+  int Err=UploadFile(LocalFile, RemoteFile);
+  sprintf(Line, "Upload: %s => %s => %d\n", LocalFile, RemoteFile, Err);
+  Format_String(CONS_UART_Write, Line);
+  if(Err>=0 && Delete) remove(LocalFile);
+  return Err; }
+
+static int Upload(void)
+{ int Err=0;
+  for( ; ; )
+  { if(Parameters.UploadURL[0]==0) break;
+    Err=UploadOldestFile(); if(Err<=0) break; }
+  return 0; }
+
+// ----------------------------------------------------------------------------------------------
+
+#ifdef UPLOAD_TO_SOCKET
+static const char *UploadHost = "ogn3.glidernet.org";                // server address
+static const char *UploadPort = "8084";                              // server socket
+
+static Socket UploadSocket;                                          // socket to talk to the server
 
 static int UploadDialog(void)               // connect and talk to the server exchaging data
 { int ConnErr=UploadSocket.Connect(UploadHost, UploadPort);   // connect to the server
@@ -55,7 +144,9 @@ static int UploadDialog(void)               // connect and talk to the server ex
 #endif
   UploadSocket.Disconnect();
   return 0; }
+#endif
 
+// ----------------------------------------------------------------------------------------------
 
 extern "C"
 void vTaskUPLOAD(void* pvParameters)
@@ -63,7 +154,14 @@ void vTaskUPLOAD(void* pvParameters)
   vTaskDelay(10000);
 
   for( ; ; )
-  { vTaskDelay(10000);
+  { vTaskDelay(60000);
+    if(Parameters.UploadURL[0]==0) continue;                         // don't attempt to upload if URL not defined
+    if(Flight.inFlight()) continue;                                  // don't attempt to unload if airborne
+
+    uint32_t Oldest=0;
+    int Files=FlashLog_FindOldestFile(Oldest);
+    if(Files==0 || Oldest==0) continue;                              // don't attempt to upload if no log files
+
     esp_err_t Err=WIFI_Start();                                      // start WiFi in station-mode
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
@@ -130,7 +228,7 @@ void vTaskUPLOAD(void* pvParameters)
 #endif
         if(WIFI_IP.ip.addr==0) { WIFI_Disconnect(); continue; }     // if getting local IP failed then give up and try another AP
 
-        UploadDialog();
+        Upload();
 
         vTaskDelay(2000);
         WIFI_Disconnect(); WIFI_IP.ip.addr=0;

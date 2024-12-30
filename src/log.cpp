@@ -23,9 +23,9 @@ void AddPath(char *Name, const char *FileName, const char *Path)
 
 #ifdef WITH_SPIFFS
 
-static const char *SDcard_Path = "/sdcard/TLG";   // with sub-directory which is created if does not exist
-static const char *FlashLog_Path = "/spiffs";     // path to log files
-static const char *FlashLog_Ext  = ".TLG";        // extension for log files, could be as well .TLA
+       const char *SDcard_Path = "/sdcard/TLG";   // with sub-directory which is created if does not exist
+       const char *FlashLog_Path = "/spiffs";     // path to log files
+       const char *FlashLog_Ext  = ".TLG";        // extension for log files, could be as well .TLA
 static const uint32_t FlashLog_MaxTime = 3600;    // 1 hour max. per single log file
 static const uint32_t FlashLog_MaxSize = 0x10000; // 64KB max. per single log file
 #ifdef WITH_SPIFFS_FAT

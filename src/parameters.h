@@ -160,8 +160,11 @@ uint16_t StratuxPort;
    char *getWIFIname(uint8_t Idx) { return Idx<WIFIsets ? WIFIname[Idx]:0; }
    char *getWIFIpass(uint8_t Idx) { return Idx<WIFIsets ? WIFIpass[Idx]:0; }
 
-   char WIFIname[WIFIsets][32];
+   char WIFIname[WIFIsets][32];  // WiFi networks name/pass to connect to for log upload or APRS server
    char WIFIpass[WIFIsets][64];
+#endif
+#ifdef WITH_UPLOAD
+   char UploadURL[64];           // URL to upload log files
 #endif
 
 #ifdef WITH_ENCRYPT
@@ -345,9 +348,12 @@ uint16_t StratuxPort;
    StratuxTxPwr   =  40; // [0.25dBm]
 #endif
 #ifdef WITH_WIFI
-    for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
-    { WIFIname[Idx][0] = 0;
-      WIFIpass[Idx][0] = 0; }
+   for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
+   { WIFIname[Idx][0] = 0;
+     WIFIpass[Idx][0] = 0; }
+#endif
+#ifdef WITH_UPLOAD
+   UploadURL[0] = 0;
 #endif
   }
 
@@ -677,7 +683,7 @@ uint16_t StratuxPort;
   { if( (ch>='0') && (ch<='9') ) return 1;  // numbers
     if( (ch>='A') && (ch<='Z') ) return 1;  // uppercase letters
     if( (ch>='a') && (ch<='z') ) return 1;  // lowercase letters
-    if(strchr(".@-+_/#", ch)) return 1;     // any of the listed special characters
+    if(strchr(".@-+_/#:", ch)) return 1;    // any of the listed special characters
     return 0; }
 
   static int8_t Read_String(char *Value, const char *Inp, uint8_t MaxLen)
@@ -875,6 +881,9 @@ uint16_t StratuxPort;
     if( (memcmp(Name, "WIFIpass", 8)==0) && (strlen(Name)==9) )
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
 #endif
+#ifdef WITH_WIFI
+    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 64)>=0;
+#endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
       SaveToFlash=Save; return 1; }
@@ -1029,6 +1038,9 @@ uint16_t StratuxPort;
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
+#ifdef WITH_UPLOAD
+    strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
+#endif
     return 10+InfoParmNum; }
 
   int WriteToFile(const char *Name = "/spiffs/TRACKER.CFG")
@@ -1099,6 +1111,9 @@ uint16_t StratuxPort;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
+#endif
+#ifdef WITH_WIFI
+    strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
   }
 
