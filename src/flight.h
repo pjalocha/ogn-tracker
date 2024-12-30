@@ -53,9 +53,9 @@ class FlightMonitor
      return Len; }
 
    // produce long IGC file name
-   int LongName(char *Name, const char *Serial) const
-   { int Len=0;
-     Name[Len]=0; return 0; }
+   // int LongName(char *Name, const char *Serial) const
+   // { int Len=0;
+   //   Name[Len]=0; return 0; }
 
    static int FlightThresh(const GPS_Position &Position, uint16_t MinSpeed) // does the GPS position meed the  in-flight criteria ?
    { if(!Position.isValid()) return -1;                        // if position not valid then give up
@@ -97,7 +97,7 @@ class FlightMonitor
      }
      else                                                      // if not in flight yet
      { int Det=FlightThresh(Position, MinSpeed);               // check in-flight criteria with normal limits
-       if(Det>0)                                               // if criteria satisfied
+       if(Det>0)                                               // if criteria satisfied: we switch to airborne !
        { HoldTime++;                                           // count the holding time
          if(HoldTime>=MinHold)                                 // if enough
          { Takeoff=Position; FlownDist=0;                      // declare takeoff, start counting the distance flown

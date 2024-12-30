@@ -22,6 +22,14 @@
 #include "ble_spp.h"
 #endif
 
+#ifdef WITH_WIFI
+#include "wifi.h"
+#endif
+
+#ifdef WITH_UPLOAD
+#include "upload.h"
+#endif
+
 #ifdef WITH_AP
 #include "ap.h"
 #endif
@@ -670,9 +678,23 @@ void setup()
     const bool StartAP=0;
 #endif // WITH_AP
 
+#ifdef WITH_WIFI
+  WIFI_State.Flags=0;
+  esp_err_t Err=WIFI_Init();
+#ifdef DEBUG_PRINT
+  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  Format_String(CONS_UART_Write, "WIFI_Init() => ");
+  if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
+  Format_SignDec(CONS_UART_Write, Err);
+  Format_String(CONS_UART_Write, "\n");
+  xSemaphoreGive(CONS_Mutex);
+#endif
+#endif
+
 #ifdef WITH_BT_SPP
-  if(!StartAP)
-    BTserial.begin(Parameters.BTname);
+  if(!StartAP && Parameters.BTname[0])
+  { Serial.printf("Start BT4 Serial Port: %s\n", Parameters.BTname);
+    BTserial.begin(Parameters.BTname); }
 #endif
 
 #ifdef WITH_BLE_SPP
@@ -710,6 +732,9 @@ void setup()
 #ifdef WITH_AP
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
+#endif
+#ifdef WITH_UPLOAD
+  xTaskCreate(vTaskUPLOAD,"UPLOAD",3000, NULL, 0, NULL);
 #endif
 
 }

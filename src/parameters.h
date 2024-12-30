@@ -153,7 +153,7 @@ uint16_t StratuxPort;
   int8_t StratuxTxPwr;
 #endif
 
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
    static const uint8_t WIFInameLen = 32;
    static const uint8_t WIFIpassLen = 64;
    static const uint8_t WIFIsets    = 10;
@@ -204,7 +204,7 @@ uint16_t StratuxPort;
 
   uint32_t CheckSum;
 
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
    const char *getWIFIpass(const char *NetName) const
    { for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
      { if(strcmp(NetName, WIFIname[Idx])==0) return WIFIpass[Idx]; }
@@ -344,7 +344,7 @@ uint16_t StratuxPort;
    StratuxMinSig  = -70; // [dBm]
    StratuxTxPwr   =  40; // [0.25dBm]
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { WIFIname[Idx][0] = 0;
       WIFIpass[Idx][0] = 0; }
@@ -1021,7 +1021,7 @@ uint16_t StratuxPort;
     Write_Float1(Line, "StratuxTxPwr"  ,  (int32_t)10*StratuxTxPwr/4); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "StratuxMinSig",   (int32_t)StratuxMinSig); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { if(WIFIname[Idx][0]==0) continue;
       strcpy(Line, "WIFIname"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIname[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -1092,7 +1092,7 @@ uint16_t StratuxPort;
     Write_Float1 (Line, "StratuxTxPwr", (int32_t)10*StratuxTxPwr/4); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
     Write_SignDec (Line, "StratuxMinSig", (int32_t)StratuxMinSig); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { if(WIFIname[Idx][0]==0) continue;
       strcpy(Line, "WIFIname"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIname[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
