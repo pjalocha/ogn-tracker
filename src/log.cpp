@@ -39,6 +39,8 @@ static const uint32_t FlashLog_SaveSize = 4096;   // [bytes] reopen the file eve
 static FILE *   FlashLog_File=0;                  // current log file if open
 static uint32_t FlashLog_FileFlush=0;             // track where the log file has been forced to be written to flash
 
+       bool     FlashLog_isOpen(void) { return FlashLog_File; } // is a log file open now ?
+
 FIFO<OGN_LogPacket<OGN_Packet>, 32> FlashLog_FIFO;
 
 int FlashLog_ShortFileName(char *FileName, uint32_t Time)     // make the short (without path) file name for given start date

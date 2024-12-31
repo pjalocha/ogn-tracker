@@ -13,6 +13,7 @@ extern bool     FlashLog_SaveReq;
 extern uint32_t FlashLog_FileTime;                            // [sec] start time of the current log file
 extern char     FlashLog_FileName[32];                        // current log file name if open
 
+bool FlashLog_isOpen(void);
 int  FlashLog_FullFileName(char *FileName, uint32_t Time);    // create full name (including the path) of the log file starting from Time
 int  FlashLog_ShortFileName(char *FileName, uint32_t Time);
 uint32_t FlashLog_ReadShortFileTime(const char *FileName, int Len);

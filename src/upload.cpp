@@ -177,7 +177,7 @@ void vTaskUPLOAD(void* pvParameters)
   { vTaskDelay(60000);
     if(Parameters.UploadURL[0]==0) continue;                         // don't upload if URL not defined
     if(Flight.inFlight()) continue;                                  // don't unload if airborne
-    if(FlashLog_FileName[0]) continue;                               // don't upload if a log file is being written
+    if(FlashLog_isOpen()) continue;                                  // don't upload if a log file is being written
 
     uint32_t Oldest=0;
     int Files=FlashLog_FindOldestFile(Oldest);
