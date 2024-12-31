@@ -13,17 +13,25 @@ Optionally, you can add
 + Pressure sensor: most common BMP280
 + display: OLED or LCD
 
+### Modules
+The most popular is likely TTGO T-Beam: there are several variants with different radio chips and charge/power controllers
+
 ### Antennas
 often ignored but they are essential for proper function of the tracker
 and not just the antenna itself but where and how is the antenna installed
-+ GPS antenna: stable and accurate position acquisition
-+ ISM antenna: stable and strong radio signal and reception/relay of other trackers
++ GPS antenna: should see good part of the sky for stable and accurate position acquisition
++ ISM antenna: should not be screened by metal and/or carbon fibre sheets for stable and strong radio signal and reception/relay of other trackers
 
 ## Compile and upload
 You will need platformio which takes care for getting the right compiler and upload tools
 
 ### Code adaptation to various modules
 is through the profiles defined in platformio.ini - to choose the right code use **-e** option of the **pio** command.
+
+To check all defined profiles check the **platformio.ini** file or type:
+```
+grep env platformio.ini
+```
 
 ### Install platformio
 You only need the command-line part which can be installed on Ubuntu:
@@ -50,6 +58,6 @@ TTGO modules appear as **/dev/ttyACM0** or **/dev/ttyUSB0** depending on which U
 ## Configuration and options
 
 The code is tailored for given module at compile time and there are as well various options/functions:
-some configured at compile time and some at runtime
-
-
+some configured at compile time and some at runtime.
++ Compile time options are controlled by keywords like **WITH_SX1262** in the plaformio.ini file
++ Run-time options are configured with commands sent to the serial console like **$POGNS,AcftType=1** and they are remembered in the flash of the device.
