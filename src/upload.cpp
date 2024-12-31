@@ -38,27 +38,47 @@ static esp_err_t HTTP_event_handler(esp_http_client_event_t *evt)
 
 // static const char *UploadURL = "http://ogn3.glidernet.org:8084/upload";
 
+/*
+void send_chunk(esp_http_client_handle_t client, const char *data, size_t len)
+{ char chunk_header[16];
+  snprintf(chunk_header, sizeof(chunk_header), "%X\r\n", len);  // Hex length with CRLF
+
+  esp_http_client_write(client, chunk_header, strlen(chunk_header));  // Send chunk size
+  esp_http_client_write(client, data, len);                           // Send chunk data
+  esp_http_client_write(client, "\r\n", 2); }                         // End of chunk
+*/
+
 static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
 { FILE *File = fopen(LocalFileName, "rb"); if(File==0) return -1;
 
+  fseek(File, 0, SEEK_END);
+  int FileSize = ftell(File);
+  rewind(File);
+
+  // esp_http_client_config_t Config =
+  // { .url = Parameters.UploadURL,
+  //   .event_handler = HTTP_event_handler };
+
   esp_http_client_config_t Config =
   { .url = Parameters.UploadURL,
-    .event_handler = HTTP_event_handler };
+    .method = HTTP_METHOD_POST,
+    .event_handler = NULL };
+
   esp_http_client_handle_t Client = esp_http_client_init(&Config);
-  esp_http_client_set_method(Client, HTTP_METHOD_POST);
+  // esp_http_client_set_method(Client, HTTP_METHOD_POST);
   esp_http_client_set_header(Client, "Content-Type", "application/octet-stream");
   esp_http_client_set_header(Client, "X-File-Name", RemoteFileName);
 
-  esp_err_t Err = esp_http_client_open(Client, -1); // start the HTTP request: -1 means chunked transfer
+  esp_err_t Err = esp_http_client_open(Client, FileSize); // start the HTTP request: -1 means chunked transfer
   if(Err!=ESP_OK)
   { fclose(File);
     esp_http_client_cleanup(Client);
     return -2; }
 
-  int FileSize=0;
+  int SendSize=0;
   for( ; ; )
   { int Read=fread(Line, 1, MaxLineLen, File); if(Read<=0) break;
-    FileSize+=Read;
+    SendSize+=Read;
     Err = esp_http_client_write(Client, Line, Read);
     if(Err<0) break; }
 
@@ -73,7 +93,7 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
 
   esp_http_client_close(Client);
   esp_http_client_cleanup(Client);
-  return Err>=0 && StatCode==200 ? FileSize:-3; }
+  return Err>=0 && StatCode==200 ? SendSize:-3; }
 
 static char LocalFile[64];
 static char RemoteFile[128];
