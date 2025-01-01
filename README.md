@@ -84,7 +84,7 @@ You can set those permanently by typing **sudo minicom -s** setting those items 
 
 On the console you will see messages and regular output like GPS NMEA and other.
 
-You can send setup commands there like **$POGNS,AcftType=2** to tell it is a towing aircraft
+You can send setup commands like **$POGNS,AcftType=2** to tell the aircraft is a towing plane
 
 When you press **Ctrl-C** you will see other parameters you can set.
 
@@ -98,5 +98,5 @@ some are configured at compile time and some other at runtime.
 The OGN-Tracker detects take-off and landing and records the position/altitude/speed/climb points every few seconds.
 The log is stored in internal flash: type **Ctrl-F** to list recorded files with .TLG extension.
 
-The files are binary but can be converted to APRS format with an **$POGNL** command (details come later)
-THe files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
+The files are binary but can be downloaded as APRS with an **$POGNL** command (details come later)
+The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
