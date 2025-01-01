@@ -74,9 +74,29 @@ If you have no rights to access the serial port then:
 + type **sudo usermod -aG dialout <user>** and relogin: you should now be able to access the serial port
 + if the above does not work: type **sudo chown <user>:<user> <port>** to become the owner of the port
 
+## Serial console
+You can talk to the tracker on the serial console using a terminal emulator, e.g. **minicom**
+
+With minicom it is important to:
++ turn OFF **Hardware Flow Control** in **Serial port setup**
++ turn ON **Add carriage return** in **Screen and keyboard**
+You can set those permanently by typing **sudo minicom -s** setting those items and **Save setup as dfl** in the menu.
+
+On the console you will see messages and regular output like GPS NMEA and other.
+
+You can send setup commands there like **$POGNS,AcftType=2** to tell it is a towing aircraft
+
+When you press **Ctrl-C** you will see other parameters you can set.
+
 ## Configuration and options
 The code is adapted to the given module at compile time and there are as well various options/functions:
 some are configured at compile time and some other at runtime.
 + **Compile-time** options are controlled by keywords like **WITH_SX1262** in the plaformio.ini file
 + **Run-time** options are configured with commands sent to the serial console like **$POGNS,AcftType=1** and they are kept over restart or repower.
 
+## Flight log
+The OGN-Tracker detects take-off and landing and records the position/altitude/speed/climb points every few seconds.
+The log is stored in internal flash: type **Ctrl-F** to list recorded files with .TLG extension.
+
+The files are binary but can be converted to APRS format with an **$POGNL** command (details come later)
+THe files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
