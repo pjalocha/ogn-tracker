@@ -15,6 +15,9 @@ static int ProcessFile(const char *FileName)
   for( ; ; )
   { const char *Slash=strchr(ShortName, '/'); if(Slash==0) break;
     ShortName=Slash+1; }
+  if(strlen(ShortName)>12)
+  { const char *Uscore=strrchr(ShortName, '_');
+    if(Uscore) ShortName=Uscore+1; }
   if(Read_Hex(FileTime, ShortName)!=8) printf("Not a TLG file: %s\n", ShortName);
   FILE *File = fopen(FileName, "rb"); if(File==0) { printf("Cannot open %s for read\n", FileName); return 0; }
   OGN_LogPacket<OGN1_Packet> Packet;
