@@ -94,9 +94,35 @@ some are configured at compile time and some other at runtime.
 + **Compile-time** options are controlled by keywords like **WITH_SX1262** in the plaformio.ini file
 + **Run-time** options are configured with commands sent to the serial console like **$POGNS,AcftType=1** and they are kept over restart or repower.
 
+### Set aircraft address and type
+There are three elements here:
+1. aiecraft address: 24-bit number
+2. aircraft address-type: 1=ICAO, 2=FLARM, 3=OGN
+3. aircraft type: 1=glider, 2=towplane, 3=helicopter, ...
+
+Suppose you setup a tracker for a towplane with ICAO hex address 4ABCDE - you send the following to the serial console:
+```
+$POGNS,Address=0x4ABCDE,AddrType=1,AcftType=2
+```
+Note "0x" in front of a hexadecimal number
+
 ## Flight log
 The OGN-Tracker detects take-off and landing and records the position/altitude/speed/climb points every few seconds.
 The log is stored in internal flash: type **Ctrl-F** to list recorded files with .TLG extension.
 
 The files are binary but can be downloaded as APRS with an **$POGNL** command (details come later)
 The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
+
+### Configure automatic upload of flight log files
+You need to setup the following elements:
+1. WiFi name to connect to internet and password: suppose they are "OurClub" and "OurPass"
+2. Upload URL which accepts files uploaded with POST method
+
+You send the following to the serial console:
+```
+$POGNS,UploadURL=http://ogn3.glidernet.org:8084/upload,WIFIname=OurClub,WIFIpass=OurPass
+```
+The given upload URL is a real test server which accepts files, but you can run your own.
+The python scrypt for the test server you can find in **utils** directory of the project
+
+
