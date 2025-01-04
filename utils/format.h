@@ -82,15 +82,15 @@ int16_t Read_Dec3(const char *Inp);             // convert three digit decimal n
 int16_t Read_Dec4(const char *Inp);             // convert four digit decimal number into an integer
 int32_t Read_Dec5(const char *Inp);             // convert five digit decimal number into an integer
 
-  template <class Type>
-   int8_t Read_Hex(Type &Int, const char *Inp, uint8_t MaxDig=0) // convert variable number of digits hexadecimal number into an integer
-   { if(Inp==0) return 0;
-     if(MaxDig==0) MaxDig=2*sizeof(Type);
-     Int=0; int8_t Len=0;
-     for( ; MaxDig; MaxDig--)
-     { int8_t Dig=Read_Hex1(Inp[Len]); if(Dig<0) break;
-       Int = (Int<<4) + Dig; Len++; }
-     return Len; }                                        // return number of characters read
+template <class Type>
+ int8_t Read_Hex(Type &Int, const char *Inp, uint8_t MaxDig=0) // convert variable number of digits hexadecimal number into an integer
+ { if(Inp==0) return 0;
+   if(MaxDig==0) MaxDig=2*sizeof(Type);
+   Int=0; int8_t Len=0;
+   for( ; MaxDig; MaxDig--)
+   { int8_t Dig=Read_Hex1(Inp[Len]); if(Dig<0) break;
+     Int = (Int<<4) | Dig; Len++; }
+   return Len; }                                        // return number of characters read
 
 template <class Type>
  int8_t Read_UnsDec(Type &Int, const char *Inp)         // convert variable number of digits unsigned decimal number into an integer
