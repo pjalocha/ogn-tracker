@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #include <vector>
 #include <algorithm>
@@ -60,7 +61,10 @@ static int ProcessFile(const char *FileName)
   uint32_t AcftID=0;
   uint32_t FileTime=0;
   const char *ShortName=File_MAC_ID_Time(MAC, AcftID, FileTime, FileName); if(ShortName==0) return 0;
-  printf("MAC:%012lX ID:%08X Time:%10d File:%s\n", MAC, AcftID, FileTime, ShortName);
+  time_t Time = FileTime;
+  struct tm *TM = gmtime(&Time);
+  printf("MAC:%012lX ID:%08X Time:%04d.%02d.%02d %02d:%02d:%02d File:%s\n",
+           MAC, AcftID, TM->tm_year+1900, TM->tm_mon+1, TM->tm_mday, TM->tm_hour, TM->tm_min, TM->tm_sec, ShortName);
 
   FILE *File = fopen(FileName, "rb"); if(File==0) { printf("Cannot open %s for read\n", FileName); return 0; }
   OGN_LogPacket<OGN1_Packet> Packet;
