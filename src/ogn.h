@@ -35,15 +35,15 @@
 // ---------------------------------------------------------------------------------------------------------------------
 
 template <class OGNx_Packet, class OGNy_Packet>
- static bool OGN_isSignif(const OGNx_Packet *Packet, const OGNy_Packet *PrevPacket)       // is significant: decide whether to store it or not
+ bool OGN_isSignif(const OGNx_Packet *Packet, const OGNy_Packet *PrevPacket)       // is significant: decide whether to store it or not
 { if(PrevPacket==0) return 1;
   int8_t TimeDelta = Packet->Position.Time - PrevPacket->Position.Time;
   if(TimeDelta<0) TimeDelta+=60;                                              // [sec] time since previous  packet
-  if(TimeDelta>=20) return 1;                                                 // [sec]
+  if(TimeDelta>=20) return 1;                                                 // [sec] if more than 20sec time diff. then return  "yes"
   int16_t Climb = Packet->DecodeClimbRate();                                  // [0.1m/s]
   if(abs(Climb)>=100) return 1;                                               // if climb/decent rate more than 10m/s
   int32_t AltDelta=Packet->DecodeAltitude()-PrevPacket->DecodeAltitude();     // [m] altitude change
-  if(abs(AltDelta)>=20)  return 1;                                            // if more than 50m altitude change
+  if(abs(AltDelta)>=20)  return 1;                                            // if more than 20m altitude change
   int16_t PrevClimb = PrevPacket->DecodeClimbRate();                          // [0.1m/s]
   int32_t DistDeltaV = (int32_t)(Climb-PrevClimb)*TimeDelta;                  // [0.1m]
   if(abs(DistDeltaV)>=200) return 1;                                          // if climb doistance >= 20m
@@ -59,7 +59,6 @@ template <class OGNx_Packet, class OGNy_Packet>
   int32_t DistDeltaR = abs(CFaccel-PrevCFaccel)*(int32_t)TimeDelta*TimeDelta/2; // [0.1m]
   if(abs(DistDeltaR)>=200) return 1;                                          // [0.1m]
   return 0; }
-
 
 // ---------------------------------------------------------------------------------------------------------------------
 

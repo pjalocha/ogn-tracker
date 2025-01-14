@@ -14,6 +14,10 @@
 
 #include "main.h"
 
+#ifdef WITH_BT4_SPP
+#include "bt4.h"
+#endif
+
 #ifdef WITH_BT_SPP
 #include "BluetoothSerial.h"
 #endif
@@ -381,6 +385,9 @@ static BluetoothSerial BTserial;
 
 void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
 { Serial.write(Byte);
+#ifdef WITH_BT4_SPP
+  BT_SPP_Write(Byte);
+#endif
 #ifdef WITH_BT_SPP
   BTserial.write(Byte);
 #endif
@@ -394,6 +401,9 @@ int  CONS_UART_Free(void)
 
 int  CONS_UART_Read (uint8_t &Byte)
 { int Ret=Serial.read(); if(Ret>=0) { Byte=Ret; return 1; }
+#ifdef WITH_BT4_SPP
+  Ret=BT_SPP_Read(Byte); if(Ret>0) { return 1; }
+#endif
 #ifdef WITH_BT_SPP
   Ret=BTserial.read(); if(Ret>=0) { Byte=Ret; return 1; }
 #endif
@@ -652,11 +662,6 @@ void setup()
   if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202 && !HardwareStatus.AXP210)  // if none of the power controllers detected
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
 
-  // int RadioStat=TRX.Init();
-  // if(RadioStat==0)
-  // { HardwareStatus.Radio=1; Serial.println("RF chip detected"); }
-  // else
-  // { Serial.printf("RF chip not detected: %d\n", RadioStat); }
 /*
   Serial.printf("I2C scan:");
   uint8_t I2Cdev=0;
@@ -691,9 +696,15 @@ void setup()
 #endif
 #endif
 
+#ifdef WITH_BT4_SPP
+  if(!StartAP && Parameters.BTname[0])
+  { int32_t Err=BT_SPP_Init();
+    Serial.printf("Start BT4 (ESP-IDF) Serial Port: %s (%d)\n", Parameters.BTname, Err); }
+#endif
+
 #ifdef WITH_BT_SPP
   if(!StartAP && Parameters.BTname[0])
-  { Serial.printf("Start BT4 Serial Port: %s\n", Parameters.BTname);
+  { Serial.printf("Start BT4 (Arduino) Serial Port: %s\n", Parameters.BTname);
     BTserial.begin(Parameters.BTname); }
 #endif
 

@@ -130,7 +130,7 @@ class FlashParameters
      } ;
    } ;
 
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    char BTname[16];
    // char  BTpin[16];
 #endif
@@ -327,7 +327,7 @@ uint16_t StratuxPort;
 #ifdef WITH_ENCRYPT
     for(uint8_t Idx=0; Idx<4; Idx++) EncryptKey[Idx]=0;
 #endif
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    getAprsCall(BTname);
    // strcpy(BTpin, "1234");
 #endif
@@ -832,7 +832,7 @@ uint16_t StratuxPort;
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
     { if(strcmp(Name, OGN_Packet::InfoParmName(Idx))==0)
         return Read_String(InfoParmValue(Idx), Value, 16)>=0; }
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     if(strcmp(Name, "BTname")==0) return Read_String(BTname, Value, 16)>=0;
 #endif
 #ifdef WITH_AP
@@ -1012,7 +1012,7 @@ uint16_t StratuxPort;
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
     { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx), 16); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_AP
@@ -1084,7 +1084,7 @@ uint16_t StratuxPort;
 #ifdef WITH_BT_PWR
     Write_UnsDec (Line, "Bluetooth" ,          BT_ON            ); strcat(Line, " #  [  1|0]\n"); Format_String(Output, Line);
 #endif
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
 #ifdef WITH_AP

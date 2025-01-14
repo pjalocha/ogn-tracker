@@ -7,7 +7,7 @@
 
 class FlightMonitor
 { public:
-   GPS_Position FirstLock;              // first (or almost) GPS lock
+   GPS_Position FirstLock;              // first (solid) GPS lock
    GPS_Position Takeoff;                // est. takeoff position
    GPS_Position Landing;                // est. landing position
    GPS_Position MaxAltitude;            // est. positon at peak altitude
@@ -20,6 +20,9 @@ class FlightMonitor
 
   public:
 
+   FlightMonitor()
+   { }
+
    void Clear(void)
    { FirstLock.Clear();
      Takeoff.Clear();
@@ -29,13 +32,14 @@ class FlightMonitor
      HoldTime=0;
      FirstInit=0; }
 
-   static char Code36(int Num)       // coding of numbers in IGC file names
+   static char Code36(int Num)       // coding of numbers (like day of the month) in IGC file names
    { if(Num<=0) return '0';
      if(Num<10) return '0'+Num;
      if(Num<36) return 'A'+(Num-10);
      return '_'; }
 
-   int ShortName(char *Name, uint8_t TakeoffNum, const char *Serial) const // produce short IGC file name (a three-character Serial)
+   // produce short IGC file name (a three-character Serial)
+   int ShortName(char *Name, uint8_t TakeoffNum, const char *Serial) const
    { return ShortName(Name, Takeoff, TakeoffNum, Serial); }
 
    // produce short IGC file name
@@ -44,7 +48,7 @@ class FlightMonitor
      Name[Len++]='0'+Takeoff.Year%10;                  // Year (last digit)
      Name[Len++]=Code36(Takeoff.Month);                // encoded month
      Name[Len++]=Code36(Takeoff.Day);                  // encoded day
-     Name[Len++]='O';                                  // OGN
+     Name[Len++]='O';                                  // = OGN
      Len+=Format_String(Name+Len, Serial);             // three-letter serial
      Name[Len++]=Code36(TakeoffNum);                   // flight of the day
      Len+=Format_String(Name+Len, ".IGC");             // extension
@@ -57,7 +61,8 @@ class FlightMonitor
    // { int Len=0;
    //   Name[Len]=0; return 0; }
 
-   static int FlightThresh(const GPS_Position &Position, uint16_t MinSpeed) // does the GPS position meed the  in-flight criteria ?
+   // does the GPS position meed the  in-flight criteria ?
+   static int FlightThresh(const GPS_Position &Position, uint16_t MinSpeed) // [0.1m/s]
    { if(!Position.isValid()) return -1;                        // if position not valid then give up
      if(Position.Altitude>20000) return 1;                     // [0.1] Altitude above 2000m implies a flight
      uint16_t Speed=Position.Speed;                            // [0.1m/s]  Horizontal speed
