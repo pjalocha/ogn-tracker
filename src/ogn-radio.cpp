@@ -95,7 +95,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYN
   if(State) ErrState=State;
   State=Radio.setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
   if(State) ErrState=State;
-  State=Radio.setRxBandwidth(234.3);                                // [kHz]  250kHz bandwidth
+  State=Radio.setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
   if(State) ErrState=State;
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
   if(State) ErrState=State;
@@ -107,8 +107,8 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYN
   if(State) ErrState=State;
   State=Radio.fixedPacketLengthMode(PktLen*2);                      // [bytes] Fixed packet size mode
   if(State) ErrState=State;
-  State=Radio.disableAddressFiltering();                            // don't want any of such features
 #ifdef WITH_SX1276
+  State=Radio.disableAddressFiltering();                            // don't want any of such features
   // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
   if(SYNC[0]==0x55)
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
@@ -141,7 +141,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
   Radio_TxCredit-=usTxTime/1000;
   // uint32_t Time=millis();
   // LED_OGN_Blue();                                                     // 10ms flash for transmission
-  int State=Radio.transmit((const char *)Packet, Len);                                 // transmit
+  int State=Radio.transmit((const uint8_t *)Packet, Len);                                 // transmit
   // LED_OGN_Off();
   // Time = millis()-Time;
   // Serial.printf("Radio_TxManchFSK(, %d=>%d) (%d) %dms\n", Len, TxLen, State, Time);  // for debug
@@ -152,7 +152,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 { // LED_OGN_Blue();
   // Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_PAYLOAD_LENGTH_FSK, Len);
-  int State=Radio.startTransmit((const char *)Packet, Len);
+  int State=Radio.startTransmit((const uint8_t *)Packet, Len);
   uint32_t usStart = micros();                                         // [usec] when transmission started
   uint32_t usTxTime=Radio.getTimeOnAir(Len);                           // [usec] predicted transmission time
    int32_t usLeft = usTxTime;                                          // [usec]
@@ -315,8 +315,8 @@ static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYN
   if(State) ErrState=State;
   State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
   if(State) ErrState=State;
-  State=Radio.disableAddressFiltering();                            // don't want any of such features
 #ifdef WITH_SX1276
+  State=Radio.disableAddressFiltering();                            // don't want any of such features
   // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
   // if(SYNC[0]==0x55)
   //   State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
