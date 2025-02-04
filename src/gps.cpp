@@ -718,7 +718,11 @@ static void GPS_NMEA(void)                                                 // wh
   // if( NMEA.isP() || NMEA.isBD() || NMEA.isGx() )
   // we would need to patch the GGA here for the GPS which does not calc. nor correct for GeoidSepar
 #endif
-  { if(Parameters.Verbose && !NMEA.isGxGSV())
+  {
+#ifdef WITH_GPS_NMEA_PASS
+#else
+    if(Parameters.Verbose && !NMEA.isGxGSV())
+#endif
     { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
