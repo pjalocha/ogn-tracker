@@ -14,12 +14,24 @@
 
 #include "main.h"
 
+#ifdef WITH_BT4_SPP
+#include "bt4.h"
+#endif
+
 #ifdef WITH_BT_SPP
 #include "BluetoothSerial.h"
 #endif
 
 #ifdef WITH_BLE_SPP
 #include "ble_spp.h"
+#endif
+
+#ifdef WITH_WIFI
+#include "wifi.h"
+#endif
+
+#ifdef WITH_UPLOAD
+#include "upload.h"
 #endif
 
 #ifdef WITH_AP
@@ -333,7 +345,7 @@ static int ADC_Init(void)
 static void BatterySenseEnable(bool ON=1) { digitalWrite(ADC_BattSenseEna, ON); }
 #endif
 
-uint16_t BatterySense(int Samples)
+uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-control chip or from an ADC channel
 {
 #ifdef WITH_XPOWERS
   if(PMU) return PMU->getBattVoltage();
@@ -381,6 +393,9 @@ static BluetoothSerial BTserial;
 
 void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
 { Serial.write(Byte);
+#ifdef WITH_BT4_SPP
+  BT_SPP_Write(Byte);
+#endif
 #ifdef WITH_BT_SPP
   BTserial.write(Byte);
 #endif
@@ -394,6 +409,9 @@ int  CONS_UART_Free(void)
 
 int  CONS_UART_Read (uint8_t &Byte)
 { int Ret=Serial.read(); if(Ret>=0) { Byte=Ret; return 1; }
+#ifdef WITH_BT4_SPP
+  Ret=BT_SPP_Read(Byte); if(Ret>0) { return 1; }
+#endif
 #ifdef WITH_BT_SPP
   Ret=BTserial.read(); if(Ret>=0) { Byte=Ret; return 1; }
 #endif
@@ -557,13 +575,13 @@ void setup()
 #else
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
-  { HardwareStatus.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+  { HardwareStatus.AXP192=1; Serial.println("Power/charge chip AXP192 detected"); }
 #ifdef PMU_I2C_PinSCL
   else if(AXP.begin(PMU_I2C, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
 #else
   else if(AXP.begin(Wire, AXP202_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
-  { HardwareStatus.AXP202=1; Serial.println("AXP202 power/charge chip detected"); }
+  { HardwareStatus.AXP202=1; Serial.println("Power/charge chip AX202 detected"); }
   else
   { Serial.println("AXP power/charge chip NOT detected"); }
 
@@ -588,9 +606,9 @@ void setup()
     PMU = new XPowersAXP2101(Wire);
 #endif
     if(PMU->init())
-    { HardwareStatus.AXP210=1; Serial.println("AXP2101 power/charge chip detected"); }
+    { HardwareStatus.AXP210=1; Serial.println("Power/charge chip AXP2101 detected"); }
     else
-    { delete PMU; PMU=0; Serial.println("AXP2101 power/charge chip NOT detected"); }
+    { delete PMU; PMU=0; Serial.println("Power/charge chip AXP2101 NOT detected"); }
   }
   if(PMU==0)
   {
@@ -600,9 +618,9 @@ void setup()
     PMU = new XPowersAXP192(Wire);
 #endif
     if(PMU->init())
-    { HardwareStatus.AXP192=1; Serial.println("AXP192 power/charge chip detected"); }
+    { HardwareStatus.AXP192=1; Serial.println("Power/charge chip AXP192 detected"); }
     else
-    { delete PMU; PMU=0; Serial.println("AXP192 power/charge chip NOT detected"); }
+    { delete PMU; PMU=0; Serial.println("Power/charge chip AXP192 NOT detected"); }
   }
   if(HardwareStatus.AXP210)
   { PMU->enableSystemVoltageMeasure();
@@ -611,7 +629,7 @@ void setup()
     // It is necessary to disable the detection function of the TS pin on the board
     // without the battery temperature detection function, otherwise it will cause abnormal charging
     PMU->disableTSPinMeasure();
-#ifdef WITH_TBEAM20
+#ifdef WITH_TBEAM12
     // RF 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO2);
@@ -642,7 +660,7 @@ void setup()
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
   if(HardwareStatus.AXP192 || HardwareStatus.AXP210)
   { Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
-    Serial.printf("  Batt: %5.3fV\n", 0.001f*PMU->getBattVoltage());
+    Serial.printf("  Batt: %5.3fV %d%%\n", 0.001f*PMU->getBattVoltage(), PMU->getBatteryPercent());
     // Serial.printf("  USB:  %5.3fV  %5.3fA\n",
     //           0.001f*PMU->getVbusVoltage(), 0.001f*PMU->getVbusCurrent());
     // Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
@@ -652,11 +670,6 @@ void setup()
   if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202 && !HardwareStatus.AXP210)  // if none of the power controllers detected
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
 
-  // int RadioStat=TRX.Init();
-  // if(RadioStat==0)
-  // { HardwareStatus.Radio=1; Serial.println("RF chip detected"); }
-  // else
-  // { Serial.printf("RF chip not detected: %d\n", RadioStat); }
 /*
   Serial.printf("I2C scan:");
   uint8_t I2Cdev=0;
@@ -678,9 +691,29 @@ void setup()
     const bool StartAP=0;
 #endif // WITH_AP
 
+#ifdef WITH_WIFI
+  WIFI_State.Flags=0;
+  esp_err_t Err=WIFI_Init();
+#ifdef DEBUG_PRINT
+  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  Format_String(CONS_UART_Write, "WIFI_Init() => ");
+  if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
+  Format_SignDec(CONS_UART_Write, Err);
+  Format_String(CONS_UART_Write, "\n");
+  xSemaphoreGive(CONS_Mutex);
+#endif
+#endif
+
+#ifdef WITH_BT4_SPP
+  if(!StartAP && Parameters.BTname[0])
+  { int32_t Err=BT_SPP_Init();
+    Serial.printf("Start BT4 (ESP-IDF) Serial Port: %s (%d)\n", Parameters.BTname, Err); }
+#endif
+
 #ifdef WITH_BT_SPP
-  if(!StartAP)
-    BTserial.begin(Parameters.BTname);
+  if(!StartAP && Parameters.BTname[0])
+  { Serial.printf("Start BT4 (Arduino) Serial Port: %s\n", Parameters.BTname);
+    BTserial.begin(Parameters.BTname); }
 #endif
 
 #ifdef WITH_BLE_SPP
@@ -718,6 +751,9 @@ void setup()
 #ifdef WITH_AP
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
+#endif
+#ifdef WITH_UPLOAD
+  xTaskCreate(vTaskUPLOAD,"UPLOAD",3000, NULL, 0, NULL);
 #endif
 
 }
@@ -908,6 +944,20 @@ static void ProcessCtrlC(void)                                  // print system 
 
   xSemaphoreGive(CONS_Mutex); }
 
+static void ProcessCtrlX(void)
+{ static uint32_t LastTime=0;
+  uint32_t Time=millis();
+  uint32_t Diff=Time-LastTime;
+  if(Diff<1000)
+  { // SysLog_Line("Restart from console", 1, 50);
+    // ShutDownReq=1;
+#ifdef WITH_SPIFFS
+    FlashLog_SaveReq=1;
+#endif
+    vTaskDelay(2000);
+    ESP.restart(); }
+  LastTime=Time; }
+
 static void ProcessCtrlL(void)                                    // print system state to the console
 {
 #ifdef WITH_SPIFFS
@@ -924,6 +974,7 @@ static void ProcessCtrlO(void)                                    // print syste
 
 static int ProcessInput(void)
 {
+  const uint8_t CtrlB = 'B'-'@';
   const uint8_t CtrlC = 'C'-'@';
   const uint8_t CtrlF = 'F'-'@';
   const uint8_t CtrlL = 'L'-'@';
@@ -937,16 +988,17 @@ static int ProcessInput(void)
 #ifndef WITH_GPS_UBX_PASS                                          // when transparency to the GPS not requested
     if(Byte==CtrlC) ProcessCtrlC();                                // if Ctrl-C received: print parameters
     if(Byte==CtrlF) ProcessCtrlF();                                // if Ctrl-F received: list files
-    if(Byte==CtrlC) ProcessCtrlL();                                // if Ctrl-L received: list log files
+    if(Byte==CtrlL) ProcessCtrlL();                                // if Ctrl-L received: list log files
     if(Byte==CtrlO) ProcessCtrlO();                                // if Ctrl-O received: print LoRaWAN status
-    if(Byte==CtrlX)                                                // Ctrl-X
-    {
-#ifdef WITH_SPIFFS
-      FlashLog_SaveReq=1;
-#endif
-      vTaskDelay(1000);
-      esp_restart(); }                                            // if Ctrl-X received then restart
+    if(Byte==CtrlX) ProcessCtrlX();                                // Ctrl-X
+//     {
+// #ifdef WITH_SPIFFS
+//       FlashLog_SaveReq=1;
+// #endif
+//       vTaskDelay(1000);
+//       esp_restart(); }                                            // if Ctrl-X received then restart
 #endif // of WITH_GPS_UBX_PASS
+
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
     if(NMEA.isComplete())                                         // if complete NMEA:
     {

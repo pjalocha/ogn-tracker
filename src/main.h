@@ -26,7 +26,7 @@ uint32_t getUniqueAddress(void);
 #define DEFAULT_GeoidSepar     40         // [m]
 #define DEFAULT_CONbaud    115200         // [bps]
 #define DEFAULT_PPSdelay      100         // [ms]
-#define DEFAULT_FreqPlan        1
+#define DEFAULT_FreqPlan        0
 
 #include "parameters.h"
 
@@ -38,8 +38,8 @@ uint32_t getUniqueAddress(void);
 #include "t-beam-v10-pins.h"
 #endif
 
-#ifdef WITH_TBEAM20
-#include "t-beam-v10-pins.h"
+#ifdef WITH_TBEAM12
+#include "t-beam-v12-pins.h"
 #endif
 
 #ifdef WITH_TBEAMS3

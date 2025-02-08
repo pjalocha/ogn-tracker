@@ -130,7 +130,7 @@ class FlashParameters
      } ;
    } ;
 
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    char BTname[16];
    // char  BTpin[16];
 #endif
@@ -153,15 +153,18 @@ uint16_t StratuxPort;
   int8_t StratuxTxPwr;
 #endif
 
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
    static const uint8_t WIFInameLen = 32;
    static const uint8_t WIFIpassLen = 64;
    static const uint8_t WIFIsets    = 10;
    char *getWIFIname(uint8_t Idx) { return Idx<WIFIsets ? WIFIname[Idx]:0; }
    char *getWIFIpass(uint8_t Idx) { return Idx<WIFIsets ? WIFIpass[Idx]:0; }
 
-   char WIFIname[WIFIsets][32];
+   char WIFIname[WIFIsets][32];  // WiFi networks name/pass to connect to for log upload or APRS server
    char WIFIpass[WIFIsets][64];
+#endif
+#ifdef WITH_UPLOAD
+   char UploadURL[64];           // URL to upload log files
 #endif
 
 #ifdef WITH_ENCRYPT
@@ -204,7 +207,7 @@ uint16_t StratuxPort;
 
   uint32_t CheckSum;
 
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
    const char *getWIFIpass(const char *NetName) const
    { for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
      { if(strcmp(NetName, WIFIname[Idx])==0) return WIFIpass[Idx]; }
@@ -324,7 +327,7 @@ uint16_t StratuxPort;
 #ifdef WITH_ENCRYPT
     for(uint8_t Idx=0; Idx<4; Idx++) EncryptKey[Idx]=0;
 #endif
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    getAprsCall(BTname);
    // strcpy(BTpin, "1234");
 #endif
@@ -344,10 +347,13 @@ uint16_t StratuxPort;
    StratuxMinSig  = -70; // [dBm]
    StratuxTxPwr   =  40; // [0.25dBm]
 #endif
-#ifdef WITH_APRS
-    for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
-    { WIFIname[Idx][0] = 0;
-      WIFIpass[Idx][0] = 0; }
+#ifdef WITH_WIFI
+   for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
+   { WIFIname[Idx][0] = 0;
+     WIFIpass[Idx][0] = 0; }
+#endif
+#ifdef WITH_UPLOAD
+   UploadURL[0] = 0;
 #endif
   }
 
@@ -677,7 +683,7 @@ uint16_t StratuxPort;
   { if( (ch>='0') && (ch<='9') ) return 1;  // numbers
     if( (ch>='A') && (ch<='Z') ) return 1;  // uppercase letters
     if( (ch>='a') && (ch<='z') ) return 1;  // lowercase letters
-    if(strchr(".@-+_/#", ch)) return 1;     // any of the listed special characters
+    if(strchr(".@-+_/#:", ch)) return 1;    // any of the listed special characters
     return 0; }
 
   static int8_t Read_String(char *Value, const char *Inp, uint8_t MaxLen)
@@ -826,7 +832,7 @@ uint16_t StratuxPort;
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
     { if(strcmp(Name, OGN_Packet::InfoParmName(Idx))==0)
         return Read_String(InfoParmValue(Idx), Value, 16)>=0; }
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     if(strcmp(Name, "BTname")==0) return Read_String(BTname, Value, 16)>=0;
 #endif
 #ifdef WITH_AP
@@ -874,6 +880,9 @@ uint16_t StratuxPort;
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIname[Idx], Value, WIFInameLen)>=0; }
     if( (memcmp(Name, "WIFIpass", 8)==0) && (strlen(Name)==9) )
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
+#endif
+#ifdef WITH_WIFI
+    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 64)>=0;
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
@@ -1003,7 +1012,7 @@ uint16_t StratuxPort;
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
     { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx), 16); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_AP
@@ -1021,13 +1030,16 @@ uint16_t StratuxPort;
     Write_Float1(Line, "StratuxTxPwr"  ,  (int32_t)10*StratuxTxPwr/4); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "StratuxMinSig",   (int32_t)StratuxMinSig); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { if(WIFIname[Idx][0]==0) continue;
       strcpy(Line, "WIFIname"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIname[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
+#endif
+#ifdef WITH_UPLOAD
+    strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
     return 10+InfoParmNum; }
 
@@ -1072,7 +1084,7 @@ uint16_t StratuxPort;
 #ifdef WITH_BT_PWR
     Write_UnsDec (Line, "Bluetooth" ,          BT_ON            ); strcat(Line, " #  [  1|0]\n"); Format_String(Output, Line);
 #endif
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
 #ifdef WITH_AP
@@ -1092,13 +1104,16 @@ uint16_t StratuxPort;
     Write_Float1 (Line, "StratuxTxPwr", (int32_t)10*StratuxTxPwr/4); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
     Write_SignDec (Line, "StratuxMinSig", (int32_t)StratuxMinSig); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { if(WIFIname[Idx][0]==0) continue;
       strcpy(Line, "WIFIname"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIname[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
+#endif
+#ifdef WITH_WIFI
+    strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
   }
 

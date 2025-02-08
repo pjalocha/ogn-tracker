@@ -1,5 +1,6 @@
+#pragma once
 
-#include "hal.h"
+#include "main.h"
 
 #include "timesync.h"
 #include "ogn.h"

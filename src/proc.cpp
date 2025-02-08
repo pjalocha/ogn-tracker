@@ -89,6 +89,7 @@ static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN
 
 #ifdef WITH_LOG
 
+// log a received packet
 static int FlashLog(OGN_RxPacket<OGN_Packet> *Packet, uint32_t Time)
 { OGN_LogPacket<OGN_Packet> *LogPacket = FlashLog_FIFO.getWrite(); if(LogPacket==0) return -1; // allocate new packet in the LOG_FIFO
   LogPacket->Packet = Packet->Packet;                                                          // copy the packet
@@ -98,6 +99,7 @@ static int FlashLog(OGN_RxPacket<OGN_Packet> *Packet, uint32_t Time)
   FlashLog_FIFO.Write();                                                                       // finalize the write
   return 1; }
 
+// log own packet
 static int FlashLog(OGN_TxPacket<OGN_Packet> *Packet, uint32_t Time)
 { OGN_LogPacket<OGN_Packet> *LogPacket = FlashLog_FIFO.getWrite(); if(LogPacket==0) return -1;
   LogPacket->Packet = Packet->Packet;
@@ -363,12 +365,13 @@ static uint8_t WritePFLAU(char *NMEA, uint8_t GPS=1)    // produce the (mostly d
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
-static void ProcessRxPacket(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)  // process every (correctly) received packet
+// process every received packet
+static void ProcessRxPacket(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
 { int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   if( RxPacket->Packet.Header.NonPos)                                                 // status or info packet
   {
 #ifdef WITH_SDLOG
-    IGClog_FIFO.Write(*RxPacket);
+    IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
 #endif
     return ; }
   uint8_t MyOwnPacket = ( RxPacket->Packet.Header.Address  == Parameters.Address  )
@@ -378,17 +381,17 @@ static void ProcessRxPacket(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacket
   { RxPacket->calcRelayRank(GPS_Altitude/10);
     OGN_RxPacket<OGN_Packet> *PrevRxPacket = RelayQueue.addNew(RxPacketIdx);          // add to the relay queue and get the previous packet of same ID
 #ifdef WITH_SDLOG
-    IGClog_FIFO.Write(*RxPacket);
+    IGClog_FIFO.Write(*RxPacket);                                                     // log encrypted position packets
 #endif
     return; }
   bool DistOK = RxPacket->Packet.calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
-  if(DistOK)
+  if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;
     RxPacket->LonDist=LonDist;
     RxPacket->calcRelayRank(GPS_Altitude/10);                                         // calculate the relay-rank (priority for relay)
     OGN_RxPacket<OGN_Packet> *PrevRxPacket = RelayQueue.addNew(RxPacketIdx);          // add to the relay queue and get the previous packet of same ID
 #ifdef WITH_POGNT
-    { uint8_t Len=RxPacket->WritePOGNT(Line);                                           // print on the console as $POGNT
+    { uint8_t Len=RxPacket->WritePOGNT(Line);                                         // print on the console as $POGNT
       if(Parameters.Verbose)
       { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
         Format_String(CONS_UART_Write, Line, 0, Len);
