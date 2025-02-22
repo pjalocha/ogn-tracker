@@ -70,6 +70,8 @@ static   TickType_t Burst_Tick;            // [msec] System Tick when the data b
 
          Status     GPS_Status;            // GPS status flags
 
+         char GPS_Hardware[12] = { 0 };    // hardware info read from the GPS
+         char GPS_Firmware[244] = { 0 };    // software info read from the GPS
 static union
 { uint8_t Flags;
   struct
@@ -340,6 +342,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           Format_String(CONS_UART_Write, "\n");
 #endif
         }
+        UBX_RxMsg::Send(0x0A, 0x04, GPS_UART_Write);                     // send the query for the GPS version
         UBX_RxMsg::Send(0x06, 0x08, GPS_UART_Write);                     // send the query for the navigation rate
         UBX_RxMsg::Send(0x06, 0x24, GPS_UART_Write);                     // send the query for the navigation mode setting
         UBX_RxMsg::Send(0x06, 0x3E, GPS_UART_Write);                     // send the query for the GNSS configuration
@@ -767,6 +770,25 @@ static void GPS_UBX(void)                                                       
     // Format_Hex(CONS_UART_Write, UBX.ID);
     xSemaphoreGive(CONS_Mutex); }
 #endif
+  if(UBX.isMON_VER())                                                             // if version info
+  { class UBX_MON_VER *VER = (class UBX_MON_VER *)UBX.Word;                       // create pointer to the packet content
+    strncpy(GPS_Firmware, VER->swVersion, 30); GPS_Firmware[30]=0;
+    strncpy(GPS_Hardware, VER->hwVersion, 10); GPS_Hardware[10]=0;
+    int ExtLen=strlen(GPS_Firmware);
+    for(uint16_t Idx=30+10; Idx<UBX.Bytes; Idx+=30)
+    { int Len=strlen((const char *)UBX.Byte+Idx); if(Len>=30) break;
+      GPS_Firmware[ExtLen++]=':';
+      strcpy(GPS_Firmware+ExtLen, (const char *)UBX.Byte+Idx);
+      ExtLen+=Len; }
+    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    Format_String(CONS_UART_Write, "MON-VER [");
+    Format_UnsDec(CONS_UART_Write, UBX.Bytes);
+    Format_String(CONS_UART_Write, "] ");
+    Format_String(CONS_UART_Write, GPS_Hardware);
+    CONS_UART_Write(':');
+    Format_String(CONS_UART_Write, GPS_Firmware);
+    CONS_UART_Write('\n');
+    xSemaphoreGive(CONS_Mutex); }
 #ifdef WITH_GPS_CONFIG
   if(UBX.isCFG_PRT())                                                             // if port configuration
   { class UBX_CFG_PRT *CFG = (class UBX_CFG_PRT *)UBX.Word;                       // create pointer to the packet content
