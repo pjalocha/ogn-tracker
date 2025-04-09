@@ -686,7 +686,7 @@ void Radio_Task(void *Parms)
     // msTime = TimeRef.getFracTime(millis());
 
 #ifdef WITH_FANET
-    uint32_t FreqFNT = Radio_FreqPlan.getFreqFNT(TimeRef.UTC);    // frequency to transmit FANET
+    uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();           // frequency to transmit FANET
     if(FreqFNT)
     { Radio_ConfigFANET();
       Radio.setFrequency(1e-6*FreqFNT);

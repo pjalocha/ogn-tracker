@@ -63,13 +63,10 @@ class FreqPlan
    uint32_t getFreqFANET(void) const
    { if(Plan<=1) return 868200000;                                           // Europe and default is 868.200MHz
      return 0; }
-
-   uint32_t getFreqFNT(uint32_t Time)
-   { if(Plan<=1) return BaseFreq;                                          // Europe and default is 868.2MHz
-     uint32_t Freq1 = getFrequency(Time, 0, 0);
-     if(Plan==5) return Freq1;                                             // for 434MHz is same as "FLARM", which is never used there
-     uint32_t Freq2 = getFrequency(Time, 0, 1);
-     return (Freq1+Freq2)/2; }                                             // other hopping systems is half-way between FLARM and OGN
+   //  uint32_t Freq1 = getFrequency(Time, 0, 0);
+   //  if(Plan==6) return Freq1;                                             // for 434MHz is same as "FLARM", which is never used there
+   //  uint32_t Freq2 = getFrequency(Time, 0, 1);
+   //  return (Freq1+Freq2)/2; }                                             // other hopping systems is half-way between FLARM and OGN
 
    uint8_t static calcPlan(int32_t Latitude, int32_t Longitude) // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zeeland
    { if( (Longitude>=(-26*600000)) && (Longitude<=(60*600000)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
