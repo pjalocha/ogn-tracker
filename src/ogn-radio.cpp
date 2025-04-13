@@ -57,6 +57,12 @@ const float Radio_PktUpdate = 0.05;                    // weight to update the p
 float   Radio_BkgRSSI = -105.0f;                       // [dBm] background noise seen by the receiver
 const float Radio_BkgUpdate = 0.05;                    // weight to update the background noise
 
+#ifdef TX_PA_GAIN
+const float Radio_TxPwrGain = TX_PA_GAIN;
+#else
+const float Radio_TxPwrGain = 0;                       // [dBm] gain of a PA or loss of the filter/cable
+#endif
+
 // =======================================================================================================
 
 #ifdef WITH_SX1276
@@ -127,6 +133,19 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYN
   // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
   return ErrState; }                                                   // this call takes 18-19 ms
 
+static int Radio_ConfigTxPower(float TxPower)      // set trannsmitter power
+{ TxPower-=Radio_TxPwrGain;
+  if(TxPower<0) TxPower=0;
+#ifdef WITH_SX1276
+  else if(TxPower>20) TxPower=20;
+#endif
+#ifdef WITH_SX1262
+  else if(TxPower>22) TxPower=22;
+#endif
+  Radio.setOutputPower(TxPower);
+  Radio.setCurrentLimit(140);                      // values are 0 to 140 mA for SX1262, default is 60
+  return 0; }
+
 static int ManchEncode(uint8_t *Out, const uint8_t *Inp, uint8_t InpLen) // Encode packet bytes as Manchester
 { int Len=0;
   for(int Idx=0; Idx<InpLen; Idx++)                // loop over bytes and encode usinglookup table
@@ -165,9 +184,10 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
     if(usLeft>1500) { delay(1); continue; }
     if(usLeft<(-40)) break;
     taskYIELD(); }
-  State=Radio.finishTransmit();                         // adds a long delay and leaves a significant tail
+  // State=Radio.finishTransmit();                         // adds a long delay and leaves a significant tail
   // Radio.clearIRQFlags();
-  // Radio.standby();
+  Radio.standby();
+  Radio.clearIrqFlags(RADIOLIB_SX127X_FLAGS_ALL);
   // uint8_t RegPktLen = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PAYLOAD_LENGTH_FSK);
   // uint8_t RegFixed = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PACKET_CONFIG_1);
   // uint8_t RegDIO1 = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_DIO_MAPPING_1);
@@ -179,7 +199,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 static uint8_t Radio_TxPacket[80];                 // Manchester-encoded packet just before transmission
 static uint8_t Radio_RxPacket[80];                 // Manchester-encoded packet just after reception
 
-static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)         // transmit a packet using Manchester encoding
+static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // transmit a packet using Manchester encoding
 { int TxLen=ManchEncode(Radio_TxPacket, Packet, Len);                    // Manchester encode
   return Radio_TxFSK(Radio_TxPacket, TxLen); }
 
@@ -266,8 +286,7 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
     PktCount+=Radio_ManchRx(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
     Radio.standby();
     Radio_ConfigManchFSK(TxPktLen, TxSYNC, 8);       // configure for transmission
-    Radio.setOutputPower(TxPower);
-    Radio.setCurrentLimit(140);                      // values are 0 to 140 mA for SX1262, default is 60
+    Radio_ConfigTxPower(TxPower);
     Radio.setFrequency(TxFreq);                      // set frequency
     Radio_TxManchFSK(TxPacket, TxPktLen);            // transmit the packet
     Radio_TxCount[TxSysID]++;
@@ -460,13 +479,13 @@ static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a
   Radio_TxCredit-=usTxTime/1000;
   Radio_TxCount[Radio_SysID_FNT]++; }
 
-static void Radio_ConfigFANET(uint8_t CR=4)                        // setup Radio for FANET
+static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radio for FANET
 {                                                                  // first swith to LoRa mode
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
     Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
-  Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CR, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
+  Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,      Payload (max) size, Header-Type,                    Invert-IQ
   Radio.setPacketParams(5, RADIOLIB_SX126X_LORA_CRC_ON, 40, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
 #endif
@@ -477,7 +496,7 @@ static void Radio_ConfigFANET(uint8_t CR=4)                        // setup Radi
   Radio.explicitHeader();
   Radio.setBandwidth(250.0);
   Radio.setSpreadingFactor(7);
-  Radio.setCodingRate(4+CR);
+  Radio.setCodingRate(4+CRa);
   Radio.invertIQ(false);
 #ifdef WITH_SX1262
   Radio.setSyncWord(0xF1, 0x44);
@@ -503,7 +522,7 @@ static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_
     if(msTimeLen>35) TxTime+=Random.RX%(msTimeLen-35);   // random transmission time
     PktCount+=Radio_RxFANET(TxTime, TimeRef);            // keep receiving till transmission time
     Radio.standby();
-    Radio.setOutputPower(TxPower);
+    Radio_ConfigTxPower(TxPower);
     // uint32_t msTxTime=millis();
     Radio_TxFANET(*TxPacket);                        // transmit the packet
     // msTxTime = millis()-msTxTime;
@@ -549,13 +568,13 @@ static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLe
   Radio.readData(Packet, PktLen);
   return PktLen; }
 
-static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR=4)
+static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CRa=4)
 {
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
     Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
-  Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_125_0, 4+CR, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
+  Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_125_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,                                                Payload (max) size, Header-Type,
   Radio.setPacketParams(8, TX?RADIOLIB_SX126X_LORA_CRC_ON:RADIOLIB_SX126X_LORA_CRC_OFF, 64, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT,
                            TX?RADIOLIB_SX126X_LORA_IQ_STANDARD:RADIOLIB_SX126X_LORA_IQ_INVERTED);  // InvertIQ
@@ -567,7 +586,7 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
   Radio.explicitHeader();
   Radio.setBandwidth(125.0);
   Radio.setSpreadingFactor(7);
-  Radio.setCodingRate(4+CR);
+  Radio.setCodingRate(4+CRa);
   Radio.invertIQ(!TX);                         // uplink without I/Q inversion, downlink with inversion
 #ifdef WITH_SX1262
   Radio.setSyncWord(0x34, 0x44);
@@ -581,7 +600,7 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
   const float BaseFreq = 867.1;
   const float ChanStep =   0.2;
   Radio.setFrequency(BaseFreq+ChanStep*Chan);          // set frequency
-  if(TX) Radio.setOutputPower(TxPower);
+  if(TX) Radio_ConfigTxPower(TxPower);
 
 }
 
@@ -730,7 +749,7 @@ void Radio_Task(void *Parms)
       int Ret=Radio_ConfigPAW();
       // Serial.printf("PAW: Freq:%7.3fMHz (%d)\n", 1e-6*Freq, Ret);
       Radio.setFrequency(1e-6*FreqPAW);
-      Radio.setOutputPower(Parameters.TxPower+6); // we can transmit PAW with higher power
+      Radio_ConfigTxPower(Parameters.TxPower+13); // we can transmit PAW with higher power
       Radio_TxPAW(*PawPacket); }
 #endif
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
@@ -776,17 +795,17 @@ void Radio_Task(void *Parms)
      uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);
     const uint8_t *OGN_Pkt = OgnPacket1?OgnPacket1->Byte():0;
      int8_t  ADSL_TxPwr = OGN_TxPwr;
-    uint8_t ADSL_Chan  = OGN_Chan;
+     uint8_t ADSL_Chan  = OGN_Chan;
     const uint8_t *ADSL_Pkt = AdslPacket1?&(AdslPacket1->Version):0;
     if(Oband)
     { OGN_TxPwr+=13;
       OGN_Chan=Radio_FreqPlan.Channels; }
-#ifdef WITH_SX1276
-    if(OGN_TxPwr>20) OGN_TxPwr=20;
-#endif
-#ifdef WITH_SX1262
-    if(OGN_TxPwr>22) OGN_TxPwr=22;
-#endif
+// #ifdef WITH_SX1276
+//     if(OGN_TxPwr>20) OGN_TxPwr=20;
+// #endif
+// #ifdef WITH_SX1262
+//     if(OGN_TxPwr>22) OGN_TxPwr=22;
+// #endif
 
     bool OGNonly = !EU || !Parameters.RxADSL;         // OGN-only when out of EU/Africa
 
