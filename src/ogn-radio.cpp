@@ -304,7 +304,7 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
 // =======================================================================================================
 
 // Radio setup for PilotAware: GFSK, 38.4kbps, +/-9.6kHz
-static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=8)
+static int Radio_ConfigPAW(uint8_t PktLen=6+PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=2)
 { int ErrState=0; int State=0;
   // uint32_t Time=millis();
   // Radio.standby();
@@ -326,7 +326,7 @@ static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYN
   if(State) ErrState=State;
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
   if(State) ErrState=State;
-  State=Radio.setPreambleLength(64);                                // [bits] minimal preamble
+  State=Radio.setPreambleLength(64);                                // [bits] very long preamble for Pilot-Aware
   if(State) ErrState=State;
   State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
   if(State) ErrState=State;
@@ -355,10 +355,11 @@ static int Radio_ConfigPAW(uint8_t PktLen=PAW_Packet::Size+1, const uint8_t *SYN
   return ErrState; }                                                // this call takes 18-19 ms
 
 static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
-{ memcpy(Radio_TxPacket, Packet.Byte, Packet.Size);                 // copy packet to the buffer (internal CRC is already set)
-  Packet.Whiten(Radio_TxPacket, Packet.Size);                       // whiten
-  Radio_TxPacket[Packet.Size] = Packet.CRC8(Radio_TxPacket, Packet.Size); // add external CRC
-  return Radio_TxFSK(Radio_TxPacket, Packet.Size+1); }             // send the packet out
+{ memcpy(Radio_TxPacket, PAW_SYNC+2, 6);                            // first copy the remaining 6 bytes of the pre-data part
+  memcpy(Radio_TxPacket+6, Packet.Byte, Packet.Size);               // copy packet to the buffer (internal CRC is already set)
+  Packet.Whiten(Radio_TxPacket+6, Packet.Size);                     // whiten
+  Radio_TxPacket[6+Packet.Size] = Packet.CRC8(Radio_TxPacket+6, Packet.Size); // add external CRC
+  return Radio_TxFSK(Radio_TxPacket, 6+Packet.Size+1); }            // send the packet out
 
 /*
 static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
