@@ -38,7 +38,8 @@ static const uint8_t ADSL_SYNC[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA9,
 // RID SYNC:         0xF5724B24 encoded in Manchester (fixed packet length 0x24 is included)
 static const uint8_t RID_SYNC[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA6, 0x9A, 0x00, 0x00 };
 // O-Band SYNC
-static const uint8_t OBAND_SYNC[10] = { 0xF5, 0x72, 0x4B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } ;
+// static const uint8_t OBAND_SYNC[10] = { 0xF5, 0x72, 0x4B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } ;
+static const uint8_t OBAND_SYNC[10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } ;
 
 // PilotAware SYNC, includes net-address which is always zero, and the packet size which is always 0x18 = 24
 static const uint8_t PAW_SYNC [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18, 0x71, 0x00, 0x00 };
@@ -303,12 +304,9 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
 
 // =======================================================================================================
 
-// Radio setup for PilotAware: GFSK, 38.4kbps, +/-9.6kHz
-static int Radio_ConfigPAW(uint8_t PktLen=6+PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=2)
+// Radio setup for PilotAware: GFSK, 38.4kbps, +/-9.6kHz and ADS-L LDR
+static int Radio_ConfigLDR(uint8_t PktLen=7+PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=1)
 { int ErrState=0; int State=0;
-  // uint32_t Time=millis();
-  // Radio.standby();
-  // vTaskDelay(1);
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
     State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
@@ -322,8 +320,16 @@ static int Radio_ConfigPAW(uint8_t PktLen=6+PAW_Packet::Size+1, const uint8_t *S
   if(State) ErrState=State;
   State=Radio.setFrequencyDeviation(9.6);                           // [kHz]  +/-9.6kHz deviation
   if(State) ErrState=State;
-  State=Radio.setRxBandwidth(46.9);                                 // [kHz]  50kHz bandwidth
+  State=Radio.setRxBandwidth(58.6);                                 // [kHz]  50kHz bandwidth
   if(State) ErrState=State;
+#ifdef WITH_SX1276
+  State=Radio.setAFCBandwidth(58.6);                                // [kHz]  auto-frequency-tune bandwidth
+  if(State) ErrState=State;
+  State=Radio.setAFC(1);                                            // enable AFC
+  if(State) ErrState=State;
+  State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+  if(State) ErrState=State;
+#endif
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
   if(State) ErrState=State;
   State=Radio.setPreambleLength(48);                                // [bits] very long preamble for Pilot-Aware
@@ -336,11 +342,8 @@ static int Radio_ConfigPAW(uint8_t PktLen=6+PAW_Packet::Size+1, const uint8_t *S
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   State=Radio.disableAddressFiltering();                            // don't want any of such features
-  // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
-  // if(SYNC[0]==0x55)
-  //   State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
-  // else if(SYNC[0]==0xAA)
-    State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
+  State=Radio.invertPreamble(true);                                 // true=0xAA, false=0x55
+  // State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
   State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
@@ -355,11 +358,12 @@ static int Radio_ConfigPAW(uint8_t PktLen=6+PAW_Packet::Size+1, const uint8_t *S
   return ErrState; }                                                // this call takes 18-19 ms
 
 static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
-{ memcpy(Radio_TxPacket, PAW_SYNC+2, 6);                            // first copy the remaining 6 bytes of the pre-data part
-  memcpy(Radio_TxPacket+6, Packet.Byte, Packet.Size);               // copy packet to the buffer (internal CRC is already set)
-  Packet.Whiten(Radio_TxPacket+6, Packet.Size);                     // whiten
-  Radio_TxPacket[6+Packet.Size] = Packet.CRC8(Radio_TxPacket+6, Packet.Size); // add external CRC
-  return Radio_TxFSK(Radio_TxPacket, 6+Packet.Size+1); }            // send the packet out
+{ memcpy(Radio_TxPacket, PAW_SYNC+1, 7);                            // first copy the remaining 7 bytes of the pre-data part
+  memcpy(Radio_TxPacket+7, Packet.Byte, Packet.Size);               // copy packet to the buffer (internal CRC is already set)
+  Packet.Whiten(Radio_TxPacket+7, Packet.Size);                     // whiten
+  Radio_TxPacket[7+Packet.Size] = Packet.CRC8(Radio_TxPacket+7, Packet.Size); // add external CRC
+  Radio_TxCount[Radio_SysID_PAW]++;
+  return Radio_TxFSK(Radio_TxPacket, 7+Packet.Size+1); }            // send the packet out
 
 /*
 static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
@@ -375,7 +379,7 @@ static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit 
 */
 // =======================================================================================================
 
-static int Radio_ConfigOBAND(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=3) // Radio setup for O-band ADS-L
+static int Radio_ConfigHDR(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=2) // Radio setup for O-band ADS-L HDR
 { int ErrState=0; int State=0;
 #ifdef WITH_SX1276
   State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
@@ -746,7 +750,7 @@ void Radio_Task(void *Parms)
     uint32_t FreqPAW = Radio_FreqPlan.getFreqOBAND();
     if(PawPacket && FreqPAW)                         // if there is a packet to be transmitted and the frequency plan allows it
     { Radio.standby();
-      int Ret=Radio_ConfigPAW();
+      int Ret=Radio_ConfigLDR();
       // Serial.printf("PAW: Freq:%7.3fMHz (%d)\n", 1e-6*Freq, Ret);
       Radio.setFrequency(1e-6*FreqPAW);
       Radio_ConfigTxPower(Parameters.TxPower+13); // we can transmit PAW with higher power
@@ -958,9 +962,9 @@ void Radio_Task(void *Parms)
     Radio_TxCredit+= 10;                                // [ms]
     if(Radio_TxCredit>60000) Radio_TxCredit=60000;
 
-    int LineLen=sprintf(Line, "Radio: Tx: %d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %d:%d",
-             Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4],
-             Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4],
+    int LineLen=sprintf(Line, "Radio: Tx: %d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %d:%d",
+             Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5],
+             Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5],
              Radio_BkgRSSI, PktCount, Radio_PktRate, 0.001*Radio_TxCredit, Odd, Oband);
     SysLog_Line(Line, LineLen, 1, 25);
     if(xSemaphoreTake(CONS_Mutex, 20))
