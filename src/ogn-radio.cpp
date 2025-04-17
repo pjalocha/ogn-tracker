@@ -23,7 +23,7 @@
  FIFO<PAW_Packet,               4> PAW_TxFIFO;
 
  // queues for received packets
- FIFO<Manch_RxPktData,         64> Manch_RxFIFO;
+ FIFO<FSK_RxPacket,            64> FSK_RxFIFO;
  FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
 
  QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
@@ -204,9 +204,9 @@ static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // tran
 { int TxLen=ManchEncode(Radio_TxPacket, Packet, Len);                    // Manchester encode
   return Radio_TxFSK(Radio_TxPacket, TxLen); }
 
-static int Radio_ManchRxPacket(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef) // check if there is a new packet received
+static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef) // check if there is a new packet received
 { if(!Radio_IRQ()) return 0;                                             // use the IRQ line: not raised, then no received packet
-  Manch_RxPktData *RxPkt = Manch_RxFIFO.getWrite();                      // get place for a new packet in the queue
+  FSK_RxPacket *RxPkt = FSK_RxFIFO.getWrite();                         // get place for a new packet in the queue
 #ifdef WITH_SX1262
   uint32_t PktStat = Radio.getPacketStatus();                            // get RSSI
   Random.RX += PktStat;
@@ -226,34 +226,42 @@ static int Radio_ManchRxPacket(uint8_t PktLen, uint8_t SysID, uint8_t Channel, T
   RxPkt->msTime = msTime-TimeRef.sysTime;                                // [ms] time since the reference PPS
   RxPkt->Time = TimeRef.UTC;                                             // [sec] UTC PPS
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
-  Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
-  uint8_t PktIdx=0;
-  for(uint8_t Idx=0; Idx<PktLen; Idx++)                                  // loop over packet bytes
-  { uint8_t ByteH = Radio_RxPacket[PktIdx++];
-    ByteH = ManchesterDecode[ByteH]; uint8_t ErrH=ByteH>>4; ByteH&=0x0F; // decode Manchester, detect errors
-    uint8_t ByteL = Radio_RxPacket[PktIdx++];
-    ByteL = ManchesterDecode[ByteL]; uint8_t ErrL=ByteL>>4; ByteL&=0x0F; // second nibble
-    RxPkt->Data[Idx]=(ByteH<<4) | ByteL;
-    RxPkt->Err [Idx]=(ErrH <<4) | ErrL ; }
+  if(Manch)
+  { Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
+    uint8_t PktIdx=0;
+    for(uint8_t Idx=0; Idx<PktLen; Idx++)                                  // loop over packet bytes
+    { uint8_t ByteH = Radio_RxPacket[PktIdx++];
+      ByteH = ManchesterDecode[ByteH]; uint8_t ErrH=ByteH>>4; ByteH&=0x0F; // decode Manchester, detect errors
+      uint8_t ByteL = Radio_RxPacket[PktIdx++];
+      ByteL = ManchesterDecode[ByteL]; uint8_t ErrL=ByteL>>4; ByteL&=0x0F; // second nibble
+      RxPkt->Data[Idx]=(ByteH<<4) | ByteL;
+      RxPkt->Err [Idx]=(ErrH <<4) | ErrL ; }
+  }
+  else
+  { Radio.readData(RxPkt->Data, PktLen);
+    for(uint8_t Idx=0; Idx<PktLen; Idx++)
+      RxPkt->Err[Idx]=0;
+  }
+  RxPkt->Manchester = Manch;
   RxPkt->Bytes   = PktLen;                                               // [bytes] actual packet size
-  RxPkt->SysID  = SysID;                                                 // Radio-system-ID
+  RxPkt->SysID   = SysID;                                                // Radio-system-ID
   RxPkt->Channel = Channel;                                              // Radio channel
   Radio_RxCount[SysID]++;                                                // count packets
 #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
-  { Serial.printf("RadioRx: %6dms [%d:%d] 0x%08X %+4.1fdBm\n",
-             millis(), SysID, PktLen, PktStat, -0.5*RxPkt->RSSI );
+  { Serial.printf("RadioRx: %6dms [%d:%2d:%d] %+4.1fdBm\n",
+             millis(), SysID, PktLen, Manch, -0.5*RxPkt->RSSI );
     xSemaphoreGive(CONS_Mutex); }
 #endif
-  Manch_RxFIFO.Write();                                                  // complete the write into the queue of packets
+  FSK_RxFIFO.Write();                                                  // complete the write into the queue of packets
   return 1; }
 
-static int Radio_ManchRx(uint32_t msTimeLen, uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef) // keep receiving packets for a given time [ms]
+static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, bool Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef) // keep receiving packets for a given time [ms]
 { uint32_t msStart = millis();                                     // [ms] start of the slot
   int PktCount=0;
   for( ; ; )
   { vTaskDelay(1);                                                 // wait 1ms
-    PktCount+=Radio_ManchRxPacket(PktLen, SysID, Channel, TimeRef);   // check if a packet has been received
+    PktCount+=Radio_Receive(PktLen, Manch, SysID, Channel, TimeRef);   // check if a packet has been received
     uint32_t msTime = millis()-msStart;                            // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
 #ifdef WITH_SX1262
@@ -284,7 +292,7 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
   XorShift64(Random.Word);                           // randomize
   if(TxPacket)
   { int TxTime = 25+Random.RX%(msTimeLen-50);        // random transmission time
-    PktCount+=Radio_ManchRx(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
+    PktCount+=Radio_Receive(TxTime, RxPktLen, 1, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
     Radio.standby();
     Radio_ConfigManchFSK(TxPktLen, TxSYNC, 8);       // configure for transmission
     Radio_ConfigTxPower(TxPower);
@@ -296,10 +304,10 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
     Radio.setFrequency(RxFreq);                      // set frequency
     Radio.startReceive();                            // start receiving again
     uint32_t msTime = millis()-msStart;
-    if(msTime<msTimeLen) PktCount+=Radio_ManchRx(msTimeLen-msTime, RxPktLen, RxSysID, RxChannel, TimeRef); }
+    if(msTime<msTimeLen) PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, 1, RxSysID, RxChannel, TimeRef); }
   else
   { uint32_t msTime = millis()-msStart;
-    if(msTime<msTimeLen) PktCount+=Radio_ManchRx(msTimeLen-msTime, RxPktLen, RxSysID, RxChannel, TimeRef); }
+    if(msTime<msTimeLen) PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, 1, RxSysID, RxChannel, TimeRef); }
   Radio.standby(); return PktCount; }
 
 // =======================================================================================================
