@@ -81,7 +81,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      unsigned int     Stealth: 1; //                  // not really used till now
      unsigned int    AcftType: 4; // [0..15]          // type of aircraft: 1 = glider, 2 = towplane, 3 = helicopter, ...
      unsigned int BaroAltDiff: 8; // [m]              // lower 8 bits of the altitude difference between baro and GPS
-   } Position;
+   } __attribute__((packed)) Position;
 
    struct
    { unsigned int Pulse     : 8; // [bpm]               // pilot: heart pulse rate
@@ -91,13 +91,16 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      unsigned int RxRate    : 4; // [/min]              // log2 of received packet rate
      unsigned int Time      : 6; // [sec]               // same as in the position packet
      unsigned int FixQuality: 2;
+
      unsigned int AudioNoise: 8; // [dB]                //
      unsigned int RadioNoise: 8; // [dBm]               // noise seen by the RF chip
      unsigned int Temperature:8; // [0.1degC] VR        // temperature by the baro or RF chip
      unsigned int Humidity  : 8; // [0.1%] VR           // humidity
+
      unsigned int Altitude  :14; // [m] VR              // same as in the position packet
      unsigned int Pressure  :14; // [0.08hPa]           // barometric pressure
      unsigned int Satellites: 4; // [ ]
+
      unsigned int Firmware  : 8; // [ ]                 // firmware version
      unsigned int Hardware  : 8; // [ ]                 // hardware version
      unsigned int TxPower   : 4; // [dBm]               // RF trancmitter power (offset = 4)
@@ -112,7 +115,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
           uint8_t DataChars:  4; // [int] number of characters in the packed string
           uint8_t ReportType: 4; // [1]                 // 1 for the Info packets
           uint8_t Check;         // CRC check
-     } ;
+     }  __attribute__((packed));
    } Info;
 
    struct
@@ -131,7 +134,42 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      unsigned int            : 1; //                  // spare
      unsigned int  ReportType: 4; //                  // 2 for wind/thermal report
      unsigned int BaroAltDiff: 8; // [m]              // lower 8 bits of the altitude difference between baro and GPS
-   } Wind;
+   } __attribute__((packed)) Wind;
+
+   struct
+   {        uint8_t Time          : 6;                // [sec]
+           uint16_t Humidity      :10;                // [0.1%]
+           uint16_t Pressure;                         // [2 Pa]
+
+            uint8_t WindDir;                          // [cordic]
+            uint8_t WindSpeed;                        // [mph]
+            uint8_t WindGust;                         // [mph]
+            bool    LowBatt       : 1;                // low-battery indicator
+            uint8_t RainTipCount  : 7;                // rain tip counter
+
+            uint8_t RainType      : 2;                // 0=no rain, 1=light rain, 2=strong rain
+           uint16_t RainTipPeriod :10;                // rain tip period
+           uint16_t SolarRad      :10;                // [1.7579 W/m2]
+           uint16_t UVI           :10;                // [0.02 25mW/m2]
+
+            int16_t Temperature   :12;                // [0.1 deg F]
+            uint8_t SuperCap      : 4;                //
+            uint8_t StationType:4;                    // 0 for Davis meteo station
+            uint8_t ReportType :4;                    // 3 for the meteo report
+            union
+            { uint8_t Flags;                          //
+              struct
+              { bool UTC      :1;
+                bool hasHum   :1;
+                bool hasPress :1;
+                bool hasWind  :1;
+                bool hasRain  :1;
+                bool hasTemp  :1;
+                bool hasSolar :1;
+                bool hasCap   :1;
+              }  __attribute__((packed));
+            } ;
+   } __attribute__((packed)) Meteo;                                           // Meteo
 
    struct
    {      uint8_t Data[14];                           // up to 14 bytes od specific data
@@ -203,6 +241,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      if(!Header.NonPos) return Len+PrintPosition(Out+Len);
      if(isStatus()) return Len+PrintDeviceStatus(Out+Len);
      if(isInfo  ()) return Len+PrintDeviceInfo(Out+Len);
+     if(isMeteo ()) return Len+PrintMeteo(Out+Len);
      Out[Len]=0; return Len; }
 
    int PrintPosition(char *Out) const
@@ -274,6 +313,53 @@ class OGN1_Packet          // Packet structure for the OGN tracker
        Idx+=Chars; }
      Out[Len]=0; return Len; }
 
+   int PrintMeteo(char *Out) const
+   { int Len=0;
+     if(Meteo.StationType==0)
+     { Len+=Format_String(Out+Len, " Dvs");
+       if(Meteo.hasWind)
+       { Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, ((uint32_t)Meteo.WindDir*360+128)>>8, 3);
+         Out[Len++]='/'; Len+=Format_UnsDec(Out+Len,  (uint32_t)Meteo.WindSpeed, 3);
+         Out[Len++]='/'; Len+=Format_UnsDec(Out+Len,  (uint32_t)Meteo.WindGust, 3);
+         Len+=Format_String(Out+Len, "mph"); }
+       if(Meteo.hasTemp) { Out[Len++]=' '; Len+=Format_SignDec(Out+Len, (int32_t)Meteo.Temperature, 2, 1); Out[Len++]='F'; }
+       if(Meteo.hasHum)  { Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, (uint32_t)Meteo.Humidity, 2, 1); Out[Len++]='%'; }
+       if(Meteo.hasPress) { Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, (uint32_t)Meteo.Pressure*2, 1); Out[Len++]='P'; Out[Len++]='a'; }
+       if(Meteo.hasRain)
+       { uint32_t RainRate=0;
+         if(Meteo.RainType==1 && Meteo.RainTipPeriod>0) { RainRate=  7200/Meteo.RainTipPeriod; }
+         if(Meteo.RainType==2 && Meteo.RainTipPeriod>0) { RainRate=115200/Meteo.RainTipPeriod; }
+         Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, RainRate, 2, 1);
+         Len+=Format_String(Out+Len, "mm/h"); }
+       if(Meteo.hasSolar)
+       { Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, ((uint32_t)Meteo.SolarRad*44+12)/25, 1); Out[Len++]='W';
+         Out[Len++]=' '; Len+=Format_UnsDec(Out+Len, ((uint32_t)Meteo.UVI+2)/5, 2, 1); Out[Len++]='U'; Out[Len++]='V'; }
+     }
+     else Len+=Format_String(Out+Len, " Meteo ");
+     // for(int Idx=0; Idx<4; Idx++)
+     //   Len+=EncodeAscii85(Out+Len, Data[Idx]);
+     Out[Len]=0; return Len; }
+
+  int Meteo_DBreport(char *Line, double Time, uint32_t ID, float RSSI) const
+  { int Len=0;
+    Len+=sprintf(Line+Len, "%14.3f;%d;;%3.1f;", Time, ID, RSSI);                        // time, ID, no radio channel, radio RSSI
+    if(Meteo.hasWind) Len+=sprintf(Line+Len, ";%03d;%3.1f;%3.1f;",                      // wind-direction [deg], wind speed [kt]
+                            ((uint16_t)Meteo.WindDir*90+32)>>6, 0.86898*Meteo.WindSpeed, 0.86898*Meteo.WindGust);
+                 else Len+=sprintf(Line+Len, ";;;;");
+    if(Meteo.hasTemp) Len+=sprintf(Line+Len, "%3.1f", (0.5/9)*(Meteo.Temperature-320)); // temperature [degC]
+    Line[Len++]=';';
+    if(Meteo.hasHum)  Len+=sprintf(Line+Len, "%3.1f", 0.1*Meteo.Humidity);               // humidity [%]
+    Line[Len++]=';';
+    Line[Len++]=';';
+    if(Meteo.hasPress) Len+=sprintf(Line+Len, "%3.1f", 0.02*Meteo.Pressure);            // pressure [hPa]
+    Line[Len++]=';';
+    if(Meteo.hasRain)
+    { uint32_t RainRate=0;
+      if(Meteo.RainType==1 && Meteo.RainTipPeriod>0) { RainRate=  7200/Meteo.RainTipPeriod; }
+      if(Meteo.RainType==2 && Meteo.RainTipPeriod>0) { RainRate=115200/Meteo.RainTipPeriod; }
+      Len+=sprintf(Line+Len, "%3.1f", 0.1*RainRate); }
+    Line[Len]=0; return Len; }
+
 /*
    int WriteDeviceInfo(char *Out)
    { int Len=0;
@@ -296,12 +382,15 @@ class OGN1_Packet          // Packet structure for the OGN tracker
 
    bool isStatus  (void) const { return Status.ReportType==0; }
    bool isInfo    (void) const { return Status.ReportType==1; }
+   bool isMeteo   (void) const { return Status.ReportType==3; }
    bool isManufMsg(void) const { return Status.ReportType==15; }
 
    void Print(void) const
    { if(!Header.NonPos) return PrintPosition();
      if(isStatus()) return PrintDeviceStatus();
-     if(isInfo  ()) return PrintDeviceInfo(); }
+     if(isInfo  ()) return PrintDeviceInfo();
+     // if(isMeteo ()) return PrintMeteo();
+     printf(" NonPos:%d\n", Status.ReportType); }
 
    void PrintDeviceInfo(void) const
    { printf("%c:%06lX R%c%c%c:",
@@ -622,9 +711,9 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      { memcpy(Msg+Len, ",RELAY*", 7); Len+=7; }
      Msg[Len++] = ':';
 
-     if(Header.NonPos && Status.ReportType>1) { Msg[Len]=0; return 0; } // give up if neither position nor status nor info
+     if(Header.NonPos && !isStatus() && !isInfo() && !isMeteo()) { Msg[Len]=0; return 0; } // give up if neither position nor status nor info
 
-     if(Position.Time<60)
+     if(!Header.NonPos && Position.Time<60)
      // { uint32_t DayTime=Time%86400; int Sec=DayTime%60;           // second of the time the packet was recevied
      //   int DiffSec=Position.Time-Sec; if(DiffSec>4) DiffSec-=60;  // difference should always be zero or negative, but can be small positive for predicted positions
      //   Time+=DiffSec; }                                           // get out the correct position time
@@ -636,13 +725,14 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      if(Header.NonPos)                                            // status and info packets
      {      if(isStatus()) Len+=PrintDeviceStatus(Msg+Len);
        else if(isInfo()  ) Len+=PrintDeviceInfo(Msg+Len);
+       else if(isMeteo() ) Len+=PrintMeteo(Msg+Len);
        Msg[Len]=0; return Len; }
 
      if(Header.Encrypted)                                         // encrypted packets
      { Msg[Len++]=' ';
        for(int Idx=0; Idx<4; Idx++)
        { Len+=EncodeAscii85(Msg+Len, Data[Idx]); }
-       /* Msg[Len++]='\n'; */ Msg[Len]=0; return Len; }
+       Msg[Len]=0; return Len; }
 
      const char *Icon = getAprsIcon(Position.AcftType);
 
@@ -708,9 +798,11 @@ class OGN1_Packet          // Packet structure for the OGN tracker
 
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
    int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon, uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
-   { LatDist = ((DecodeLatitude()-RefLat)*1517+0x1000)>>13;           // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
+   { LatDist = DecodeLatitude()-RefLat; if(abs(LatDist)>1080000) return -1; // to prevent overflow, corresponds to about 200km
+     LatDist = (LatDist*1517+0x1000)>>13;              // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
      if(abs(LatDist)>MaxDist) return -1;
-     LonDist = ((DecodeLongitude()-RefLon)*1517+0x1000)>>13;
+     LonDist = DecodeLongitude()-RefLon; if(abs(LatDist)>1080000) return -1;
+     LonDist = (LonDist*1517+0x1000)>>13;
      if(abs(LonDist)>(4*MaxDist)) return -1;
              LonDist = (LonDist*LatCos+0x800)>>12;
      if(abs(LonDist)>MaxDist) return -1;

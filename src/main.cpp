@@ -739,7 +739,7 @@ void setup()
   xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(Radio_Task     ,  "RF"   ,  3000, NULL, 2, NULL);  // transmit/receive packets
+  xTaskCreate(Radio_Task  ,  "RF"   ,  3000, NULL, 2, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
