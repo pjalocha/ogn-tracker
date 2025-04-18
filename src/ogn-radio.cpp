@@ -102,11 +102,23 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, const uint8_t *SYNC, uint8_t SYN
   if(State) ErrState=State;
   State=Radio.setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
   if(State) ErrState=State;
+#ifdef WITH_SX1262
   State=Radio.setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
   if(State) ErrState=State;
-  State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
+#endif
+#ifdef WITH_SX1276
+  State=Radio.setRxBandwidth(200.0);                                // [kHz]  bandwidth - single side
   if(State) ErrState=State;
-  State=Radio.setPreambleLength(8);                                 // [bits] minimal preamble
+  State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
+  if(State) ErrState=State;
+  State=Radio.setAFC(1);                                            // enable AFC
+  if(State) ErrState=State;
+  State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+  if(State) ErrState=State;
+#endif
+  State=Radio.setPreambleLength(16);                                // [bits] minimal preamble
+  if(State) ErrState=State;
+  State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);                   //
   if(State) ErrState=State;
   State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
   if(State) ErrState=State;
@@ -206,7 +218,7 @@ static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // tran
 
 static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef) // check if there is a new packet received
 { if(!Radio_IRQ()) return 0;                                             // use the IRQ line: not raised, then no received packet
-  FSK_RxPacket *RxPkt = FSK_RxFIFO.getWrite();                         // get place for a new packet in the queue
+  FSK_RxPacket *RxPkt = FSK_RxFIFO.getWrite();                           // get place for a new packet in the queue
 #ifdef WITH_SX1262
   uint32_t PktStat = Radio.getPacketStatus();                            // get RSSI
   Random.RX += PktStat;
@@ -217,6 +229,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
 #endif
 #ifdef WITH_SX1276
   RxPkt->RSSI = Radio.mod->SPIgetRegValue(RADIOLIB_SX127X_REG_RSSI_VALUE_FSK);
+  // float FreqErr = Radio.getAFCError();
   Random.RX += RxPkt->RSSI;
   // RxPkt->SNR  = 0;
 #endif
@@ -228,6 +241,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
   if(Manch)
   { Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
+    // Radio.startReceive();
     uint8_t PktIdx=0;
     for(uint8_t Idx=0; Idx<PktLen; Idx++)                                  // loop over packet bytes
     { uint8_t ByteH = Radio_RxPacket[PktIdx++];
@@ -239,6 +253,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   }
   else
   { Radio.readData(RxPkt->Data, PktLen);
+    // Radio.startReceive();
     for(uint8_t Idx=0; Idx<PktLen; Idx++)
       RxPkt->Err[Idx]=0;
   }
@@ -249,8 +264,8 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   Radio_RxCount[SysID]++;                                                // count packets
 #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
-  { Serial.printf("RadioRx: %6dms [%d:%2d:%d] %+4.1fdBm\n",
-             millis(), SysID, PktLen, Manch, -0.5*RxPkt->RSSI );
+  { Serial.printf("RadioRx: %5.3fs #%d [%d:%2d:%d] %+4.1fdBm\n",
+             1e-3*millis(), Channel, SysID, PktLen, Manch, -0.5*RxPkt->RSSI);
     xSemaphoreGive(CONS_Mutex); }
 #endif
   FSK_RxFIFO.Write();                                                  // complete the write into the queue of packets
@@ -288,6 +303,9 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
   Radio.standby();
   Radio_ConfigManchFSK(RxPktLen, RxSYNC, 8);         // configure for reception
   Radio.setFrequency(RxFreq);                        // set frequency
+#ifdef WITH_SX1276
+  // Radio.setAFC(0);                                            // enable AFC
+#endif
   Radio.startReceive();                              // start receiving
   XorShift64(Random.Word);                           // randomize
   if(TxPacket)
@@ -302,6 +320,9 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
     Radio.standby();
     Radio_ConfigManchFSK(RxPktLen, RxSYNC, 8);       // configure for receiving
     Radio.setFrequency(RxFreq);                      // set frequency
+#ifdef WITH_SX1276
+    // Radio.setAFC(0);                                            // enable AFC
+#endif
     Radio.startReceive();                            // start receiving again
     uint32_t msTime = millis()-msStart;
     if(msTime<msTimeLen) PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, 1, RxSysID, RxChannel, TimeRef); }
