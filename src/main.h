@@ -30,6 +30,10 @@ uint32_t getUniqueAddress(void);
 
 #include "parameters.h"
 
+#ifdef WITH_LORA32
+#include "heltec-lora32-pins.h"
+#endif
+
 #ifdef WITH_TBEAM07
 #include "t-beam-v07-pins.h"
 #endif
