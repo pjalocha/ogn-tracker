@@ -334,7 +334,7 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
 // =======================================================================================================
 
 // Radio setup for PilotAware: GFSK, 38.4kbps, +/-9.6kHz and ADS-L LDR
-static int Radio_ConfigLDR(uint8_t PktLen=7+PAW_Packet::Size+1, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=1)
+static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, const uint8_t *SYNC=PAW_SYNC, uint8_t SYNClen=1)
 { int ErrState=0; int State=0;
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
@@ -367,7 +367,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=7+PAW_Packet::Size+1, const uint8_t *S
   if(State) ErrState=State;
   State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
   if(State) ErrState=State;
-  State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
+  State=Radio.fixedPacketLengthMode(PktLen+8);                      // [bytes] Fixed packet size mode
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   State=Radio.disableAddressFiltering();                            // don't want any of such features
