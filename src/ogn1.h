@@ -1039,6 +1039,9 @@ class OGN1_Packet          // Packet structure for the OGN tracker
    void Whiten  (void) { TEA_Encrypt_Key0(Data, 8); TEA_Encrypt_Key0(Data+2, 8); } // whiten the position
    void Dewhiten(void) { TEA_Decrypt_Key0(Data, 8); TEA_Decrypt_Key0(Data+2, 8); } // de-whiten the position
 
+   void Whiten2 (void) { XXTEA_Encrypt_Key0(Data-1, 5, 6); }
+   void Dewhite2(void) { XXTEA_Decrypt_Key0(Data-1, 5, 6); }
+
   uint8_t getTxSlot(uint8_t Idx) const // Idx=0..15
   { const uint32_t *DataPtr = Data;
     uint32_t  Mask=1; Mask<<=Idx;
