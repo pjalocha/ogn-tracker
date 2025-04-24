@@ -1,23 +1,30 @@
-class Manch_RxPktData                 // Manchester encoed packet received by the RF chip
+class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
    static const uint8_t MaxBytes=40;  // [bytes] number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
    uint16_t msTime;                   // [ms] reception time since the PPS[Time]
-   // uint32_t PosTime;                  // [ms] position timestamp in terms of the system time
-   uint8_t Channel;                   // [   ] channel where the packet has been received
+   union
+   { uint16_t Flags;
+     struct
+     { uint8_t SysID   :4;            // [] 1=OGN, 2=ADS-L, ...
+       uint8_t Spare   :2;
+       bool Manchester :1;            // ADS-L and OGN can be Manchester encoded or not
+       bool GoodCRC    :1;
+       uint8_t Channel;               // [   ] channel where the packet has been received
+     } __attribute__((packed)) ;
+   } __attribute__((packed)) ;
    uint8_t RSSI;                      // [-0.5dBm] receiver signal strength
     int8_t SNR;                       // [0.25dB]
     int8_t FreqErr;                   // [0.1kHz]
-   uint8_t Bytes;                     // []
-   uint8_t SysID;                     // [] 1=OGN, 2=ADS-L, ...
-   uint8_t Data[MaxBytes];            // Manchester decoded data bits/bytes
-   uint8_t Err [MaxBytes];            // Manchester decoding errors
+   uint8_t Bytes;                     // [bytes] actual packet size
+   uint8_t Data[MaxBytes];            // decoded data bits/bytes
+   uint8_t Err [MaxBytes];            // Manchester decoding errors (for systems with Manchester encoding)
 
   public:
 
    void Print(void (*CONS_UART_Write)(char), uint8_t WithData=0) const
    { // uint8_t ManchErr = Count1s(RxPktErr, 26);
-     Format_String(CONS_UART_Write, "RxPktData: ");
+     Format_String(CONS_UART_Write, "FSK_RxPacket: ");
      Format_HHMMSS(CONS_UART_Write, Time);
      CONS_UART_Write('+');
      Format_UnsDec(CONS_UART_Write, msTime, 4, 3);
@@ -68,5 +75,5 @@ class Manch_RxPktData                 // Manchester encoed packet received by th
     Packet.Correct= Check==0;
     return Check; }
 
-} ;
+} __attribute__((packed)) ;
 

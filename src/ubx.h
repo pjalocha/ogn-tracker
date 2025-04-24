@@ -247,50 +247,66 @@ class UBX_CFG_NAV5        // 0x06 0x24
   void setDynModel(uint8_t DynModel) { mask = 0x0001; dynModel=DynModel; } // only change the dynamic model
 } ;
 
+class UBX_CFG_PMS         // 0x06 0x86
+{ public:
+   uint8_t version;         // =0
+   uint8_t powerSetupValue; // 0=Full-power, 1=Balanced
+   uint16_t period;
+   uint16_t onTime;
+   uint8_t reserved[2];
+} ;
+
+class UBX_MON_VER        // 0x0A 0x04
+{ public:
+   char swVersion[30];    // null-term string
+   char hwVersion[10];    // null-term string
+   char extension[7][30]; // up to 7 extension names/versions
+} ;
+
 // UBX Class packet numbers
 const uint8_t UBX_NAV = 0x01; // navigation
 const uint8_t UBX_ACK = 0x05; // acknoledgement of configuration
 const uint8_t UBX_CFG = 0x06; // configuration
+const uint8_t UBX_MON = 0x0A; //
 
 class UBX_RxMsg // receiver for the UBX sentences
 { public:
    // most information in the UBX packets is already aligned to 32-bit boundary
    // thus it makes sense to have the packet so aligned when receiving it.
-   static const uint8_t MaxWords=32; // 10;   // maximum number of 32-bit words (excl. head and tail)
-   static const uint8_t MaxBytes=4*MaxWords; // max. number of bytes
+   static const uint16_t MaxWords=64;         // maximum number of 32-bit words (excl. head and tail)
+   static const uint16_t MaxBytes=4*MaxWords; // max. number of bytes
    static const uint8_t SyncL=0xB5;    // UBX sync bytes
    static const uint8_t SyncH=0x62;
 
+   uint8_t  Class;                     // Class (01=NAV)
+   uint8_t  ID;                        // ID
+   uint16_t Bytes;                     // number of bytes in the packet (excl. head and tail)
    union
    { uint32_t Word[MaxWords];          // here we store the UBX packet (excl. head and tail)
      uint8_t  Byte[MaxBytes]; } ;
-   uint8_t  Class;                     // Class (01=NAV)
-   uint8_t  ID;                        // ID
-   uint8_t  Bytes;                     // number of bytes in the packet (excl. head and tail)
 
   private:
-   uint8_t Padding;                    // just to make the structure size be a multiple of 4-bytes
-   uint8_t State;                      // bits: 0:loading, 1:complete, 2:locked,
-   uint8_t Idx;                        // loading index
-
    uint8_t CheckA;                     // UBX check sum (two bytes)
    uint8_t CheckB;
+
+   uint8_t State;                      // bits: 0:loading, 1:complete, 2:locked,
+   uint16_t Idx;                       // loading index
+
    void CheckInit(void) { CheckA=0; CheckB=0; }                   // initialize the checksum
    void CheckPass(uint8_t Byte) { CheckA+=Byte; CheckB+=CheckA; } // pass a byte through the checksum
 
   public:
+   UBX_RxMsg() { Clear(); }
+
+   void Clear(void) { Idx=0; State=0; CheckInit(); }
+
    void RecalcCheck(void)
    { CheckInit();
      CheckPass(Class); CheckPass(ID); CheckPass(Bytes); CheckPass(0x00);
-     for(uint8_t Idx=0; Idx<Bytes; Idx++) CheckPass(Byte[Idx]); }
+     for(uint16_t Idx=0; Idx<Bytes; Idx++) CheckPass(Byte[Idx]); }
 
-   inline void Clear(void) { Idx=0; State=0; CheckInit(); }
-
-   uint8_t isLoading(void) const
-     { return State&0x01; }
-
-   uint8_t isComplete(void) const
-     { return State&0x02; }
+   uint8_t isLoading(void)  const { return State&0x01; }
+   uint8_t isComplete(void) const { return State&0x02; }
 
    void ProcessByte(uint8_t RxByte) // pass all bytes through this call and it will build the frame
      {
@@ -311,11 +327,11 @@ class UBX_RxMsg // receiver for the UBX sentences
          case 4: // LSB of packet length
             Bytes=RxByte; CheckPass(RxByte); if(Bytes>MaxBytes) { Clear(); return; }
             break;
-         case 5: // MSB of packet length (expect zero)
-            CheckPass(RxByte); if(RxByte!=0) { Clear(); return; }
+         case 5: // MSB of packet length
+            Bytes|=(uint16_t)RxByte<<8; CheckPass(RxByte); if(Bytes>MaxBytes) { Clear(); return; }
             break;
          default:                         // past the header, now load the packet content
-            uint8_t ByteIdx=Idx-6;
+            uint16_t ByteIdx=Idx-6;
             if(ByteIdx<Bytes)
             { Byte[ByteIdx]=RxByte; CheckPass(RxByte); }
             else if(ByteIdx==Bytes)        // already past the content, now the first checksum byte
@@ -336,14 +352,14 @@ class UBX_RxMsg // receiver for the UBX sentences
      (*SendByte)(Class);
      (*SendByte)(ID);
      (*SendByte)(Bytes);
-     (*SendByte)(0x00);
-     for(uint8_t Idx=0; Idx<Bytes; Idx++)
+     (*SendByte)(Bytes>>8);
+     for(uint16_t Idx=0; Idx<Bytes; Idx++)
      { (*SendByte)(Byte[Idx]); }
      (*SendByte)(CheckA);
      (*SendByte)(CheckB);
    }
 
-   static void Send(uint8_t Class, uint8_t ID, void (*SendByte)(char), const uint8_t *Data=0, uint8_t DataLen=0)
+   static void Send(uint8_t Class, uint8_t ID, void (*SendByte)(char), const uint8_t *Data=0, uint16_t DataLen=0)
    { (*SendByte)(SyncL);
      (*SendByte)(SyncH);
      (*SendByte)(Class);
@@ -352,13 +368,16 @@ class UBX_RxMsg // receiver for the UBX sentences
      (*SendByte)(ID);
      CheckA += ID;             // pass ID through check sum
      CheckB += CheckA;
-     (*SendByte)(DataLen);
-     CheckA += DataLen;
+     uint8_t LenByte=DataLen;
+     (*SendByte)(LenByte);
+     CheckA += LenByte;
      CheckB += CheckA;         // pass DataLen LSB
-     (*SendByte)(0x00);
+     LenByte=DataLen>>8;
+     (*SendByte)(LenByte);
+     CheckA += LenByte;
      CheckB += CheckA;         // pass DataLen MSB = 0x00
      if(Data)
-     { for(uint8_t Idx=0; Idx<DataLen; Idx++)
+     { for(uint16_t Idx=0; Idx<DataLen; Idx++)
        { (*SendByte)(Data[Idx]);
          CheckA += Data[Idx];
          CheckB += CheckA; }
@@ -367,9 +386,38 @@ class UBX_RxMsg // receiver for the UBX sentences
      (*SendByte)(CheckB);
    }
 
+   static uint8_t Send(uint8_t Class, uint8_t ID, uint8_t *Out, const uint8_t *Data=0, uint16_t DataLen=0)
+   { uint8_t Len=0;
+     Out[Len++] = SyncL;
+     Out[Len++] = SyncH;
+     Out[Len++] = Class;
+     uint8_t CheckA = Class;   // pass Class through check sum
+     uint8_t CheckB = CheckA;
+     Out[Len++] = ID;
+     CheckA += ID;             // pass ID through check sum
+     CheckB += CheckA;
+     uint8_t LenByte=DataLen;
+     Out[Len++] = LenByte;
+     CheckA += LenByte;
+     CheckB += CheckA;         // pass DataLen LSB
+     LenByte=DataLen>>8;
+     Out[Len++] = LenByte;
+     CheckA += LenByte;
+     CheckB += CheckA;         // pass DataLen MSB = 0x00
+     if(Data)
+     { for(uint16_t Idx=0; Idx<DataLen; Idx++)
+       { Out[Len++] = Data[Idx];
+         CheckA += Data[Idx];
+         CheckB += CheckA; }
+     }
+     Out[Len++] = CheckA;      // send the check sum
+     Out[Len++] = CheckB;
+     return Len; }
+
    bool isNAV(void) const { return Class==0x01; }
    bool isACK(void) const { return Class==0x05; }
    bool isCFG(void) const { return Class==0x06; }
+   bool isMON(void) const { return Class==0x0A; }
 
    bool isNAV_POSLLH (void) const { return isNAV() && (ID==0x02) && (Bytes==sizeof(UBX_NAV_POSLLH)); }
    bool isNAV_STATUS (void) const { return isNAV() && (ID==0x03); }
@@ -385,6 +433,8 @@ class UBX_RxMsg // receiver for the UBX sentences
    bool isCFG_PRT    (void) const { return isCFG() && (ID==0x00); }
    bool isCFG_SBAS   (void) const { return isCFG() && (ID==0x16); }
    bool isCFG_NAV5   (void) const { return isCFG() && (ID==0x24); }
+
+   bool isMON_VER    (void) const { return isMON() && (ID==0x04); }
 } ;
 
 
