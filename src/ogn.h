@@ -932,6 +932,7 @@ class GPS_Position: public GPS_Time
       bool hasGSV   :1;
       bool isReady  :1;         // is ready for the following treaement
       bool Sent     :1;         // has been transmitted
+      bool hasGeoidSepar;       // some GPSes do not send the Geoid Separation
       bool hasBaro  :1;         // pressure sensor information: pressure, standard pressure altitude, temperature
       bool hasHum   :1;         // has humidity (not all baro have humiditiy)
       bool hasClimb :1;         // has climb-rate computed or measured
@@ -1897,7 +1898,9 @@ class GPS_Position: public GPS_Time
 
    int8_t ReadGeoidSepar(char Unit, const char *Value)
    { if(Unit!='M') return -1;
-     return Read_Float1(GeoidSeparation, Value); }   // GeoidSepar units: 0.1 meter
+     int8_t Len=Read_Float1(GeoidSeparation, Value); // GeoidSepar units: 0.1 meter
+     hasGeoidSepar=Len>0;                            // some GPSes miss the Geoid Seapration value
+     return Len; }
 
    int8_t ReadSpeed(const char *Value)
    { int32_t Knots;

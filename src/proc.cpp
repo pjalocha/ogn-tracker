@@ -467,8 +467,8 @@ static void ProcessRxPacket(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacket
   }
 }
 
-static void DecodeRxPacket(Manch_RxPktData *RxPkt)
-{
+static void DecodeRxPacket(FSK_RxPacket *RxPkt)
+{ if(RxPkt->SysID!=Radio_SysID_OGN) return;                     // ignore all but OGN
   uint8_t RxPacketIdx  = RelayQueue.getNew();                   // get place for this new packet
   OGN_RxPacket<OGN_Packet> *RxPacket = RelayQueue[RxPacketIdx];
   // PrintRelayQueue(RxPacketIdx);                              // for debug
@@ -525,21 +525,21 @@ void vTaskPROC(void* pvParameters)
   for( ; ; )
   { vTaskDelay(1);
 
-    Manch_RxPktData *RxPkt = Manch_RxFIFO.getRead();                     // check for new received packets
-    if(RxPkt)                                                           // if there is a new received packet
+    FSK_RxPacket *RxPkt = FSK_RxFIFO.getRead();                        // check for new received packets
+    if(RxPkt)                                                          // if there is a new received packet
     {
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
       CONS_UART_Write('.');
       Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
-      Format_String(CONS_UART_Write, " RF_RxFIFO -> ");
+      Format_String(CONS_UART_Write, " FSK_RxFIFO -> ");
       RxPkt->Print(CONS_UART_Write);
       // CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex);
 #endif
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
-      Manch_RxFIFO.Read(); }                                               // remove this packet from the queue
+      FSK_RxFIFO.Read(); }                                              // remove this packet from the queue
 
     static uint32_t PrevSlotTime=0;                                     // remember previous time slot to detect a change
     uint32_t     Time;                                                  // [sec] time slot
