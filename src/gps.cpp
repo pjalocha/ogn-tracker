@@ -534,7 +534,7 @@ static void GPS_BurstComplete(void)                                        // wh
     }
     GPS_Satellites=GPS_Pos[GPS_PosIdx].Satellites;
     if(GPS_Pos[GPS_PosIdx].isValid())                                         // position is complete and locked
-    { if(Parameters.manGeoidSepar)                                            // if GeoidSepar is "manual" - this implies the GPS does not correct for it
+    { if(!GPS_Pos[GPS_PosIdx].hasGeoidSepar || Parameters.manGeoidSepar)      // if GeoidSepar is "manual" - this implies the GPS does not correct for it
       { GPS_Pos[GPS_PosIdx].GeoidSeparation = Parameters.GeoidSepar;          // copy the manually set GeoidSepar
         GPS_Pos[GPS_PosIdx].Altitude -= Parameters.GeoidSepar; }              // correct the Altitude - we likely need a separate flag for this
       GPS_Pos[GPS_PosIdx].calcLatitudeCosine();
