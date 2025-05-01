@@ -582,11 +582,10 @@ class OGN_PPM_Packet                                        // OGN packet with F
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-template<class OGNx_Packet, uint8_t Size=8>
- class OGN_PrioQueue
+template<class PacketType, uint8_t Size=16>
+ class Relay_PrioQueue
 { public:
-   // static const uint8_t Size = 8;            // number of packets kept
-   OGN_RxPacket<OGNx_Packet> Packet[Size];   // OGN packets
+   PacketType           Packet[Size];        // OGN packets
    uint16_t             Sum;                 // sum of all ranks
    uint8_t              Low, LowIdx;         // the lowest rank and the index of it
 
@@ -596,7 +595,7 @@ template<class OGNx_Packet, uint8_t Size=8>
      { Packet[Idx].Clear(); }
      Sum=0; Low=0; LowIdx=0; }                                                // clear the rank sum, lowest rank
 
-   OGN_RxPacket<OGNx_Packet> * operator [](uint8_t Idx) { return Packet+Idx; }
+   PacketType * operator [](uint8_t Idx) { return Packet+Idx; }
 
    uint8_t getNew(void)                                                       // get (index of) a free or lowest rank packet
    { Sum-=Packet[LowIdx].Rank; Packet[LowIdx].Rank=0; Low=0; return LowIdx; } // remove old packet from the rank sum
@@ -607,8 +606,8 @@ template<class OGNx_Packet, uint8_t Size=8>
      { if(Packet[Idx].Alloc) Count++; }
      return Count; }
 
-   OGN_RxPacket<OGNx_Packet> *addNew(uint8_t NewIdx)                          // add the new packet to the queue
-   { OGN_RxPacket<OGNx_Packet> *Prev = 0;
+   PacketType *addNew(uint8_t NewIdx)                                         // add the new packet to the queue
+   { PacketType *Prev = 0;
      Packet[NewIdx].Alloc=1;                                                  // mark this clot as allocated
      uint32_t AddressAndType = Packet[NewIdx].Packet.getAddressAndType();     // get ID of this packet: ID is address-type and address (2+24 = 26 bits)
      for(uint8_t Idx=0; Idx<Size; Idx++)                                      // look for other packets with same ID
@@ -680,6 +679,8 @@ template<class OGNx_Packet, uint8_t Size=8>
      Out[Len++]='\n'; Out[Len]=0; return Len; }
 
 } ;
+
+// ---------------------------------------------------------------------------------------------------------------------
 
 class GPS_Time
 { public:

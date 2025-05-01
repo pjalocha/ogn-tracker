@@ -45,11 +45,11 @@ class FANET_Packet
      if(Pref==0x08 || Pref==0x11 || Pref==0x20 || Pref==0xDD || Pref==0xDE || Pref==0xDF) return 2;
      return 3; }
 
-   void setAddress(uint32_t Addr) { setAddrPref(Addr>>16); setAddrLow(Addr); }
-   void setAddrPref(uint8_t Prefix) { Byte[1]=Prefix; }
-   void setAddrLow(uint16_t Addr  ) { Byte[2]=Addr; Byte[3]=Addr>>8; }
+   void setAddress(uint32_t Addr) { setAddrPref(Addr>>16); setAddrLow(Addr); }   // full 24-bit address
+   void setAddrPref(uint8_t Prefix) { Byte[1]=Prefix; }                          // address prefix
+   void setAddrLow(uint16_t Addr  ) { Byte[2]=Addr; Byte[3]=Addr>>8; }           // lower 16-bits of the address
    void setHeader(uint8_t Type) { Byte[0] = 0x40 | (Type&0x3F); }
-   void setType(uint8_t Type) { Byte[0] = (Byte[0]&0xC0) | (Type&0x3F); }
+   void setType(uint8_t Type) { Byte[0] = (Byte[0]&0xC0) | (Type&0x3F); }        // packet-type: 1=air-position
 
    uint8_t ExtHeaderLen(void) const // length ot the extended header (zero in most cases)
    { if(!ExtHeader()) return 0;
@@ -60,7 +60,8 @@ class FANET_Packet
 
   uint8_t MsgOfs(void) const { return 4+ExtHeaderLen(); }              // offset to the actual message (past the header and ext. header)
   uint8_t MsgLen(void) const { return Len-4-ExtHeaderLen(); }          // length of the actual message
-  const uint8_t *Msg(void) const { return Byte+MsgOfs(); }
+  const uint8_t *Msg(void) const { return Byte+MsgOfs(); }             // pointer to the message, past the header
+  uint8_t *Msg(void)         { return Byte+MsgOfs(); }
 
   void setName(const char *Name)
   { setHeader(2);
@@ -190,6 +191,25 @@ class FANET_Packet
   uint8_t WriteFNNGB(char *Out)
   { return 0; }
 
+  int DecodePosition(float &Lat, float &Lon, int &Alt)
+  { uint8_t Idx=MsgOfs();
+    if(Type()==1)
+    { Lat = FloatCoord(getLat(Byte+Idx));
+      Lon = FloatCoord(getLon(Byte+Idx+3));
+      Alt = getAltitude(Byte+Idx+6);
+      return 3; }
+    if(Type()==7)
+    { Lat = FloatCoord(getLat(Byte+Idx));
+      Lon = FloatCoord(getLon(Byte+Idx+3));
+      Alt = 0;
+      return 2; }
+    return 0; }
+
+  int Print(char *Out) const
+  { int OutLen=0;
+    OutLen+=sprintf(Out+OutLen, "[%2d:%d:%2d] FNT%06X", Len, Type(), MsgLen(), getAddr());
+    Out[OutLen]=0; return OutLen; }
+
   void Print(const char *Name=0) const
   { if(Name) printf("%s ", Name);
     printf("[%2d:%d:%2d] FNT%06X", Len, Type(), MsgLen(), getAddr());
@@ -260,7 +280,7 @@ class FANET_Packet
       Byte[Len] = (Upp<<4) | Low; Inp+=2; }                          // new byte, count input
     return Len; }                                                    // return number of bytes read = packet length
 
-   static int32_t CoordUBX(int32_t Coord) { return ((int64_t)900007296*Coord+0x20000000)>>30; } // convert FANET-cordic to UBX 10e-7deg units
+   static int32_t CoordUBX(int32_t Coord) { return ((int64_t)900007296*Coord+0x20000000)>>30; } // convert FANET-cordic to UBX 1e-7deg units
                                                 // ((int64_t)900000000*Coord+0x20000000)>>30;   // this is the exact formula, but FANET is not exact here
 
    static int Format_Lat(char *Str, int32_t Lat, char &HighRes) // format latitude after APRS

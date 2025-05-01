@@ -3,9 +3,8 @@
 
 #include <stdlib.h>
 #include <math.h>
-// #include <string.h>
-// #include "radiodemod.h"
-// #include "intmath.h"
+#include <string.h>
+#include "intmath.h"
 #include "ognconv.h"
 #include "bitcount.h"
 #include "format.h"
@@ -120,6 +119,7 @@ class ADSL_Packet
 
    } ;
    uint8_t CRC[3];           // 24-bit (is aligned to 32-bit)
+   uint8_t Spare;            // to make the overall size a multiple of 32-bit words
 
 // --------------------------------------------------------------------------------------------------------
 
@@ -230,9 +230,6 @@ class ADSL_Packet
        Len+=Format_Hex(Out+Len, Byte[Idx]);
      return Len; }
 
-   uint8_t  getRelay(void)     const { return Address[3]&0x80; }
-   void     setRelay(uint8_t Relay)  { Address[3] = (Address[3]&0x7F) | (Relay<<7); }
-
    static uint32_t get3bytes(const uint8_t *Byte) { int32_t Word=Byte[2]; Word<<=8; Word|=Byte[1]; Word<<=8; Word|=Byte[0]; return Word; }
    static void     set3bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; }
 
@@ -243,7 +240,18 @@ class ADSL_Packet
      uint32_t D = Byte[3];
      return A | (B<<8) | (C<<16) | (D<<24); }
 
-   static void     set4bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; Byte[3]=Word>>24; }
+   static void set4bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; Byte[3]=Word>>24; }
+
+   bool      isRelay(void)     const { return Address[3]&0x80; }
+   void     setRelay(uint8_t Relay)  { Address[3] = (Address[3]&0x7F) | (Relay<<7); }
+
+   bool isUnicast(void) const { return Type&0x80; }
+   bool isPos(void) const     { return (Type&0x7F)==0x02; }
+
+   uint32_t getAddressAndType(void) const
+   { uint32_t Addr=getAddrTable();
+     Addr = (Addr<<24) | getAddress();
+     return Addr; }
 
    uint32_t getAddress(void) const
    { uint32_t Addr = get4bytes(Address); return (Addr>>6)&0x00FFFFFF; }
@@ -497,7 +505,7 @@ class ADSL_Packet
      Len+=Format_String(JSON+Len, ",\"alt_hae_m\":");
      Len+=Format_SignDec(JSON+Len, getAlt(), 1, 0, 1);
 
-     if(getRelay()) Len+=Format_String(JSON+Len, ",\"relay\":1");
+     if(isRelay()) Len+=Format_String(JSON+Len, ",\"relay\":1");
 
      Len+=Format_String(JSON+Len, ",\"NACp\":");
      JSON[Len++]='0'+HorizAccuracy;
@@ -670,18 +678,66 @@ class ADSL_Packet
 
 } __attribute__((packed));
 
-class ADSL_RxPacket: public ADSL_Packet
+
+class ADSL_RxPacket
 { public:
-   uint32_t  sTime;         // [ s] reception time
-   uint16_t msTime;         // [ms]
-    int8_t RSSI;            // [dBm]
-   uint8_t BitErr;          // number of bit errors
+   ADSL_Packet Packet;
+
+   union
+   { uint8_t State;       // state bits and small values
+     struct
+     { // bool Saved   :1;   // has been already saved in internal storage
+       // bool Ready   :1;   // is ready for transmission
+       // bool Sent    :1;   // has already been transmitted out
+       bool Alloc   :1;   // allocated in a queue or list
+       bool Correct :1;   // correctly received or corrected by FEC
+       uint8_t RxErr:4;   // number of bit errors corrected upon reception
+       uint8_t Warn :2;   // LookOut warning level
+     } ;
+   } ;
+
+   uint8_t RxChan;        // RF channel where the packet was received
+   uint8_t RxRSSI;        // [-0.5dBm]
+   uint8_t Rank;          // rank: low altitude and weak signal => high rank
+
+   int16_t LatDist;       // [m] distance along the latitude
+   int16_t LonDist;       // [m] distance along the longitude
 
   public:
-   void setTime(double RxTime) { sTime=floor(RxTime); msTime=floor(1000.0*(RxTime-sTime)); }
-   double getTime(void) const { return (double)sTime+0.001*msTime; }
-   uint32_t SlotTime(void) const { uint32_t Slot=sTime; if(msTime<=300) Slot--; return Slot; }
+   ADSL_RxPacket() { Clear(); }
+   void Clear(void) { Packet.Init(); State=0; Rank=0; }
+
+   // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
+   int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon,
+              uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
+   { LatDist = Packet.getLatOGN()-RefLat; if(abs(LatDist)>1080000) return -1; // to prevent overflow, corresponds to about 200km
+     LatDist = (LatDist*1517+0x1000)>>13;     // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
+     if(abs(LatDist)>MaxDist) return -1;
+     LonDist = Packet.getLonOGN()-RefLon; if(abs(LatDist)>1080000) return -1;
+     LonDist = (LonDist*1517+0x1000)>>13;
+     if(abs(LonDist)>(4*MaxDist)) return -1;
+             LonDist = (LonDist*LatCos+0x800)>>12;
+     if(abs(LonDist)>MaxDist) return -1;
+     return 1; }
+
+   void calcRelayRank(int32_t RxAltitude)                               // [m] altitude of reception
+   { // if(Packet.Header.Emergency) { Rank=0xFF; return; }                 // emergency packets always highest rank
+     Rank=0;
+     if(!Packet.isPos())      return;                               // only relay position packets
+     if(Packet.TimeStamp>=60) return;                               // don't relay packets with unknown time - but maybe we shoul>
+     if(Packet.isRelay())     return;                               // no rank for relayed packets (only single relay)
+     if(RxRSSI>128)                                                     // [-0.5dB] weaker signal => higher rank
+       Rank += (RxRSSI-128)>>2;                                         // 1point/2dB less signal
+     // if(Packet.Header.Encrypted)  return;                               // for exncrypted packets we only take signal strength
+     RxAltitude -= Packet.getAlt();                                     // [m] receiver altitude - target altitude
+     if(RxAltitude>0)                                                   // 
+       Rank += RxAltitude>>6;                                           // 1points/64m of altitude below
+     int16_t ClimbRate = Packet.getClimb();                             // [0.1m/s] higher sink rate => higher rank
+     if(ClimbRate<0)
+       Rank += (-ClimbRate)>>3;                                         // 1point/1m/s of sink
+   }
 
 } __attribute__((packed));
+
 
 #endif // __ADSL_H__

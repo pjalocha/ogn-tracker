@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <string.h>
+
 class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
    static const uint8_t MaxBytes=40;  // [bytes] number of bytes in the packet
@@ -6,11 +9,11 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
    union
    { uint16_t Flags;
      struct
-     { uint8_t SysID   :4;            // [] 1=OGN, 2=ADS-L, ...
+     { uint8_t Channel;               // [   ] channel where the packet has been received
+       uint8_t SysID   :4;            // [] 1=OGN, 2=ADS-L, ...
        uint8_t Spare   :2;
-       bool Manchester :1;            // ADS-L and OGN can be Manchester encoded or not
-       bool GoodCRC    :1;
-       uint8_t Channel;               // [   ] channel where the packet has been received
+       bool Manchester :1;            // ADS-L and OGN are Manchester encoded on M-Band but not O-Band
+       bool GoodCRC    :1;            // correct CRC has been detected
      } __attribute__((packed)) ;
    } __attribute__((packed)) ;
    uint8_t RSSI;                      // [-0.5dBm] receiver signal strength
@@ -21,6 +24,26 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
    uint8_t Err [MaxBytes];            // Manchester decoding errors (for systems with Manchester encoding)
 
   public:
+
+   // shift to the left a series of bytes by given number of bits
+   static uint8_t BitShift(uint8_t *Data, uint8_t Bytes, uint8_t Shift)
+   { if(Shift==0) return Bytes;
+     uint8_t Ofs=Shift>>3; Shift-=Ofs<<3;
+     if(Shift==0) { Bytes-=Ofs; memmove(Data, Data+Ofs, Bytes); return Bytes; }
+     uint8_t CmplShift=8-Shift;
+     uint8_t Byte=Data[Ofs]<<Shift;
+     uint8_t Idx=0;
+     Bytes-=Ofs;
+     for( ; Idx<Bytes; Idx++)
+     { uint8_t SrcByte=Data[Idx+Ofs];
+       Data[Idx] = Byte | (SrcByte>>CmplShift);
+       Byte = SrcByte<<Shift; }
+     return Bytes; }
+
+   // shift Data and Err by given number of Bits
+   void BitShift(int Bits)
+   { BitShift(Data, Bytes, Bits);
+     Bytes=BitShift(Err, Bytes, Bits); }
 
    void Print(void (*CONS_UART_Write)(char), uint8_t WithData=0) const
    { // uint8_t ManchErr = Count1s(RxPktErr, 26);

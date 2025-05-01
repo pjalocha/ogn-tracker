@@ -56,8 +56,8 @@ class FreqPlan
    uint32_t getFrequency(uint32_t Time, uint8_t Slot=0, uint8_t OGN=1) const
    { uint8_t Channel=getChannel(Time, Slot, OGN); return BaseFreq+ChanSepar*Channel; } // return frequency [Hz] for given UTC time and slot
 
-   uint32_t getFreqOBAND(void) const
-   { if(Plan<=1) return 869525000;                                           // Europe and default is 869.525MHz
+   uint32_t getFreqOBAND(uint8_t Chan=2) const
+   { if(Plan<=1) return 869425000+50000*Chan;                                // Europe and default is 869.525MHz (5 channels for LDR)
      return 0; }
 
    uint32_t getFreqFANET(void) const

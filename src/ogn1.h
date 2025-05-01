@@ -797,9 +797,10 @@ class OGN1_Packet          // Packet structure for the OGN tracker
 #endif // __AVR__
 
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
-   int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon, uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
+   int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon,
+              uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
    { LatDist = DecodeLatitude()-RefLat; if(abs(LatDist)>1080000) return -1; // to prevent overflow, corresponds to about 200km
-     LatDist = (LatDist*1517+0x1000)>>13;              // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
+     LatDist = (LatDist*1517+0x1000)>>13;      // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
      if(abs(LatDist)>MaxDist) return -1;
      LonDist = DecodeLongitude()-RefLon; if(abs(LatDist)>1080000) return -1;
      LonDist = (LonDist*1517+0x1000)>>13;
