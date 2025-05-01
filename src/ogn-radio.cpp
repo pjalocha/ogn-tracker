@@ -113,7 +113,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(State) ErrState=State;
   State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
   if(State) ErrState=State;
-  State=Radio.setAFC(1);                                            // enable AFC
+  State=Radio.setAFC(0);                                            // enable AFC
   if(State) ErrState=State;
   State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
   if(State) ErrState=State;
