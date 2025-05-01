@@ -131,20 +131,36 @@ static void PrintRelayQueue(uint8_t Idx)                    // for debug
 
 static bool GetRelayPacket(OGN_TxPacket<OGN_Packet> *Packet)      // prepare a packet to be relayed
 { if(OGN_RelayQueue.Sum==0) return 0;                     // if no packets in the relay queue
-  XorShift32(Random.RX);                              // produce a new random number
+  XorShift32(Random.RX);                                  // produce a new random number
   uint8_t Idx=OGN_RelayQueue.getRand(Random.RX);          // get weight-random packet from the relay queue
   if(OGN_RelayQueue.Packet[Idx].Rank==0) return 0;        // should not happen ...
   memcpy(Packet->Packet.Byte(), OGN_RelayQueue[Idx]->Byte(), OGN_Packet::Bytes); // copy the packet
-  Packet->Packet.Header.Relay=1;                      // increment the relay count (in fact we only do single relay)
+  Packet->Packet.Header.Relay=1;                          // increment the relay count (in fact we only do single relay)
   // Packet->Packet.calcAddrParity();
   if(!Packet->Packet.Header.Encrypted) Packet->Packet.Whiten(); // whiten but only for non-encrypted packets
-  Packet->calcFEC();                                  // Calc. the FEC code => packet ready for transmission
+  Packet->calcFEC();                                      // Calc. the FEC code => packet ready for transmission
   // PrintRelayQueue(Idx);  // for debug
   OGN_RelayQueue.decrRank(Idx);                           // reduce the rank of the packet selected for relay
   return 1; }
 
-static void CleanRelayQueue(uint32_t Time, uint32_t Delay=20) // remove "old" packets from the relay queue
-{ OGN_RelayQueue.cleanTime((Time-Delay)%60); }            // remove packets 20(default) seconds into the past
+static bool GetRelayPacket(ADSL_Packet *Packet)           // prepare a packet to be relayed
+{ if(ADSL_RelayQueue.Sum==0) return 0;                    // if no packets in the relay queue
+  XorShift32(Random.RX);                                  // produce a new random number
+  uint8_t Idx=ADSL_RelayQueue.getRand(Random.RX);         // get weight-random packet from the relay queue
+  if(ADSL_RelayQueue.Packet[Idx].Rank==0) return 0;       // should not happen ...
+  *Packet = ADSL_RelayQueue[Idx]->Packet;
+  Packet->setRelay();
+  Packet->Scramble();
+  Packet->setCRC();
+  ADSL_RelayQueue.decrRank(Idx);                           // reduce the rank of the packet selected for relay
+  return 1; }
+
+static void CleanRelayQueue(uint32_t Time, uint32_t Delay=12) // remove "old" packets from the relay queue
+{ Time-=Delay;
+  uint8_t Sec = Time%60;
+  OGN_RelayQueue.cleanTime(Sec);                         // remove packets 20(default) seconds into the past
+  uint8_t qSec = Sec%15;
+  ADSL_RelayQueue.cleanTime(qSec<<2); }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
@@ -452,7 +468,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       xSemaphoreGive(Log_Mutex); }
 #endif
     }
-#endif
+#endif // WITH_PFLAA
 #ifdef WITH_MAVLINK
    MAV_ADSB_VEHICLE MAV_RxReport;
    RxPacket->Packet.Encode(&MAV_RxReport);
@@ -487,6 +503,39 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);                // add to the relay queue and get the previ>
     // Serial.printf("ProcessRxADSL: %02X:%06X [%+5d,%+5d]m\n",
     //          RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), LatDist, LonDist);
+#ifdef WITH_LOOKOUT
+    const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime);           // process the received target postion
+    if(Tgt) Warn=Tgt->WarnLevel;                                                      // remember warning level of this target
+    RxPacket->Warn = Warn>0;
+#ifdef WITH_GDL90
+    if(Tgt)
+    { Look.Write(GDL_REPORT, Tgt);                                                    // produce GDL90 report for this target
+      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      GDL_REPORT.Send(CONS_UART_Write, 20);                                           // transmit as traffic position report (not own-ship)
+      xSemaphoreGive(CONS_Mutex); }
+#endif
+#ifdef WITH_BEEPER
+    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+#endif
+#else // if not WITH_LOOKOUT
+#ifdef WITH_BEEPER
+    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+#endif
+#endif // WITH_LOOKOUT
+/*
+#ifdef WITH_PFLAA
+    if( Parameters.Verbose    // print PFLAA on the console for received packets
+#ifdef WITH_LOOKOUT
+    && (!Tgt)
+#endif
+    )
+    { uint8_t Len=RxPacket->WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.DecodeAltitude()-GPS_Altitude/10);
+      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      Format_String(CONS_UART_Write, Line, 0, Len);
+      xSemaphoreGive(CONS_Mutex);
+    }
+#endif
+*/
   }
 }
 
@@ -696,17 +745,6 @@ void vTaskPROC(void* pvParameters)
       TxPacket->Packet.Whiten();                                              // just whiten if there is no encryption
 #endif // WITH_ENCRYPT
       TxPacket->calcFEC();                                                    // calculate FEC code
-#ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      // Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
-      // CONS_UART_Write('.');
-      // Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
-      Format_UnsDec(CONS_UART_Write, PosTime);
-      Format_String(CONS_UART_Write, " (*) TxFIFO <- ");
-      Format_Hex(CONS_UART_Write, TxPacket->Packet.HeaderWord);
-      CONS_UART_Write('\r'); CONS_UART_Write('\n');
-      xSemaphoreGive(CONS_Mutex);
-#endif // WITH_ENCRYPT
       XorShift32(Random.RX);
       static uint8_t TxBackOff=0;
       if(TxBackOff) TxBackOff--;
@@ -914,20 +952,8 @@ void vTaskPROC(void* pvParameters)
     while(OGN_TxFIFO.Full()<2)
     { OGN_TxPacket<OGN_Packet> *RelayPacket = OGN_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
-      // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      // Format_String(CONS_UART_Write, "Relayed: ");
-      // Format_Hex(CONS_UART_Write, RelayPacket->Packet.HeaderWord);
-      // CONS_UART_Write('\r'); CONS_UART_Write('\n');
-      // xSemaphoreGive(CONS_Mutex);
-#ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, "TxFIFO: ");
-      Format_Hex(CONS_UART_Write, RelayPacket->Packet.HeaderWord);
-      CONS_UART_Write('\r'); CONS_UART_Write('\n');
-      xSemaphoreGive(CONS_Mutex);
-#endif // DEBUG_PRINT
-      OGN_TxFIFO.Write();
-    }
+      OGN_TxFIFO.Write(); }
+
     CleanRelayQueue(SlotTime);
 
   }

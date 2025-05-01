@@ -242,8 +242,8 @@ class ADSL_Packet
 
    static void set4bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; Byte[3]=Word>>24; }
 
-   bool      isRelay(void)     const { return Address[3]&0x80; }
-   void     setRelay(uint8_t Relay)  { Address[3] = (Address[3]&0x7F) | (Relay<<7); }
+   bool isRelay(void)     const { return Address[3]&0x80; }
+   void setRelay(uint8_t Relay=1)  { Address[3] = (Address[3]&0x7F) | (Relay<<7); }
 
    bool isUnicast(void) const { return Type&0x80; }
    bool isPos(void) const     { return (Type&0x7F)==0x02; }
@@ -706,6 +706,8 @@ class ADSL_RxPacket
   public:
    ADSL_RxPacket() { Clear(); }
    void Clear(void) { Packet.Init(); State=0; Rank=0; }
+
+   uint8_t PosTime(void) const { return Packet.TimeStamp; }    // [1/4sec] short timestamp 0.00..14.75 sec
 
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
    int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon,

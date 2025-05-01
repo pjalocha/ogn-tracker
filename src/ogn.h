@@ -235,6 +235,8 @@ template <class OGNx_Packet=OGN1_Packet>
            +Count1s(FEC[0]^RefPacket.FEC[0])
            +Count1s((FEC[1]^RefPacket.FEC[1])&0xFFFF); }
 
+   uint8_t PosTime(void) const { return Packet.Position.Time; }
+
    void calcRelayRank(int32_t RxAltitude)                               // [m] altitude of reception
    { if(Packet.Header.Emergency) { Rank=0xFF; return; }                 // emergency packets always highest rank
      Rank=0;
@@ -646,7 +648,7 @@ template<class PacketType, uint8_t Size=16>
    void cleanTime(uint8_t Time)                                                // clean up slots of given Time
    { for(int Idx=0; Idx<Size; Idx++)
      { if(Packet[Idx].Alloc==0) continue;
-       uint8_t PktTime=Packet[Idx].Packet.Position.Time;
+       uint8_t PktTime=Packet[Idx].PosTime(); // Packet.Position.Time;
        if( PktTime==Time || PktTime>=60) clean(Idx);
      }
    }
