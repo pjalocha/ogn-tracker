@@ -745,13 +745,21 @@ void vTaskPROC(void* pvParameters)
       TxPacket->Packet.Whiten();                                              // just whiten if there is no encryption
 #endif // WITH_ENCRYPT
       TxPacket->calcFEC();                                                    // calculate FEC code
+      bool FloatAcft = Parameters.AcftType==3 || ( Parameters.AcftType>=0xB && Parameters.AcftType<=0xD);  // heli, balloon or drone
       XorShift32(Random.RX);
       static uint8_t TxBackOff=0;
       if(TxBackOff) TxBackOff--;
       else
       { OGN_TxFIFO.Write();                                                // complete the write into the TxFIFO
+        TxBackOff = 0;
+        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
+        if(Radio_TxCredit<=0) TxBackOff+=1; }
+      Position->Sent=1;
 #ifdef WITH_ADSL
-        if(Radio_FreqPlan.Plan<=1)                                         // ADS-L only in Europe/Africa
+      XorShift32(Random.RX);
+      { static uint8_t TxBackOff=0;
+        if(TxBackOff) TxBackOff--;
+        else if(Radio_FreqPlan.Plan<=1)                                         // ADS-L only in Europe/Africa
         { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
           Packet->Init();
           Packet->setAddress (Parameters.Address);
@@ -761,13 +769,11 @@ void vTaskPROC(void* pvParameters)
           Position->Encode(*Packet);
           Packet->Scramble();
           Packet->setCRC();
-          ADSL_TxFIFO.Write(); }
+          ADSL_TxFIFO.Write();
+          if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
+          if(Radio_TxCredit<=0) TxBackOff+=1; }
+      }
 #endif
-        TxBackOff = 0;
-        bool FloatAcft = Parameters.AcftType==3 || ( Parameters.AcftType>=0xB && Parameters.AcftType<=0xD);  // heli, balloon or drone
-        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
-        if(Radio_TxCredit<=0) TxBackOff+=1; }
-      Position->Sent=1;
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
@@ -953,6 +959,11 @@ void vTaskPROC(void* pvParameters)
     { OGN_TxPacket<OGN_Packet> *RelayPacket = OGN_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
       OGN_TxFIFO.Write(); }
+
+    while(ADSL_TxFIFO.Full()<2)
+    { ADSL_Packet *RelayPacket = ADSL_TxFIFO.getWrite();
+      if(!GetRelayPacket(RelayPacket)) break;
+      ADSL_TxFIFO.Write(); }
 
     CleanRelayQueue(SlotTime);
 
