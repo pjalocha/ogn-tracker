@@ -11,7 +11,11 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION 0.1.9
+#define VERSION "0.1.10"
+#endif
+
+#ifndef SOFT_NAME
+#define SOFT_NAME "OGNv" VERSION
 #endif
 
 #define HARDWARE_ID 0x04

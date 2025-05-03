@@ -232,7 +232,7 @@ static void TFT_DrawID(bool WithAP)
   uint8_t Len=Format_String(Line, "#");
   Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
   Len+=Format_Hex(Line+Len, (uint32_t)ID);
-  Len+=Format_String(Line+Len, " v"STR(VERSION));
+  Len+=Format_String(Line+Len, " v"VERSION);
   Line[Len]=0;
   TFT.setFont(0);
   TFT.setTextSize(1);
@@ -506,14 +506,20 @@ void setup()
   if(Parameters.CONbaud<2400 || Parameters.CONbaud>921600 || Parameters.CONbaud%2400)
   { Parameters.CONbaud=115200; Parameters.WriteToNVS(); }
 
+#ifdef HARD_NAME
+  strcpy(Parameters.Hard, HARD_NAME);
+#endif 
+#ifdef SOFT_NAME
+  strcpy(Parameters.Soft, SOFT_NAME);
+#endif
+
 #ifdef ARDUINO_USB_MODE
   Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
 #endif
   Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
   GPS_UART_Init();
 
-  Serial.println("OGN-Tracker");
-  // Serial.printf("RFM: CS:%d IRQ:%d RST:%d\n", LORA_CS, LORA_IRQ, LORA_RST);
+  Serial.printf("OGN-Tracker: Hard:%s Soft:%s\n", Parameters.Hard, Parameters.Soft);
 
 #ifdef WITH_ST7735
   TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
