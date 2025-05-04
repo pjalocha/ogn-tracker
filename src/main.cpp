@@ -453,7 +453,7 @@ static void GPS_UART_Init(int BaudRate=9600)
   uart_set_pin       (GPS_UART, GPS_PinTx, GPS_PinRx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
   uart_driver_install(GPS_UART, 256, 256, 0, 0, 0);
-  uart_set_rx_full_threshold(GPS_UART, 16); }
+  uart_set_rx_full_threshold(GPS_UART, 8); }
 
 // =======================================================================================================
 
@@ -745,7 +745,7 @@ void setup()
   xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(Radio_Task  ,  "RF"   ,  3000, NULL, 2, NULL);  // transmit/receive packets
+  xTaskCreate(Radio_Task  ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);

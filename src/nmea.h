@@ -119,6 +119,10 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
      { if(Data[1]!='B') return 0;
        return Data[2]=='D'; }
 
+   uint8_t isGB(void) const                     // for Beidou GSA and GSV
+     { if(Data[1]!='G') return 0;
+       return Data[2]=='B'; }
+
    uint8_t isGx(void) const                     // GPS or GLONASS sentence ?
      { return Data[1]=='G'; }
 
@@ -218,8 +222,14 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
        if(Data[4]!='S') return 0;
        return Data[5]=='V'; }
 
-   uint8_t isGPTXT(void) const                   // GPS test message
-     { if(!isGP()) return 0;
+   uint8_t isGBGSV(void) const                   // BEIDOU satellite data
+     { if(!isGB()) return 0;
+       if(Data[3]!='G') return 0;
+       if(Data[4]!='S') return 0;
+       return Data[5]=='V'; }
+
+   uint8_t isGxTXT(void) const                   // GPS test message
+     { if(!isGx()) return 0;
        if(Data[3]!='T') return 0;
        if(Data[4]!='X') return 0;
        return Data[5]=='T'; }
