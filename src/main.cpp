@@ -14,6 +14,8 @@
 
 #include "main.h"
 
+#include "esp_core_dump.h"
+
 #ifdef WITH_BT4_SPP
 #include "bt4.h"
 #endif
@@ -679,6 +681,21 @@ void setup()
   Serial.printf(" %d devices\n", I2Cdev);
 */
 
+  char Info[512];
+  int InfoLen=0;
+  esp_core_dump_init();
+  esp_core_dump_summary_t *DumpSummary = (esp_core_dump_summary_t *)malloc(sizeof(esp_core_dump_summary_t));
+  if(DumpSummary)
+  { esp_err_t Err = esp_core_dump_get_summary(DumpSummary);
+    if (Err==ESP_OK)
+    { esp_core_dump_bt_info_t &BackTrace = DumpSummary->exc_bt_info;
+      InfoLen=sprintf(Info, "Crash-dump: Task:%s PC:%08x [%d]\n", DumpSummary->exc_task, DumpSummary->exc_pc, BackTrace.depth);
+      for(uint32_t Idx=0; Idx<BackTrace.depth && Idx<16; Idx++)
+      { InfoLen+=sprintf(Info+InfoLen, " %08x", BackTrace.bt[Idx]); }
+    }
+    free(DumpSummary); }
+  if(InfoLen) Serial.println(Info);
+
 #ifdef WITH_AP                    // with WiFi Access Point
 #ifdef WITH_AP_BUTTON
     bool StartAP = Button_isPressed() && Parameters.APname[0]; // start WiFi AP when button pressed during startup and APname non-empty
@@ -715,7 +732,9 @@ void setup()
 #endif
 
 #ifdef WITH_BLE_SPP
-  if(!StartAP) BLE_SPP_Start(Parameters.BTname);
+  if(!StartAP && ameters.BTname[0])
+  { Serial.printf("Start BLE (Arduino) Serial Port: %s\n", Parameters.BTname);
+    BLE_SPP_Start(Parameters.BTname); }
 #endif
 
 #ifdef WITH_OLED
