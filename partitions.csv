@@ -6,6 +6,8 @@ phy_init,data,phy,0xf000,4K,
 # application (code)
 factory,app,factory,0x10000,1800K,
 # SPIFFS in Flash
-intlog,data,spiffs,,0x210000,
+intlog,data,spiffs,,0x200000,
 # FAT in Flash
-# intlog,data,fat,,0x210000,
+# intlog,data,fat,,0x200000,
+coredump, data,coredump,,0x10000,
+
