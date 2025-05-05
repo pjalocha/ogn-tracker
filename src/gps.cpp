@@ -173,26 +173,26 @@ static void ProcessGSA(NMEA_RxMsg &GSA)              // process GxGSA to know wh
 
 static void ProcessGSV(NMEA_RxMsg &GSV)              // process GxGSV to extract satellite data
 { // GSV.Data[GSV.Len]=0; Serial.printf("%s (%d)\n", (char *)GSV.Data, GSV.Parms);
-  uint8_t SatSys=0;
-       if(GSV.isGPGSV()) { SatSys=0; } // GPS
-  else if(GSV.isGLGSV()) { SatSys=1; } // GLONASS
-  else if(GSV.isGAGSV()) { SatSys=2; } // Galileo
+  uint8_t SatSys=0;                                     // which satelite system
+       if(GSV.isGPGSV()) { SatSys=0; }                  // GPS
+  else if(GSV.isGLGSV()) { SatSys=1; }                  // GLONASS
+  else if(GSV.isGAGSV()) { SatSys=2; }                  // Galileo
   else if(GSV.isBDGSV() || GSV.isGBGSV()) { SatSys=3; } // Beidou
-  else return;
+  else return;                                          // unknown system: give up
   if(GSV.Parms<3) return;
-  int8_t Pkts=Read_Dec1((const char *)GSV.ParmPtr(0)); if(Pkts<0) return;            // how many packets to pass all sats
-  int8_t Pkt =Read_Dec1((const char *)GSV.ParmPtr(1)); if(Pkt <0) return;            // which packet in the sequence
+  int8_t Pkts=Read_Dec1((const char *)GSV.ParmPtr(0)); if(Pkts<0) return;            // how many messages for this system
+  int8_t Pkt =Read_Dec1((const char *)GSV.ParmPtr(1)); if(Pkt <0) return;            // which message in the sequence
   int8_t Sats=Read_Dec2((const char *)GSV.ParmPtr(2));                               // total number of satellites
   if(Sats<0) Sats=Read_Dec1((const char *)GSV.ParmPtr(2));                           // could be a single or double digit number
   if(Sats<0) return;
-  if(Pkt==1) { SatSNRsum[SatSys]=0; SatSNRcount[SatSys]=0; }                         // if 1st packet then clear the sum and counter
+  if(Pkt==1) { SatSNRsum[SatSys]=0; SatSNRcount[SatSys]=0; }                         // if 1st message then clear the sum and counter
   for( int Parm=3; Parm<GSV.Parms; )                                                 // up to 4 sats per packet
   { int8_t PRN =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(PRN <0) break;      // PRN number
     int8_t Elev=Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(Elev<0) break;      // [deg] eleveation
    int16_t Azim=Read_Dec3((const char *)GSV.ParmPtr(Parm++)); if(Azim<0) break;      // [deg] azimuth
     int8_t SNR =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(SNR<=0) continue;   // [dB] SNR or absent when not tracked
     SatSNRsum[SatSys]+=SNR; SatSNRcount[SatSys]++; }                                 // add up SNR
-  if(Pkt==Pkts)                                                                      // if the last packet
+  if(Pkt==Pkts)                                                                      // if the last message for this system
   { uint8_t Count=0; uint16_t Sum=0;
     for(uint8_t Sys=0; Sys<4; Sys++)
     { if(SatSNRcount[Sys]==0) continue;
