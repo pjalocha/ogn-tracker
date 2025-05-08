@@ -413,6 +413,28 @@ int  CONS_UART_Read (uint8_t &Byte)
 
 // =======================================================================================================
 
+#ifdef GPS_PinPPS
+uint32_t PPS_Intr_usTime = 0;   // [us] micros() counter at the time of the PPS
+uint32_t PPS_Intr_msTime = 0;   // [ms] millis() counter at the time of the PPS
+ int32_t PPS_usPeriodErr = 0;   // [1/16us] PPS period systematic error
+uint32_t PPS_usPeriodRMS = 0;   // [ ]
+
+const uint32_t PPS_usPeriod = 1000000;
+
+static void IRAM_ATTR PPS_Intr(void *Context)
+{ uint32_t usTime = micros();
+  uint32_t usDelta = usTime - PPS_Intr_usTime;
+  int32_t usResid = usDelta-PPS_usPeriod;
+  if(abs(usResid)<500)
+  { int32_t ResidErr = (usResid<<4)-PPS_usPeriodErr;              // [1/16us]
+    // if(ResidErr>0) { ResidErr>>=1; if(ResidErr>16) ResidErr=16; }
+    uint32_t ErrSqr = ResidErr*ResidErr;
+    PPS_usPeriodRMS += ((int32_t)((ErrSqr>>4)-PPS_usPeriodRMS)+8)>>4;
+    PPS_usPeriodErr += (ResidErr+8)>>4; }
+  PPS_Intr_usTime = usTime;
+  PPS_Intr_msTime = millis(); }
+#endif
+
 // move to the specific pin-defnition file
 // #define GPS_UART    UART_NUM_1      // UART for GPS
 // const int GPS_PinTx  = GPIO_NUM_12;
@@ -421,6 +443,7 @@ int  CONS_UART_Read (uint8_t &Byte)
 
 int   GPS_UART_Full         (void)          { size_t Full=0; uart_get_buffered_data_len(GPS_UART, &Full); return Full; }
 int   GPS_UART_Read         (uint8_t &Byte) { return uart_read_bytes  (GPS_UART, &Byte, 1, 0); }  // should be buffered and non-blocking
+int   GPS_UART_Read(uint8_t *Data, int Max) { return uart_read_bytes  (GPS_UART, Data, Max, 0); }
 void  GPS_UART_Write        (char     Byte) {        uart_write_bytes (GPS_UART, &Byte, 1);    }  // should be buffered and blocking
 void  GPS_UART_Flush        (int MaxWait  ) {        uart_wait_tx_done(GPS_UART, MaxWait);     }
 void  GPS_UART_SetBaudrate  (int BaudRate ) {        uart_set_baudrate(GPS_UART, BaudRate);    }
@@ -436,7 +459,16 @@ void GPS_ENABLE (void) { gpio_set_level((gpio_num_t)GPS_PinEna, 1); }
 static void GPS_UART_Init(int BaudRate=9600)
 {
 #ifdef GPS_PinPPS
-  gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
+  // gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
+  gpio_config_t PinConf = { };
+  PinConf.intr_type    = GPIO_INTR_POSEDGE;    // Interrupt on rising edge
+  PinConf.mode         = GPIO_MODE_INPUT;      // Set as input
+  PinConf.pin_bit_mask = (1ULL << GPS_PinPPS); // Select pin
+  PinConf.pull_down_en = (gpio_pulldown_t)0;   // Disable pull-down
+  PinConf.pull_up_en   = (gpio_pullup_t)0;     // Disable pull-up
+  gpio_config(&PinConf);
+  gpio_install_isr_service(0);                 // default flags, but what could it be ?
+  gpio_isr_handler_add((gpio_num_t)GPS_PinPPS, PPS_Intr, 0);   // the last arg. is context which can be passed to the interrupt handl$#endif
 #endif
 #ifdef GPS_PinEna
   gpio_set_direction((gpio_num_t)GPS_PinEna, GPIO_MODE_OUTPUT);
@@ -454,8 +486,8 @@ static void GPS_UART_Init(int BaudRate=9600)
   uart_param_config  (GPS_UART, &GPS_UART_Config);
   uart_set_pin       (GPS_UART, GPS_PinTx, GPS_PinRx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
-  uart_driver_install(GPS_UART, 256, 256, 0, 0, 0);
-  uart_set_rx_full_threshold(GPS_UART, 8); }
+  uart_driver_install(GPS_UART, 512, 512, 0, 0, 0);
+  uart_set_rx_full_threshold(GPS_UART, 32); }
 
 // =======================================================================================================
 
@@ -510,7 +542,7 @@ void setup()
 
 #ifdef HARD_NAME
   strcpy(Parameters.Hard, HARD_NAME);
-#endif 
+#endif
 #ifdef SOFT_NAME
   strcpy(Parameters.Soft, SOFT_NAME);
 #endif

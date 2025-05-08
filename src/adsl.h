@@ -44,8 +44,8 @@ class ADSL_Packet
            uint8_t NavigIntegrity :4; // 12=7.5m, 11=25m, 10=75m       <= NIC  +1
            uint8_t HorizAccuracy  :3; // 7=3m, 6=10m, 5=30m. 4=92.5m   <= NACp -4
            uint8_t VertAccuracy   :2; // 3=15m, 2=45m, 1=150m          <= GVA
-           uint8_t VelAccuracy    :2; // 3=1m/s 2=3m/s 3=10m/s         <= NACv
-           uint8_t Reserved       :1; //
+           uint8_t VelAccuracy    :2; // 3=1m/s 2=3m/s 1=10m/s         <= NACv
+           uint8_t SpoofingDetect :1; // signal suspected GPS spoofing
          } __attribute__((packed));
        } ;
      } __attribute__((packed)) ;

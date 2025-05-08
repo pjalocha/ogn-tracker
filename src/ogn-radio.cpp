@@ -357,25 +357,26 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
     State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
 #endif
   if(State) ErrState=State;
-  State=Radio.setDataShaping(RADIOLIB_SHAPING_1_0);                 // [BT]   FSK modulation shaping
+  State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
   if(State) ErrState=State;
   State=Radio.setBitRate(38.4);                                     // [kpbs] 38.4kbps bit rate
   if(State) ErrState=State;
-  State=Radio.setFrequencyDeviation(9.6);                           // [kHz]  +/-9.6kHz deviation
+  State=Radio.setFrequencyDeviation(12.5);                           // [kHz]  +/-9.6kHz deviation
   if(State) ErrState=State;
   State=Radio.setRxBandwidth(58.6);                                 // [kHz]  50kHz bandwidth
   if(State) ErrState=State;
 #ifdef WITH_SX1276
+  State=Radio.setAFC(0);                                            // disable AFC
   State=Radio.setAFCBandwidth(58.6);                                // [kHz]  auto-frequency-tune bandwidth
   if(State) ErrState=State;
-  State=Radio.setAFC(1);                                            // enable AFC
-  if(State) ErrState=State;
   State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+  if(State) ErrState=State;
+  State=Radio.setAFC(1);                                            // enable AFC
   if(State) ErrState=State;
 #endif
   State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 2 bytes, the rest we have to do in software
   if(State) ErrState=State;
-  State=Radio.setPreambleLength(RxMode?8:48);                       // [bits] very long preamble for Pilot-Aware
+  State=Radio.setPreambleLength(RxMode?16:64);                      // [bits] very long preamble for Pilot-Aware
   if(State) ErrState=State;
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
   if(State) ErrState=State;
@@ -1001,7 +1002,7 @@ void Radio_Task(void *Parms)
              Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5],
              Radio_BkgRSSI, PktCount, Radio_PktRate, 0.001*Radio_TxCredit, Odd, Oband);
     SysLog_Line(Line, LineLen, 1, 25);
-    if(xSemaphoreTake(CONS_Mutex, 20))
+    if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
 

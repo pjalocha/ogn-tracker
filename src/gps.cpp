@@ -186,7 +186,7 @@ static void ProcessGSV(NMEA_RxMsg &GSV)              // process GxGSV to extract
   if(Sats<0) Sats=Read_Dec1((const char *)GSV.ParmPtr(2));                           // could be a single or double digit number
   if(Sats<0) return;
   if(Pkt==1) { SatSNRsum[SatSys]=0; SatSNRcount[SatSys]=0; }                         // if 1st message then clear the sum and counter
-  for( int Parm=3; Parm<GSV.Parms; )                                                 // up to 4 sats per packet
+  for( int Parm=3; Parm<GSV.Parms-4; )                                                 // up to 4 sats per packet
   { int8_t PRN =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(PRN <0) break;      // PRN number
     int8_t Elev=Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(Elev<0) break;      // [deg] eleveation
    int16_t Azim=Read_Dec3((const char *)GSV.ParmPtr(Parm++)); if(Azim<0) break;      // [deg] azimuth
@@ -194,7 +194,7 @@ static void ProcessGSV(NMEA_RxMsg &GSV)              // process GxGSV to extract
     SatSNRsum[SatSys]+=SNR; SatSNRcount[SatSys]++; }                                 // add up SNR
   if(Pkt==Pkts)                                                                      // if the last message for this system
   { uint8_t Count=0; uint16_t Sum=0;
-    for(uint8_t Sys=0; Sys<4; Sys++)
+    for(uint8_t Sys=0; Sys<4; Sys++)                                                 // add all systems together
     { if(SatSNRcount[Sys]==0) continue;
       Count+=SatSNRcount[Sys]; Sum+=SatSNRsum[Sys]; }
     GPS_SatCnt = Count;
@@ -228,7 +228,7 @@ static void GPS_PPS_On(void)                          // called on rising edge o
   PrevTickCount = PPS_Tick;                           // [ms]
   if(abs((int)Delta-1000)>=20) return;                // [ms] filter out difference away from 1.00sec
   TimeSync_HardPPS(PPS_Tick);                         // [ms] synchronize the UTC time to the PPS at given Tick
-  // GPS_TimeSync.sysTime=;
+  // Serial.printf("PPS: %3.1f/%3.1f usec\n", (1.0/16)*PPS_usPeriodErr, (1.0/4)*IntSqrt(PPS_usPeriodRMS));
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
@@ -349,17 +349,21 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
         }
 #endif // WITH_GPS_UBX
+#ifdef WITH_GPS_CFG
+        { strcpy(GPS_Cmd, "$CFGGEOID,1");                               // CFG command to output AMSL altitude
+          uint8_t Len = strlen(GPS_Cmd);
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
+#endif
 #ifdef WITH_GPS_MTK
-        Format_String(GPS_UART_Write, "\r\n\r\n");                     // apparently this is needed, otherwise the next command is missed
+        Format_String(GPS_UART_Write, "\r\n\r\n");                       // apparently this is needed, otherwise the next command is missed
         if(Parameters.NavRate)
-        { // uint8_t Len = Format_String(GPS_Cmd, "$PMTK220,");                   // report rate
-          uint8_t Len = Format_String(GPS_Cmd, "$PMTK300,");                   // fix rate
+        { // uint8_t Len = Format_String(GPS_Cmd, "$PMTK220,");          // report rate
+          uint8_t Len = Format_String(GPS_Cmd, "$PMTK300,");             // fix rate
           uint16_t OneSec = 1000;
           Len += Format_UnsDec(GPS_Cmd+Len, (uint32_t)OneSec/Parameters.NavRate);
           Len += Format_String(GPS_Cmd+Len, ",0,0,0,0");
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
-          // GPS_Cmd[Len++]='\r';
-          // GPS_Cmd[Len++]='\n';
           GPS_Cmd[Len]=0;
           // Format_String(CONS_UART_Write, GPS_Cmd, Len, 0); // for debug
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0);
@@ -386,8 +390,6 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           GPS_Cmd[Len++]=',';
           GPS_Cmd[Len++]='0'+Parameters.EnableBEI;   // search (or not) for BAIDOU satellites (not supported yet ?)
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
-          // GPS_Cmd[Len++]='\r';
-          // GPS_Cmd[Len++]='\n';
           GPS_Cmd[Len]=0;
           // Format_String(CONS_UART_Write, GPS_Cmd, Len, 0); // for debug
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
@@ -419,14 +421,19 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         Format_String(CONS_UART_Write, "\n");
 #endif
 #endif // WITH_GPS_UBX
+// HTIT GPS:
+// $CFGPRT,0 => $CFGPRT,0,H46,,H481,H23*7E
+// $CFGPRT,1 => $CFGPRT,1,0,115200,H401,H23*0A
+// $CFGPRT,2 => $CFGPRT,2,0,115200,H1,H23*0D
+// $CFGSYS = satellite constelations
+// $CFGGEOID
+// $CFGDYN = dynamic model
 /*
 #ifdef WITH_GPS_CFG
-        { strcpy(GPS_Cmd, "$CFGPRT,1,");                                        // CFG command to change the baud rate
+          strcpy(GPS_Cmd, "$CFGPRT,1,0,");                              // CFG command to change the baud rate
           uint8_t Len = strlen(GPS_Cmd);
-          Len += Format_UnsDec(GPS_Cmd+Len, GPS_TargetBaudRate);
-          Len += Format_String(GPS_Cmd+Len, ",3,3");
           // Len += Format_UnsDec(GPS_Cmd+Len, GPS_TargetBaudRate);
-          // Len += Format_String(GPS_Cmd+Len, ",1,3");
+          // Len += Format_String(GPS_Cmd+Len, ",3,3");
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
           GPS_Cmd[Len]=0;
           Serial.printf("GPS <- %s", GPS_Cmd);
@@ -464,7 +471,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         // GPS_UART_SetBaudrate(GPS_TargetBaudRate); GPS_BaudRate=GPS_TargetBaudRate;   // switch serial port to the new baudrate
       }
 
-      QueryWait=60; if(Parameters.NavRate) QueryWait+=Parameters.NavRate;
+      QueryWait=30; if(Parameters.NavRate) QueryWait*=Parameters.NavRate;
     }
   }
   else { QueryWait=0; }
@@ -676,6 +683,10 @@ static void GPS_NMEA(bool Correct=1)                                        // w
 { if(!Correct)
   { // NMEA.Data[NMEA.Len]=0; Serial.printf("Bad NMEA: %\s\n", (const char *)NMEA.Data);
     GPS_Pos[GPS_PosIdx].NMEAerrors++; return; }                // count incorrect NMEA frames
+  // Serial.printf("GPS:");
+  // for(int Idx=0; Idx<12; Idx++)
+  //   Serial.printf("%c", NMEA.Data[Idx]);
+  // Serial.printf(":%d\n", Correct);
   GPS_Status.NMEA=1;
   GPS_Status.BaudConfig = (GPS_getBaudRate() == GPS_TargetBaudRate);
   LED_PCB_Flash(5);                                                         // Flash the LED for 2 ms
@@ -685,26 +696,14 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   { int8_t SameTime = GPS_DateTime.ReadTime((const char *)NMEA.ParmPtr(0)); // 1=same time, 0=diff. time, -1=error
     if(SameTime==0 && GPS_Burst.GxGGA) { GPS_BurstComplete(); GPS_BurstEnd(); GPS_BurstStart(NMEA.Len); }
     GPS_DateTime.ReadDate((const char *)NMEA.ParmPtr(8));
-#ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "GPS_NMEA() RMC ");
-    Format_SignDec(CONS_UART_Write, (int16_t)(GPS_DateTime.Year), 2);
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
-#endif
+    // Serial.printf("RMC: Same:%d\n", SameTime);
     GPS_Burst.GxRMC=1; }
   else if(NMEA.isGxGGA())
-  { int8_t SameTime = GPS_DateTime.ReadTime((const char *)NMEA.ParmPtr(0)); // 1=same time, 0=diff. time, -1=error
+  { int8_t SameTime = GPS_DateTime.ReadTime((const char *)NMEA.ParmPtr(0));  // 1=same time, 0=diff. time, -1=error
     if(SameTime==0 && GPS_Burst.GxRMC) { GPS_BurstComplete(); GPS_BurstEnd(); GPS_BurstStart(NMEA.Len); }
-#ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "GPS_NMEA() GGA ");
-    Format_SignDec(CONS_UART_Write, (int16_t)(GPS_DateTime.Sec), 2);
-    Format_String(CONS_UART_Write, "s\n");
-    xSemaphoreGive(CONS_Mutex);
-#endif
+    // Serial.printf("GGA: Same:%d\n", SameTime);
     GPS_Burst.GxGGA=1; }
-  GPS_Pos[GPS_PosIdx].ReadNMEA(NMEA);                                          // read position elements from NMEA
+  GPS_Pos[GPS_PosIdx].ReadNMEA(NMEA);                                        // read position elements from NMEA
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
@@ -1063,6 +1062,8 @@ static void GPS_MAV(void)                                                  // wh
 
 // ----------------------------------------------------------------------------
 
+// static uint8_t ByteBuff[128];
+
 #ifdef __cplusplus
   extern "C"
 #endif
@@ -1098,54 +1099,43 @@ void vTaskGPS(void* pvParameters)
 
   TickType_t RefTick = xTaskGetTickCount();
   for( ; ; )                                                              // main task loop: every milisecond (RTOS time tick)
-  { vTaskDelay(1);                                                        // wait for the next time tick (but apparently it can wait more than one OS tick)
+  { // vTaskDelay(1);                                                        // wait for the next time tick (but apparently it can wait more than one OS tick)
     TickType_t NewTick = xTaskGetTickCount();
     TickType_t Delta = NewTick-RefTick;
     RefTick = NewTick;
-/*
-#ifdef DEBUG_PRINT
-    if(Delta>1)
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_UnsDec(CONS_UART_Write, TimeSync_Time(RefTick)%60);
-      CONS_UART_Write('.');
-      Format_UnsDec(CONS_UART_Write, TimeSync_msTime(RefTick),3);
-      Format_String(CONS_UART_Write, " -> ");
-      Format_UnsDec(CONS_UART_Write, Delta);
-      Format_String(CONS_UART_Write, "t\n");
-      xSemaphoreGive(CONS_Mutex); }
-#endif
-*/
 #ifdef WITH_GPS_PPS
     if(GPS_PPS_isOn()) { if(!PPS) { PPS=1; GPS_PPS_On();  } }             // monitor GPS PPS signal
                   else { if( PPS) { PPS=0; GPS_PPS_Off(); } }             // and call handling calls
 #endif
     LineIdle+=Delta;                                                      // count idle time
     NoValidData+=Delta;                                                   // count time without any valid NMEA nor UBX packet
-    // uint16_t Bytes=0;
-    // uint16_t MaxBytesPerTick = 1+(GPS_getBaudRate()+2500)/5000;
     for( ; ; )                                                            // loop over bytes in the GPS UART buffer
-    { uint8_t Byte; int Err=GPS_UART_Read(Byte); if(Err<=0) break;        // get Byte from serial port, if no bytes then break this loop
-      // CONS_UART_Write(Byte);                                              // copy the GPS output to console (for debug only)
-      // Bytes++;
+    { // int Bytes=GPS_UART_Read(ByteBuff, 128); if(Bytes<=0) break;
+      uint8_t Byte; int Err=GPS_UART_Read(Byte); if(Err<=0) break;        // get Byte from serial port, if no bytes then break this loop
+      // Serial.printf("GPS:%d\n", Bytes);
       LineIdle=0;                                                         // if there was a byte: restart idle counting
-      NMEA.ProcessByte(Byte);                                             // process through the NMEA interpreter
+      // for(int Idx=0; Idx<Bytes; Idx++)
+      // { uint8_t Byte=ByteBuff[Idx];
+        // CONS_UART_Write(Byte);                                              // copy the GPS output to console (for debug only)
+        NMEA.ProcessByte(Byte);                                             // process through the NMEA interpreter
 #ifdef WITH_GPS_UBX
-      UBX.ProcessByte(Byte);
+        UBX.ProcessByte(Byte);
 #endif
 #ifdef WITH_MAVLINK
-      MAV.ProcessByte(Byte);
+        MAV.ProcessByte(Byte);
 #endif
-      if(NMEA.isComplete())                                               // NMEA completely received ?
-      { bool Good=NMEA.isChecked();                                       // NMEA check sum is correct ?
-        GPS_NMEA(Good); if(Good) NoValidData=0;
-        NMEA.Clear(); break; }
+        if(NMEA.isComplete())                                               // NMEA completely received ?
+        { bool Good=NMEA.isChecked();                                       // NMEA check sum is correct ?
+          GPS_NMEA(Good); if(Good) NoValidData=0;
+          // Serial.printf("NMEA:%d\n",Good);
+          NMEA.Clear(); break; }
 #ifdef WITH_GPS_UBX
-      if(UBX.isComplete()) { GPS_UBX(); NoValidData=0; UBX.Clear(); break; }
+        if(UBX.isComplete()) { GPS_UBX(); NoValidData=0; UBX.Clear(); break; }
 #endif
 #ifdef WITH_MAVLINK
-      if(MAV.isComplete()) { GPS_MAV(); NoValidData=0; MAV.Clear(); break; }
+        if(MAV.isComplete()) { GPS_MAV(); NoValidData=0; MAV.Clear(); break; }
 #endif
-      // if(Bytes>=MaxBytesPerTick) break;
+      // }
     }
 /*
 #ifdef DEBUG_PRINT
@@ -1164,6 +1154,7 @@ void vTaskGPS(void* pvParameters)
       xSemaphoreGive(CONS_Mutex); }
 #endif
 */
+    if(LineIdle>2) vTaskDelay(1);
     if(LineIdle==0)                                                        // if any bytes were received ?
     { if(!GPS_Burst.Active) GPS_BurstStart();                              // if not already started then declare burst started
       if( (!GPS_Burst.Complete) && (GPS_Burst.GxGGA && GPS_Burst.GxRMC && GPS_Burst.GxGSA) ) // if GGA+RMC+GSA received
