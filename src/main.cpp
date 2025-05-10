@@ -420,6 +420,7 @@ uint32_t PPS_Intr_usTime = 0;   // [us] micros() counter at the time of the PPS
 uint32_t PPS_Intr_msTime = 0;   // [ms] millis() counter at the time of the PPS
 uint32_t PPS_Intr_usFirst= 0;   // [us] micros() counter at the first interrupt in a series
 uint32_t PPS_Intr_Count  = 0;   // [count] good PPS interrupts in the series
+uint32_t PPS_Intr_Missed = 0;   // [count] missed PPS interrupts
  int32_t PPS_usPeriodErr = 0;   // [1/16us] PPS period systematic error
 uint32_t PPS_usPeriodRMS = 0;   // [ ]
 
@@ -429,15 +430,16 @@ static void IRAM_ATTR PPS_Intr(void *Context)
 { uint32_t usTime = micros();                                     // [usec] usec-clock at interrupt time
   uint32_t msTime = xTaskGetTickCount();                          // [msec] mses-clock at interrupt time
   uint32_t usDelta = usTime - PPS_Intr_usTime;                    // difference from the previous PPS
+  PPS_Intr_usTime = usTime;
+  PPS_Intr_msTime = msTime;
   uint32_t Cycles = (usDelta+PPS_usPeriod/2)/PPS_usPeriod;
    int32_t usResid = usDelta-Cycles*PPS_usPeriod;
-  if(Cycles==0 || Cycles>10)                                      // if two many missed PPSes
-  { PPS_Intr_Count=0;
-    PPS_Intr_usFirst= usTime;
-    PPS_Intr_usTime = usTime;
-    PPS_Intr_msTime = msTime;
-    return; }
-  if(abs(usResid)<Cycles*500)
+  // if(Cycles==0 || Cycles>10)                                      // if two many missed PPSes
+  // { PPS_Intr_Count=0;
+  //   PPS_Intr_Missed=0;
+  //   PPS_Intr_usFirst= usTime;
+  //   return; }
+  if(Cycles>0 && Cycles<=10 && abs(usResid)<Cycles*500)
   { int32_t ResidErr = ((usResid<<4)-PPS_usPeriodErr)/Cycles;      // [1/16us]
     // if(ResidErr>0) { ResidErr>>=1; if(ResidErr>16) ResidErr=16; }
     uint32_t ErrSqr = ResidErr*ResidErr;
@@ -446,10 +448,14 @@ static void IRAM_ATTR PPS_Intr(void *Context)
       PPS_usPeriodErr += (ResidErr+8)>>4; }                        // [] average the PPS period error
     else
     { PPS_usPeriodErr = ResidErr;
-      PPS_usPeriodRMS=4<<4; }
-    PPS_Intr_Count += Cycles; }                                    // count PPS cycles
-  PPS_Intr_usTime = usTime;
-  PPS_Intr_msTime = msTime; }
+      PPS_usPeriodRMS=(2*2)<<4; }
+    PPS_Intr_Count += Cycles;
+    PPS_Intr_Missed+= Cycles-1; }                                    // count PPS cycles
+  else
+  { PPS_Intr_Count=0;
+    PPS_Intr_Missed=0;
+    PPS_Intr_usFirst= usTime; }
+}
 #endif
 
 // move to the specific pin-defnition file

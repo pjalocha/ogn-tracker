@@ -159,12 +159,15 @@ int16_t GPS_AverageSpeed(void)                        // get average speed based
 static void GPS_PPS_On(void)                          // called on rising edge of PPS
 { static TickType_t PrevTickCount=0;
   PPS_Tick = xTaskGetTickCount();                     // [ms] TickCount now
-#ifdef DEBUG_PRINT
-  uint32_t Late = PPS_Tick-PPS_Intr_msTime;
-  Serial.printf("PPS: %3.1f/%3.1f usec (%d) %ums\n",
-     (1.0/16)*PPS_usPeriodErr, (1.0/4)*IntSqrt(PPS_usPeriodRMS), PPS_Intr_Count, Late);
-#endif
   TickType_t Delta = PPS_Tick-PrevTickCount;          // [ms] time difference to the previous PPS
+#ifdef DEBUG_PRINT
+  if(xSemaphoreTake(CONS_Mutex, 10))
+  { uint32_t Late = PPS_Tick-PPS_Intr_msTime;
+    Serial.printf("PPS: %+4.1f/%3.1f %u:%u (%u/%u) Late:%u %u Delta:%u [ms]\n",
+     (1.0/16)*PPS_usPeriodErr, (1.0/4)*IntSqrt(PPS_usPeriodRMS),
+      PPS_Intr_usTime, PPS_Intr_msTime, PPS_Intr_Count, PPS_Intr_Missed, PPS_Tick, Late, Delta);
+    xSemaphoreGive(CONS_Mutex); }
+#endif
   PrevTickCount = PPS_Tick;                           // [ms]
   if(abs((int)Delta-1000)>=20) return;                // [ms] filter out difference away from 1.00sec
   TimeSync_HardPPS(PPS_Tick);                         // [ms] synchronize the UTC time to the PPS at given Tick
