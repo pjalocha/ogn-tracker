@@ -572,7 +572,10 @@ static void GPS_BurstEnd(void)                                             // wh
   SatList.Sort();
   GPS_SatCnt=SatList.CalcStats(GPS_SatSNR);
   SatList.PrintStats(Line);
-  Serial.printf("GPS: %s\n", Line);
+  if(xSemaphoreTake(CONS_Mutex, 10))
+  { Serial.printf("GPS: %s\n", Line);
+    xSemaphoreGive(CONS_Mutex); }
+
   // Serial.printf("GPS: %02X %s\n", GPS_Status.Flags, Line);
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
@@ -707,13 +710,14 @@ static void GPS_UBX(void)                                                       
 #endif
   // GPS_Pos[GPS_PosIdx].ReadUBX(UBX);
 #ifdef WITH_GPS_UBX_PASS
-  { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);                                    // send ther UBX packet to the console
-    UBX.Send(CONS_UART_Write);
+  { if(xSemaphoreTake(CONS_Mutex, portMAX_DELAY))                                 // send ther UBX packet to the console
+    { UBX.Send(CONS_UART_Write);
     // DumpUBX();
     // Format_String(CONS_UART_Write, "UBX");
     // Format_Hex(CONS_UART_Write, UBX.Class);
     // Format_Hex(CONS_UART_Write, UBX.ID);
-    xSemaphoreGive(CONS_Mutex); }
+      xSemaphoreGive(CONS_Mutex); }
+  }
 #endif
   if(UBX.isMON_VER())                                                             // if version info
   { class UBX_MON_VER *VER = (class UBX_MON_VER *)UBX.Word;                       // create pointer to the packet content
@@ -725,15 +729,16 @@ static void GPS_UBX(void)                                                       
       GPS_Firmware[ExtLen++]=':';
       strcpy(GPS_Firmware+ExtLen, (const char *)UBX.Byte+Idx);
       ExtLen+=Len; }
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "MON-VER [");
-    Format_UnsDec(CONS_UART_Write, UBX.Bytes);
-    Format_String(CONS_UART_Write, "] ");
-    Format_String(CONS_UART_Write, GPS_Hardware);
-    CONS_UART_Write(':');
-    Format_String(CONS_UART_Write, GPS_Firmware);
-    CONS_UART_Write('\n');
-    xSemaphoreGive(CONS_Mutex); }
+    if(xSemaphoreTake(CONS_Mutex, 10))
+    { Format_String(CONS_UART_Write, "MON-VER [");
+      Format_UnsDec(CONS_UART_Write, UBX.Bytes);
+      Format_String(CONS_UART_Write, "] ");
+      Format_String(CONS_UART_Write, GPS_Hardware);
+      CONS_UART_Write(':');
+      Format_String(CONS_UART_Write, GPS_Firmware);
+      CONS_UART_Write('\n');
+      xSemaphoreGive(CONS_Mutex); }
+  }
 #ifdef WITH_GPS_CONFIG
   if(UBX.isCFG_PRT())                                                             // if port configuration
   { class UBX_CFG_PRT *CFG = (class UBX_CFG_PRT *)UBX.Word;                       // create pointer to the packet content
@@ -1132,11 +1137,11 @@ void vTaskGPS(void* pvParameters)
         GPS_UART_Write('\n');
 #endif
       }
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, "TaskGPS: ");
-      Format_UnsDec(CONS_UART_Write, NewBaudRate);
-      Format_String(CONS_UART_Write, "bps\n");
-      xSemaphoreGive(CONS_Mutex);
+      if(xSemaphoreTake(CONS_Mutex, 10))
+      { Format_String(CONS_UART_Write, "TaskGPS: ");
+        Format_UnsDec(CONS_UART_Write, NewBaudRate);
+        Format_String(CONS_UART_Write, "bps\n");
+        xSemaphoreGive(CONS_Mutex); }
       GPS_UART_SetBaudrate(NewBaudRate);
       NoValidData=0;
     }
