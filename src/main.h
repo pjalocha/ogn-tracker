@@ -104,6 +104,8 @@ void  GPS_UART_SetBaudrate  (int BaudRate );
 bool  GPS_PPS_isOn();
 extern uint32_t PPS_Intr_usTime;   // [us] micros() counter at the time of the PPS
 extern uint32_t PPS_Intr_msTime;   // [ms] millis() counter at the time of the PPS
+extern uint32_t PPS_Intr_usFirst;  // [us] the time of the first interrupt in a series
+extern uint32_t PPS_Intr_Count;    // [count] of good PPS interrupts in the series
 extern  int32_t PPS_usPeriodErr;   // [1/16us] PPS period systematic error
 extern uint32_t PPS_usPeriodRMS;   // [ ]
 #else
