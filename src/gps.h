@@ -28,8 +28,8 @@ extern          uint32_t GPS_TimeSinceLock; // [sec] time since GPS has a valid 
 // extern          uint32_t GPS_Random;        // random number produced from the GPS data
 extern          uint16_t GPS_PosPeriod;     // [msec] how often (which period) the GPS/MAV is sending the positions
 
-extern          uint16_t GPS_SatSNR;        // [0.25dB] average SNR for satellites being tracked
-extern           uint8_t GPS_SatCnt;        // [0.25dB] number of satellites being tracked
+extern           uint8_t GPS_SatSNR;        // [0.25dB] average SNR for satellites being tracked
+extern           uint8_t GPS_SatCnt;        // [count] number of satellites being tracked
 
 typedef union
          { uint8_t  Flags;

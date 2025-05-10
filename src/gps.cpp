@@ -15,11 +15,8 @@
 #include "sdlog.h"
 #endif
 
-// #include "rf.h"
 #include "ogn.h"
-
-// #include "ctrl.h"
-// #include "knob.h"
+#include "gps-satlist.h"
 
 #include "lowpass2.h"
 
@@ -63,7 +60,7 @@ static   TickType_t Burst_Tick;            // [msec] System Tick when the data b
 
          // uint32_t   GPS_Random = 0x12345678; // random number from the LSB of the GPS data
 
-         uint16_t   GPS_SatSNR = 0;        // [0.25dB] average SNR from the GSV sentences
+         uint8_t    GPS_SatSNR = 0;        // [0.25dB] average SNR from the GSV sentences
          uint8_t    GPS_SatCnt = 0;
 
          uint8_t    GPS_Satellites = 0;    // number of satellites in the solution, zero when no lock
@@ -87,13 +84,6 @@ static union
                                                                                                    // for the autobaud on the GPS port
 const int GPS_BurstTimeout = 100; // [ms]
 
-// static const uint8_t  BaudRates=7;                                                                 // number of possible baudrates choices
-// static       uint8_t  BaudRateIdx=0;                                                               // actual choice
-// static const uint32_t BaudRate[BaudRates] = { 4800, 9600, 19200, 38400, 57600, 115200, 230400 } ;  // list of baudrate the autobaud scans through
-
-// uint32_t GPS_getBaudRate (void) { return BaudRate[BaudRateIdx]; }
-// uint32_t GPS_nextBaudRate(void) { BaudRateIdx++; if(BaudRateIdx>=BaudRates) BaudRateIdx=0; return GPS_getBaudRate(); }
-
 static uint32_t GPS_BaudRate = 4800;     // [bps] current baudrate on the GPS port
 static uint32_t GPS_nextBaudRate(void)   // produce next (possible) GPS baudrate (for autobaud)
 { if(GPS_BaudRate>=460800) GPS_BaudRate=4800;
@@ -104,7 +94,6 @@ static uint32_t GPS_nextBaudRate(void)   // produce next (possible) GPS baudrate
 uint32_t GPS_getBaudRate (void) { return GPS_BaudRate; }
 
 const uint32_t GPS_TargetBaudRate = 115200; // [bps]
-// const uint8_t  GPS_TargetDynModel =      7; // for UBX GPS's: 6 = airborne with >1g, 7 = with >2g
 
 #ifdef WITH_MAVLINK
 uint16_t MAVLINK_BattVolt = 0;   // [mV]
@@ -149,61 +138,7 @@ void FlightProcess(void)
 
 static char GPS_Cmd[64];         // command to be send to the GPS
 
-// Satellite count and SNR per system, 0=GPS, 1=GLONASS, 2=GALILEO, 3=BEIDO
-static uint16_t    SatSNRsum  [4] = { 0, 0, 0, 0 }; // sum up the satellite SNR's
-static uint8_t     SatSNRcount[4] = { 0, 0, 0, 0 }; // count entries to the sum
-static const char *SatPrefix  [4] = { "GP", "GL", "GA", "GB" };
-
-struct GPS_Sat          // store GPS satellite data in single 32-bit word
-{ union
-  { uint32_t Word;
-    struct
-    { uint16_t Azim: 9; // [deg] (use 8-bit cordic ?)
-      uint8_t  Elev: 7; // [deg] (use 6/8-bit cordic ?)
-      uint8_t   SNR: 7; // [dB/Hz]
-      bool     Incl: 1; // Included for lock
-      uint16_t  PRN: 8; // [1..96] GPS:1..32, SBAS:33..64, GNSS:65..96
-    } ;
-  } ;
-} ;
-
-static void ProcessGSA(NMEA_RxMsg &GSA)              // process GxGSA to know which satellites are used for the fix
-{ // GSA.Data[GSA.Len]=0; Serial.printf("%s (%d)\n", (char *)GSA.Data, GSA.Parms);
-}
-
-static void ProcessGSV(NMEA_RxMsg &GSV)              // process GxGSV to extract satellite data
-{ // GSV.Data[GSV.Len]=0; Serial.printf("%s (%d)\n", (char *)GSV.Data, GSV.Parms);
-  uint8_t SatSys=0;                                     // which satelite system
-       if(GSV.isGPGSV()) { SatSys=0; }                  // GPS
-  else if(GSV.isGLGSV()) { SatSys=1; }                  // GLONASS
-  else if(GSV.isGAGSV()) { SatSys=2; }                  // Galileo
-  else if(GSV.isBDGSV() || GSV.isGBGSV()) { SatSys=3; } // Beidou
-  else return;                                          // unknown system: give up
-  if(GSV.Parms<3) return;
-  int8_t Pkts=Read_Dec1((const char *)GSV.ParmPtr(0)); if(Pkts<0) return;            // how many messages for this system
-  int8_t Pkt =Read_Dec1((const char *)GSV.ParmPtr(1)); if(Pkt <0) return;            // which message in the sequence
-  int8_t Sats=Read_Dec2((const char *)GSV.ParmPtr(2));                               // total number of satellites
-  if(Sats<0) Sats=Read_Dec1((const char *)GSV.ParmPtr(2));                           // could be a single or double digit number
-  if(Sats<0) return;
-  if(Pkt==1) { SatSNRsum[SatSys]=0; SatSNRcount[SatSys]=0; }                         // if 1st message then clear the sum and counter
-  for( int Parm=3; Parm<GSV.Parms-4; )                                                 // up to 4 sats per packet
-  { int8_t PRN =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(PRN <0) break;      // PRN number
-    int8_t Elev=Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(Elev<0) break;      // [deg] eleveation
-   int16_t Azim=Read_Dec3((const char *)GSV.ParmPtr(Parm++)); if(Azim<0) break;      // [deg] azimuth
-    int8_t SNR =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(SNR<=0) continue;   // [dB] SNR or absent when not tracked
-    SatSNRsum[SatSys]+=SNR; SatSNRcount[SatSys]++; }                                 // add up SNR
-  if(Pkt==Pkts)                                                                      // if the last message for this system
-  { uint8_t Count=0; uint16_t Sum=0;
-    for(uint8_t Sys=0; Sys<4; Sys++)                                                 // add all systems together
-    { if(SatSNRcount[Sys]==0) continue;
-      Count+=SatSNRcount[Sys]; Sum+=SatSNRsum[Sys]; }
-    GPS_SatCnt = Count;
-    if(Count) GPS_SatSNR = (4*Sum+Count/2)/Count;        // [1/4dB]
-        else  GPS_SatSNR = 0;
-    // Serial.printf("%s:%d/%d SatSNR=%3.1fdB\n",
-    //     SatPrefix[SatSys], SatSNRsum[SatSys], SatSNRcount[SatSys], 0.25*GPS_SatSNR);
-  }
-}
+GPS_SatList SatList;             // list of satellites for SNR monitoring
 
 // ----------------------------------------------------------------------------
 
@@ -634,7 +569,11 @@ static void GPS_BurstComplete(void)                                   // when GP
 
 static void GPS_BurstEnd(void)                                             // when GPS stops sending the data on the serial port
 {
-  // Serial.printf("GPS_BurstEnd: Flags:%02X\n", GPS_Status.Flags);
+  SatList.Sort();
+  GPS_SatCnt=SatList.CalcStats(GPS_SatSNR);
+  SatList.PrintStats(Line);
+  Serial.printf("GPS: %s\n", Line);
+  // Serial.printf("GPS: %02X %s\n", GPS_Status.Flags, Line);
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time(Burst_Tick)%60, 2);
@@ -690,17 +629,18 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   GPS_Status.NMEA=1;
   GPS_Status.BaudConfig = (GPS_getBaudRate() == GPS_TargetBaudRate);
   LED_PCB_Flash(5);                                                         // Flash the LED for 2 ms
-       if(NMEA.isGxGSV()) { ProcessGSV(NMEA); }                             // process satellite data
-  else if(NMEA.isGxGSA()) { ProcessGSA(NMEA); GPS_Burst.GxGSA=1; }
+  SatList.Process(NMEA);                                                    // process satellite data
+       if(NMEA.isGxGSV()) { }
+  else if(NMEA.isGxGSA()) { GPS_Burst.GxGSA=1; }                            // mark GSA present in the GPS data burst
   else if(NMEA.isGxRMC())
   { int8_t SameTime = GPS_DateTime.ReadTime((const char *)NMEA.ParmPtr(0)); // 1=same time, 0=diff. time, -1=error
-    if(SameTime==0 && GPS_Burst.GxGGA) { GPS_BurstComplete(); GPS_BurstEnd(); GPS_BurstStart(NMEA.Len); }
+    if(SameTime==0 && GPS_Burst.GxGGA) { GPS_BurstComplete(); /* GPS_BurstEnd(); */ GPS_BurstStart(NMEA.Len); }
     GPS_DateTime.ReadDate((const char *)NMEA.ParmPtr(8));
     // Serial.printf("RMC: Same:%d\n", SameTime);
     GPS_Burst.GxRMC=1; }
   else if(NMEA.isGxGGA())
   { int8_t SameTime = GPS_DateTime.ReadTime((const char *)NMEA.ParmPtr(0));  // 1=same time, 0=diff. time, -1=error
-    if(SameTime==0 && GPS_Burst.GxRMC) { GPS_BurstComplete(); GPS_BurstEnd(); GPS_BurstStart(NMEA.Len); }
+    if(SameTime==0 && GPS_Burst.GxRMC) { GPS_BurstComplete(); /* GPS_BurstEnd(); */ GPS_BurstStart(NMEA.Len); }
     // Serial.printf("GGA: Same:%d\n", SameTime);
     GPS_Burst.GxGGA=1; }
   GPS_Pos[GPS_PosIdx].ReadNMEA(NMEA);                                        // read position elements from NMEA
@@ -729,16 +669,18 @@ static void GPS_NMEA(bool Correct=1)                                        // w
 #else
     if(Parameters.Verbose && !NMEA.isGxGSV() && !NMEA.isGxGSA() && !NMEA.isGxTXT())
 #endif
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
-      CONS_UART_Write('\r'); CONS_UART_Write('\n');
-      xSemaphoreGive(CONS_Mutex); }
+    { if(xSemaphoreTake(CONS_Mutex, 10))
+      { Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
+        CONS_UART_Write('\r'); CONS_UART_Write('\n');
+        xSemaphoreGive(CONS_Mutex); }
+    }
 #ifdef WITH_SDLOG
     if(Log_Free()>=128)
-    { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
-      Format_String(Log_Write, (const char *)NMEA.Data, 0, NMEA.Len);
-      Log_Write('\r'); Log_Write('\n');
-      xSemaphoreGive(Log_Mutex); }
+    { if(xSemaphoreTake(Log_Mutex, 10))
+      { Format_String(Log_Write, (const char *)NMEA.Data, 0, NMEA.Len);
+        Log_Write('\r'); Log_Write('\n');
+        xSemaphoreGive(Log_Mutex); }
+    }
 #endif
   }
 }
