@@ -416,43 +416,50 @@ int  CONS_UART_Read (uint8_t &Byte)
 // =======================================================================================================
 
 #ifdef GPS_PinPPS
+uint32_t PPS_Intr_msTime = 0;   // [ms] xTaskGetTickCount() counter at the time of the PPS
 uint32_t PPS_Intr_usTime = 0;   // [us] micros() counter at the time of the PPS
-uint32_t PPS_Intr_msTime = 0;   // [ms] millis() counter at the time of the PPS
+
+uint32_t PPS_usPrecTime  = 0;   // [1/16us] precise time of the PPS
+uint32_t PPS_usTimeRMS   = 0;   // [1/4us]  precise PPS time residue time error RMS
+
 uint32_t PPS_Intr_usFirst= 0;   // [us] micros() counter at the first interrupt in a series
 uint32_t PPS_Intr_Count  = 0;   // [count] good PPS interrupts in the series
 uint32_t PPS_Intr_Missed = 0;   // [count] missed PPS interrupts
- int32_t PPS_usPeriodErr = 0;   // [1/16us] PPS period systematic error
-uint32_t PPS_usPeriodRMS = 0;   // [ ]
 
-const uint32_t PPS_usPeriod = 1000000;
+ int32_t PPS_usPeriodErr = 0;   // [1/16us] PPS period average systematic error
+uint32_t PPS_usPeriodRMS = 0;   // [(1/4us)^2] mean square of statistical error
+
+const uint32_t PPS_usPeriod = 1000000;  // [usec] expected PPS period = 1sec = 10000000usec
 
 static void IRAM_ATTR PPS_Intr(void *Context)
 { uint32_t usTime = micros();                                     // [usec] usec-clock at interrupt time
   uint32_t msTime = xTaskGetTickCount();                          // [msec] mses-clock at interrupt time
   uint32_t usDelta = usTime - PPS_Intr_usTime;                    // difference from the previous PPS
-  PPS_Intr_usTime = usTime;
-  PPS_Intr_msTime = msTime;
-  uint32_t Cycles = (usDelta+PPS_usPeriod/2)/PPS_usPeriod;
-   int32_t usResid = usDelta-Cycles*PPS_usPeriod;
-  // if(Cycles==0 || Cycles>10)                                      // if two many missed PPSes
-  // { PPS_Intr_Count=0;
-  //   PPS_Intr_Missed=0;
-  //   PPS_Intr_usFirst= usTime;
-  //   return; }
-  if(Cycles>0 && Cycles<=10 && abs(usResid)<Cycles*500)
-  { int32_t ResidErr = ((usResid<<4)-PPS_usPeriodErr)/Cycles;      // [1/16us]
-    // if(ResidErr>0) { ResidErr>>=1; if(ResidErr>16) ResidErr=16; }
+  PPS_Intr_usTime = usTime;                                       // [usec]
+  PPS_Intr_msTime = msTime;                                       // [ms]
+  uint32_t Cycles = (usDelta+PPS_usPeriod/2)/PPS_usPeriod;        // how many PPS periods past
+   int32_t usResid = usDelta-Cycles*PPS_usPeriod;                 // [usec]
+  if(Cycles>0 && Cycles<=10 && abs(usResid)<Cycles*500)           // condition to accept the PPS edge
+  { int32_t ResidErr = (usResid<<4)-PPS_usPeriodErr;              // [1/16us]
+    if(Cycles>1) ResidErr/=Cycles;
+    PPS_usPeriodErr += (ResidErr+8)>>4;                         // [1/16us] average the PPS period error
     uint32_t ErrSqr = ResidErr*ResidErr;
-    if(PPS_Intr_Count)
-    { PPS_usPeriodRMS += ((int32_t)((ErrSqr>>4)-PPS_usPeriodRMS)+8)>>4;
-      PPS_usPeriodErr += (ResidErr+8)>>4; }                        // [] average the PPS period error
-    else
-    { PPS_usPeriodErr = ResidErr;
-      PPS_usPeriodRMS=(2*2)<<4; }
+    if(PPS_Intr_Count)                                            // if not the first edge in the series
+    { PPS_usPrecTime += ((PPS_usPeriod<<4)+PPS_usPeriodErr)*Cycles;  // [1/16us] forcast the PPS time to the current PPS
+      PPS_usPeriodRMS += ((int32_t)((ErrSqr>>4)-PPS_usPeriodRMS)+8)>>4;
+      int32_t usTimeErr = (usTime<<4)-PPS_usPrecTime;                // [1/16us] difference between current PPs and the forecast
+      PPS_usPrecTime += (usTimeErr+8)>>3;                            // [1/16us]
+      uint32_t ErrSqr = usTimeErr*usTimeErr;
+      PPS_usTimeRMS += ((int32_t)((ErrSqr>>4)-PPS_usTimeRMS)+8)>>4; }
+    else                                                          // if this was the very first edge in the series
+    { PPS_usPrecTime  = PPS_Intr_usTime<<4;
+      PPS_usTimeRMS   = 4<<4;
+      PPS_usPeriodErr = ResidErr;
+      PPS_usPeriodRMS = 4<<4; }                                   // set statistical error RMS to 2 usec
     PPS_Intr_Count += Cycles;
-    PPS_Intr_Missed+= Cycles-1; }                                    // count PPS cycles
-  else
-  { PPS_Intr_Count=0;
+    PPS_Intr_Missed+= Cycles-1; }                                 // count PPS cycles
+  else                                                            // if edge is not accepted
+  { PPS_Intr_Count=0;                                             // then we start all from scratch
     PPS_Intr_Missed=0;
     PPS_Intr_usFirst= usTime; }
 }

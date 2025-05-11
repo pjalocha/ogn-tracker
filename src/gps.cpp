@@ -163,9 +163,9 @@ static void GPS_PPS_On(void)                          // called on rising edge o
 #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 10))
   { uint32_t Late = PPS_Tick-PPS_Intr_msTime;
-    Serial.printf("PPS: %+4.1f/%3.1f %u:%u (%u/%u) Late:%u %u Delta:%u [ms]\n",
-     (1.0/16)*PPS_usPeriodErr, (1.0/4)*IntSqrt(PPS_usPeriodRMS),
-      PPS_Intr_usTime, PPS_Intr_msTime, PPS_Intr_Count, PPS_Intr_Missed, Late, PPS_Tick, Delta);
+    Serial.printf("PPS: %+4.1f/%3.1f/%3.1f %u:%3.1f:%u (%u/%u) Late:%u %u Delta:%u [ms]\n",
+     (1.0/16)*PPS_usPeriodErr, (1.0/4)*IntSqrt(PPS_usPeriodRMS), (1.0/4)*IntSqrt(PPS_usTimeRMS),
+      PPS_Intr_usTime, (1.0/16)*PPS_usPrecTime, PPS_Intr_msTime, PPS_Intr_Count, PPS_Intr_Missed, Late, PPS_Tick, Delta);
     xSemaphoreGive(CONS_Mutex); }
 #endif
   PrevTickCount = PPS_Tick;                           // [ms]
