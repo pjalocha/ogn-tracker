@@ -6,6 +6,7 @@
 #include "ogn.h"
 #include "lowpass2.h"
 #include "flight.h"
+#include "gps-satlist.h"
 
 // extern uint8_t GPS_PowerMode;               // 0=shutdown, 1=reduced, 2=normal
 
@@ -67,6 +68,8 @@ extern uint8_t  MAVLINK_BattCap;    // [%]
 extern EventGroupHandle_t GPS_Event;
 const EventBits_t GPSevt_PPS    = 0x01;
 const EventBits_t GPSevt_NewPos = 0x02;
+
+extern GPS_SatList GPS_SatMon;              // list of satellites for SNR monitoring
 
 extern FlightMonitor Flight;                // detect/monitor takeoff/flight/landing
 

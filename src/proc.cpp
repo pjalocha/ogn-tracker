@@ -191,12 +191,36 @@ template <class Type>
   if(X>Upp) return Upp;
   return X; }
 
-static void getAdslStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
+static void getTelemSatPPS(ADSL_Packet &Packet)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
   Packet.setAddrTypeOGN(Parameters.AddrType);
   Packet.setRelay(0);
-  Packet.Telemetry.Header.TelemType=0x00;
+  Packet.Telemetry.Header.TelemType=0x3;                            // 3 = GPS telemetry
+  Packet.SatSNR.Header.GNSStype=0;                                  // 0 = GPS satellite SNR
+
+}
+
+static void getTelemSatSNR(ADSL_Packet &Packet)
+{ Packet.Init(0x42);
+  Packet.setAddress    (Parameters.Address);
+  Packet.setAddrTypeOGN(Parameters.AddrType);
+  Packet.setRelay(0);
+  Packet.Telemetry.Header.TelemType=0x3;                            // 3 = GPS telemetry
+  Packet.SatSNR.Header.GNSStype=0;                                  // 0 = GPS satellite SNR
+  for(uint8_t Sys=0; Sys<5; Sys++)
+  { Packet.SatSNR.Data.SatSNR[Sys]=GPS_SatMon.getSysStatus(Sys); }
+  Packet.SatSNR.Data.Inbalance = 0;
+  Packet.SatSNR.Data.PDOP = GPS_SatMon.PDOP;
+  Packet.SatSNR.Data.HDOP = GPS_SatMon.HDOP;
+  Packet.SatSNR.Data.VDOP = GPS_SatMon.VDOP; }
+
+static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
+{ Packet.Init(0x42);
+  Packet.setAddress    (Parameters.Address);
+  Packet.setAddrTypeOGN(Parameters.AddrType);
+  Packet.setRelay(0);
+  Packet.Telemetry.Header.TelemType=0x0;                            // 0 => device status
   if(GPS) GPS->EncodeTelemetry(Packet);
   uint8_t SNR = (GPS_SatSNR+2)/4;                                   // encode number of satellites and SNR in the Status packet
   if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
@@ -962,15 +986,18 @@ void vTaskPROC(void* pvParameters)
 
 #ifdef WITH_ADSL
     { static uint8_t StatTxBackOff = 16;
+      static uint8_t StatTxPkt = 0;
       XorShift32(Random.RX);
       if(StatTxBackOff) StatTxBackOff--;
       else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
-        getAdslStatus(*Packet, Position);
+        if(StatTxPkt==0) getTelemStatus(*Packet, Position);
+                    else getTelemSatSNR(*Packet);
+        StatTxPkt++; if(StatTxPkt>=2) StatTxPkt=0;
         Packet->Scramble();
         Packet->setCRC();
         ADSL_TxFIFO.Write();
-        StatTxBackOff = 12+Random.RX%5; }
+        StatTxBackOff = 10+Random.RX%5; }
     }
     while(ADSL_TxFIFO.Full()<2)                                  // any received ADS-L pasition to be relayed ?
     { ADSL_Packet *RelayPacket = ADSL_TxFIFO.getWrite();

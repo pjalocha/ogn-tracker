@@ -94,6 +94,12 @@ class GPS_Sat
      BurstGSV=0; BurstGSA=0;
      ClearStats(); }
 
+   uint16_t getSysStatus(uint8_t Sys)
+   { uint16_t Stat = FixSats[Sys]; Stat<<=4;
+     Stat |= VisSats[Sys]; Stat<<=4;
+     Stat |= VisSNR[Sys];
+     return Stat; }
+
    void PrintSats(void) const
    { printf("GPS_SatList[%2d] %02ds\n", Size, qSec);
      for(uint8_t Idx=0; Idx<Size; Idx++)

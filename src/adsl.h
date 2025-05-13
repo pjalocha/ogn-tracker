@@ -130,7 +130,7 @@ class ADSL_Packet
          uint8_t  PDOP;          // [0.1]
          uint8_t  HDOP;          // [0.1]
          uint8_t  VDOP;          // [0.1]
-       } __attribute__((packed));
+       } __attribute__((packed)) Data;
      } __attribute__((packed)) SatSNR;
 
      struct
@@ -149,7 +149,7 @@ class ADSL_Packet
          uint8_t  PPSresid;      // [ref.clock] RNS on PPSerror
          uint8_t  ClockTimeRMS;  // [ref.clock] RMS on usTime
          uint8_t  Spare;
-       } __attribute__((packed));
+       } __attribute__((packed)) Data;
      } __attribute__((packed)) SatPPS;
 
    } ;

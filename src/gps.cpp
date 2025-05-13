@@ -16,7 +16,6 @@
 #endif
 
 #include "ogn.h"
-#include "gps-satlist.h"
 
 #include "lowpass2.h"
 
@@ -69,6 +68,8 @@ static   TickType_t Burst_Tick;            // [msec] System Tick when the data b
 
          char GPS_Hardware[12] = { 0 };    // hardware info read from the GPS
          char GPS_Firmware[244] = { 0 };    // software info read from the GPS
+
+GPS_SatList GPS_SatMon;              // list of satellites for SNR monitoring
 
 static union
 { uint8_t Flags;
@@ -137,8 +138,6 @@ void FlightProcess(void)
 // ----------------------------------------------------------------------------
 
 static char GPS_Cmd[64];         // command to be send to the GPS
-
-GPS_SatList SatList;             // list of satellites for SNR monitoring
 
 // ----------------------------------------------------------------------------
 
@@ -576,9 +575,9 @@ static void GPS_BurstComplete(void)                                   // when GP
 
 static void GPS_BurstEnd(void)                                             // when GPS stops sending the data on the serial port
 {
-  SatList.Sort();
-  GPS_SatCnt=SatList.CalcStats(GPS_SatSNR);
-  SatList.PrintStats(Line);
+  GPS_SatMon.Sort();
+  GPS_SatCnt=GPS_SatMon.CalcStats(GPS_SatSNR);
+  GPS_SatMon.PrintStats(Line);
   if(xSemaphoreTake(CONS_Mutex, 10))
   { Serial.printf("GPS: %s\n", Line);
     xSemaphoreGive(CONS_Mutex); }
@@ -639,7 +638,7 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   GPS_Status.NMEA=1;
   GPS_Status.BaudConfig = (GPS_getBaudRate() == GPS_TargetBaudRate);
   LED_PCB_Flash(5);                                                         // Flash the LED for 2 ms
-  SatList.Process(NMEA);                                                    // process satellite data
+  GPS_SatMon.Process(NMEA);                                                    // process satellite data
        if(NMEA.isGxGSV()) { }
   else if(NMEA.isGxGSA()) { GPS_Burst.GxGSA=1; }                            // mark GSA present in the GPS data burst
   else if(NMEA.isGxRMC())
@@ -677,7 +676,7 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   {
 #ifdef WITH_GPS_NMEA_PASS
 #else
-    if(Parameters.Verbose && !NMEA.isGxGSV() && !NMEA.isGxGSA() && !NMEA.isGxTXT())
+    if(Parameters.Verbose && /* !NMEA.isGxGSV() && !NMEA.isGxGSA() && */ !NMEA.isGxTXT())
 #endif
     { if(xSemaphoreTake(CONS_Mutex, 10))
       { Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
