@@ -210,6 +210,8 @@ static void getTelemSatSNR(ADSL_Packet &Packet)
   Packet.SatSNR.Header.GNSStype=0;                                  // 0 = GPS satellite SNR
   for(uint8_t Sys=0; Sys<5; Sys++)
   { Packet.SatSNR.Data.SatSNR[Sys]=GPS_SatMon.getSysStatus(Sys); }
+  // Serial.printf("SatSNR: %04X %04X %04X %04X %04X\n",
+  //     Packet.SatSNR.Data.SatSNR[0], Packet.SatSNR.Data.SatSNR[1], Packet.SatSNR.Data.SatSNR[2], Packet.SatSNR.Data.SatSNR[3], Packet.SatSNR.Data.SatSNR[4]);
   Packet.SatSNR.Data.Inbalance = 0;
   Packet.SatSNR.Data.PDOP = GPS_SatMon.PDOP;
   Packet.SatSNR.Data.HDOP = GPS_SatMon.HDOP;

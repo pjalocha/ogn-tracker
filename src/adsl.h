@@ -45,7 +45,7 @@ class ADSL_Packet
            uint8_t HorizAccuracy  :3; // 7=3m, 6=10m, 5=30m. 4=92.5m   <= NACp -4
            uint8_t VertAccuracy   :2; // 3=15m, 2=45m, 1=150m          <= GVA
            uint8_t VelAccuracy    :2; // 3=1m/s 2=3m/s 1=10m/s         <= NACv
-           uint8_t SpoofingDetect :1; // signal suspected GPS spoofing
+           uint8_t SpoofDet       :1; // signal suspected GPS spoofing
          } __attribute__((packed));
        } ;
      } __attribute__((packed)) ;
@@ -223,8 +223,8 @@ class ADSL_Packet
    int Print(char *Out) const
    { Out[0]=0;
      if(Type==0x02)
-       return sprintf(Out, "%02X:%06X %4.1fs [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s",
-         getAddrTable(), getAddress(), 0.25*TimeStamp, FNTtoFloat(getLat()), FNTtoFloat(getLon()),
+       return sprintf(Out, "%02X:%06X R%d %4.1fs [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s",
+         getAddrTable(), getAddress(), isRelay(), 0.25*TimeStamp, FNTtoFloat(getLat()), FNTtoFloat(getLon()),
          getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed());
      if(Type==0x42)
      { int Len=0;

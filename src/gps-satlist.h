@@ -96,8 +96,8 @@ class GPS_Sat
 
    uint16_t getSysStatus(uint8_t Sys)
    { uint16_t Stat = FixSats[Sys]; Stat<<=4;
-     Stat |= VisSats[Sys]; Stat<<=4;
-     Stat |= VisSNR[Sys];
+     Stat |= VisSats[Sys]; Stat<<=8;             // upper byte it FixSata (upper nibble) and VisSats (lower nibble)
+     Stat |= VisSNR[Sys];                        // lower byte = SNR
      return Stat; }
 
    void PrintSats(void) const
