@@ -191,15 +191,31 @@ template <class Type>
   if(X>Upp) return Upp;
   return X; }
 
-static void getTelemSatPPS(ADSL_Packet &Packet)
+static int getTelemSatPPS(ADSL_Packet &Packet)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
   Packet.setAddrTypeOGN(Parameters.AddrType);
   Packet.setRelay(0);
   Packet.Telemetry.Header.TelemType=0x3;                            // 3 = GPS telemetry
-  Packet.SatSNR.Header.GNSStype=0;                                  // 0 = GPS satellite SNR
-
-}
+  Packet.SatSNR.Header.GNSStype=1;                                  // 1 = GPS PPS monitor
+  if(PPS_Intr_Count==0) return 0;
+  uint32_t msTime = xTaskGetTickCount();                            // [ms] current sys-time
+  uint32_t PPSage = msTime-PPS_Intr_msTime;                         // [ms] how old the last PPS is
+  if(PPSage>20000) return 0;
+  uint32_t UTC = GPS_TimeSync.UTC;
+  uint32_t UTCage = msTime-GPS_TimeSync.sysTime;                    // [ms] time synce last ref. UTC
+  PPSage -= UTCage;                                                 //
+  PPSage += 500;
+  Packet.SatPPS.Data.UTC = UTC - PPSage/1000;                       // [sec] the UTC time of the 
+  Packet.SatPPS.Data.ClockTime = msTime-PPS_usPrecTime;             //
+  Packet.SatPPS.Data.ClockTimeRMS = Limit(PPS_usTimeRMS, (uint32_t)0, (uint32_t)255);
+  Packet.SatPPS.Data.RefClock = 16;                                 // [MHz]
+  Packet.SatPPS.Data.PPScount = Limit(PPS_Intr_Count, (uint32_t)0, (uint32_t)240);      // [sec]
+  int32_t FreqError = -PPS_usPeriodErr;
+  FreqError = (FreqError+8)>>4;                                     // [ppm]
+  Packet.SatPPS.Data.PPSerror = Limit(FreqError, (int32_t)-127, (int32_t)+127);
+  Packet.SatPPS.Data.PPSresid = Limit(PPS_usPeriodRMS, (uint32_t)0, (uint32_t)255);
+  return 1; }
 
 static void getTelemSatSNR(ADSL_Packet &Packet)
 { Packet.Init(0x42);
@@ -994,8 +1010,9 @@ void vTaskPROC(void* pvParameters)
       else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
         if(StatTxPkt==0) getTelemStatus(*Packet, Position);
-                    else getTelemSatSNR(*Packet);
-        StatTxPkt++; if(StatTxPkt>=2) StatTxPkt=0;
+        else if(StatTxPkt==1) getTelemSatSNR(*Packet);
+        else if(!getTelemSatPPS(*Packet)) getTelemSatSNR(*Packet);
+        StatTxPkt++; if(StatTxPkt>=3) StatTxPkt=0;
         Packet->Scramble();
         Packet->setCRC();
         ADSL_TxFIFO.Write();
