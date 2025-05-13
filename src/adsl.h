@@ -117,6 +117,41 @@ class ADSL_Packet
 
      } __attribute__((packed)) Flight;
 
+     struct
+     { uint8_t Type;             // 0x02=iConspicuity, bit #7 = Unicast, 0x42 = telemetry
+       uint8_t Address  [4];     // Address[30]/Reserved[1]/RelayForward[1] (not aligned to 32-bit !)
+       struct                    //
+       { uint8_t  GNSStype :6;   // 0 = Satellite SNR
+         uint8_t  TelemType:2;   // 3 = GNSS status and data
+       } __attribute__((packed)) Header;  // 1 byte
+       struct
+       { uint16_t SatSNR[5];     // SNR and sats visible and in fix for each GNSS system
+         uint8_t  Inbalance;     //
+         uint8_t  PDOP;          // [0.1]
+         uint8_t  HDOP;          // [0.1]
+         uint8_t  VDOP;          // [0.1]
+       } __attribute__((packed));
+     } __attribute__((packed)) SatSNR;
+
+     struct
+     { uint8_t Type;             // 0x02=iConspicuity, bit #7 = Unicast, 0x42 = telemetry
+       uint8_t Address  [4];     // Address[30]/Reserved[1]/RelayForward[1] (not aligned to 32-bit !)
+       struct                    //
+       { uint8_t  GNSStype :6;   // 1 = PPS timing
+         uint8_t  TelemType:2;   // 3 = GNSS status and data
+       } __attribute__((packed)) Header;  // 1 byte
+       struct
+       { uint32_t ClockTime;     // [ref.clock] PPS pulse timestamp
+         uint32_t UTC;           // [sec] UTC time
+         uint8_t  RefClock;      // [MHz] ref.clock frequency
+         uint8_t  PPScount;      // [count] number of PPS pulses in a raw
+         uint8_t  PPSerror;      // [ref.clock] PPS period error
+         uint8_t  PPSresid;      // [ref.clock] RNS on PPSerror
+         uint8_t  ClockTimeRMS;  // [ref.clock] RMS on usTime
+         uint8_t  Spare;
+       } __attribute__((packed));
+     } __attribute__((packed)) SatPPS;
+
    } ;
    uint8_t CRC[3];           // 24-bit (is aligned to 32-bit)
    uint8_t Spare;            // to make the overall size a multiple of 32-bit words
