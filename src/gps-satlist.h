@@ -72,13 +72,15 @@ class GPS_Sat
    static const uint8_t MaxSize = 60;
    GPS_Sat Sat[MaxSize];  // list of satellites
    uint8_t Size;          // number of satellites in the list
-   uint8_t qSec;
+   uint8_t qSec;          // [sec]
    uint8_t BurstGSV;
    uint8_t BurstGSA;
-   // uint8_t FixMode;
-   // uint8_t HDOP;
-   // uint8_t VDOP;
-   // uint8_t PDOP;
+
+   uint8_t FixMode;       // 1=no fix, 2=2-D, 3=3-D
+   uint8_t PDOP;          // [0.1]
+   uint8_t HDOP;          // [0.1]
+   uint8_t VDOP;          // [0.1]
+
    uint8_t VisSNR [8];    // [0.25dB] average SNR of visible satellites
    uint8_t VisSats[8];    // [count] of visible satellites
    uint8_t FixSNR [8];    // [0.25dB] average SNR of satellites in the fix
@@ -105,6 +107,7 @@ class GPS_Sat
        Len+=sprintf(Line+Len, " %s:%d/%4.1f:%d/%4.1fdB",
           GPS_Sat::SysName(Sys), FixSats[Sys], 0.25*FixSNR[Sys], VisSats[Sys], 0.25*VisSNR[Sys] );
      }
+     Len+=sprintf(Line+Len, " %d:%3.1f/%3.1f/%3.1f", FixMode, 0.1*PDOP, 0.1*HDOP, 0.1*VDOP);
      return Len; }
 
    void PrintStats(void) const
@@ -151,11 +154,18 @@ class GPS_Sat
          else   AverSNR = 0;
      return TotSat; }
 
-   uint8_t Find(uint8_t Sys, uint8_t PRN) const
+   uint8_t Find(uint8_t Sys, uint8_t PRN) const      // find given satellite by Sys and PRN
    { uint8_t Idx=0;
      for( ; Idx<Size; Idx++)
      { if(Sat[Idx].PRN!=PRN) continue;
        if(Sat[Idx].Sys!=Sys) continue;
+       break; }
+     return Idx; }
+
+   uint8_t Find(uint8_t PRN) const                  // find satellite only by PRN
+   { uint8_t Idx=0;
+     for( ; Idx<Size; Idx++)
+     { if(Sat[Idx].PRN!=PRN) continue;
        break; }
      return Idx; }
 
@@ -236,17 +246,33 @@ class GPS_Sat
      BurstGSA++;
      int8_t Sys=(-1);
      if(GSA.Parms<17) return 0;
-     if(GSA.Parms>=18) { Sys=Read_Dec1(GSA.ParmPtr(17)[0]); }
-     if(Sys<0) Sys=GPS_Sat::Sys_GP;
-     // printf("GSA: Sys=%d\n", Sys);
-     for(int Par=2; Par<14; Par++)
-     { int8_t PRN=Read_Dec2((const char *)GSA.ParmPtr(Par)); if(PRN<0) break;
-       uint8_t Idx=Find(Sys, PRN);
-       if(Idx>Size) continue;
-       if(Idx==Size && Size<MaxSize)
-       { Size++; Sat[Idx].Word=0; Sat[Idx].Sys=Sys; Sat[Idx].PRN=PRN; Sat[Idx].Azim=63; }
-       Sat[Idx].Fix=1; Sat[Idx].Time=qSec; }
+     if(GSA.Parms>=18) { Sys=Read_Dec1(GSA.ParmPtr(17)[0]); }       // system-id at the 18th parameter
+     // if(Sys<0) Sys=GPS_Sat::Sys_GP;                                 // if not readable assume 1 thus GPS
+     for(int Par=2; Par<14; Par++)                                  // scan parameters for satellite PRNs
+     { int8_t PRN=Read_Dec2((const char *)GSA.ParmPtr(Par)); if(PRN<0) break;  // read PRN, if non, there is no more to read
+       uint8_t Idx;
+       if(Sys>=0) Idx=Find(Sys, PRN);                               // find this PRN in the satellite list
+             else Idx=Find(PRN);
+       if(Idx>Size) continue;                                       //
+       if(Sys>=0 && Idx==Size && Size<MaxSize)                      // if not found then add this satellite to the list
+       { Size++; Sat[Idx].Word=0; Sat[Idx].Sys=Sys; Sat[Idx].PRN=PRN; Sat[Idx].Azim=63; } // with non-valid SNR and sky position
+       if(Idx<Size)
+       { Sat[Idx].Fix=1; Sat[Idx].Time=qSec; }                        // if found then set time and fix flag
+     }
+     PDOP = ReadDOP((const char *)GSA.ParmPtr(14));
+     HDOP = ReadDOP((const char *)GSA.ParmPtr(15));
+     VDOP = ReadDOP((const char *)GSA.ParmPtr(16));
+     int8_t Mode=Read_Dec1(GSA.ParmPtr(1)[0]);
+     if(Mode>0) FixMode=Mode;
+           else FixMode=0;
      return 0; }
+
+   static uint8_t ReadDOP(const char *Inp)
+   { int16_t DOP=0;
+     if(Read_Float1(DOP, Inp)<=0) return 0;
+     if(DOP<0) return 0;
+     if(DOP>255) return 255;
+     return DOP; }
 
    int ProcessGSV(NMEA_RxMsg &GSV)
    { BurstGSA=0;
@@ -265,7 +291,7 @@ class GPS_Sat
      if(Sats<0) Sats=Read_Dec1((const char *)GSV.ParmPtr(2));                           // could be a single or double digit number
      if(Sats<0) return -1;
      uint8_t Count=0;
-     for( int Parm=3; Parm<GSV.Parms-4; )                                               // up to 4 sats per packet
+     for( int Parm=3; Parm<=GSV.Parms-4; )                                               // up to 4 sats per packet
      { int8_t PRN =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(PRN <0) break;      // PRN number
        int8_t Elev=Read_Dec2((const char *)GSV.ParmPtr(Parm++)); // if(Elev<0) break;      // [deg] eleveation
       int16_t Azim=Read_Dec3((const char *)GSV.ParmPtr(Parm++)); // if(Azim<0) break;      // [deg] azimuth
