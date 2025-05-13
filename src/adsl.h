@@ -143,11 +143,11 @@ class ADSL_Packet
        struct
        { uint32_t UTC;           // [sec] UTC time
          uint32_t ClockTime;     // [ref.clock] PPS pulse timestamp
-         uint8_t  RefClock;      // [MHz] ref.clock frequency
-         uint8_t  PPScount;      // [count] number of PPS pulses in a raw
-          int8_t  PPSerror;      // [ppm] PPS period error
-         uint8_t  PPSresid;      // [1/16ppm] RNS on PPSerror
          uint8_t  ClockTimeRMS;  // [ref.clock] RMS on usTime
+         uint8_t  RefClock;      // [MHz] ref.clock frequency
+         uint8_t  PPScount;      // [count] number of PPS pulses in a cont. series
+          int8_t  PPSerror;      // [ppm] PPS period error
+         uint8_t  PPSresid;      // [ref.clock] RNS on PPS stability
          uint8_t  Spare;
        } __attribute__((packed)) Data;
      } __attribute__((packed)) SatPPS;
