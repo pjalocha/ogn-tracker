@@ -208,13 +208,13 @@ static int getTelemSatPPS(ADSL_Packet &Packet)
   PPSage += 500;
   Packet.SatPPS.Data.UTC = UTC - PPSage/1000;                       // [sec] the UTC time of the 
   Packet.SatPPS.Data.ClockTime = msTime-PPS_usPrecTime;             //
-  Packet.SatPPS.Data.ClockTimeRMS = Limit(PPS_usTimeRMS, (uint32_t)0, (uint32_t)255);
+  Packet.SatPPS.Data.ClockTimeRMS = Limit(IntSqrt(PPS_usTimeRMS<<4), (uint32_t)0, (uint32_t)255);
   Packet.SatPPS.Data.RefClock = 16;                                 // [MHz]
   Packet.SatPPS.Data.PPScount = Limit(PPS_Intr_Count, (uint32_t)0, (uint32_t)240);      // [sec]
   int32_t FreqError = -PPS_usPeriodErr;
   FreqError = (FreqError+8)>>4;                                     // [ppm]
   Packet.SatPPS.Data.PPSerror = Limit(FreqError, (int32_t)-127, (int32_t)+127);
-  Packet.SatPPS.Data.PPSresid = Limit(PPS_usPeriodRMS, (uint32_t)0, (uint32_t)255);
+  Packet.SatPPS.Data.PPSresid = Limit(IntSqrt(PPS_usPeriodRMS<<4), (uint32_t)0, (uint32_t)255);
   return 1; }
 
 static void getTelemSatSNR(ADSL_Packet &Packet)

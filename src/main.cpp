@@ -442,15 +442,15 @@ static void IRAM_ATTR PPS_Intr(void *Context)
   if(Cycles>0 && Cycles<=10 && abs(usResid)<Cycles*500)           // condition to accept the PPS edge
   { int32_t ResidErr = (usResid<<4)-PPS_usPeriodErr;              // [1/16us]
     if(Cycles>1) ResidErr/=Cycles;
-    PPS_usPeriodErr += (ResidErr+8)>>4;                         // [1/16us] average the PPS period error
+    PPS_usPeriodErr += (ResidErr+2)>>2;                         // [1/16us] average the PPS period error
     uint32_t ErrSqr = ResidErr*ResidErr;
     if(PPS_Intr_Count)                                            // if not the first edge in the series
     { PPS_usPrecTime += ((PPS_usPeriod<<4)+PPS_usPeriodErr)*Cycles;  // [1/16us] forcast the PPS time to the current PPS
-      PPS_usPeriodRMS += ((int32_t)((ErrSqr>>4)-PPS_usPeriodRMS)+8)>>4;
+      PPS_usPeriodRMS += ((int32_t)((ErrSqr>>4)-PPS_usPeriodRMS)+2)>>2;
       int32_t usTimeErr = (usTime<<4)-PPS_usPrecTime;                // [1/16us] difference between current PPs and the forecast
-      PPS_usPrecTime += (usTimeErr+8)>>3;                            // [1/16us]
+      PPS_usPrecTime += (usTimeErr+2)>>2;                            // [1/16us]
       uint32_t ErrSqr = usTimeErr*usTimeErr;
-      PPS_usTimeRMS += ((int32_t)((ErrSqr>>4)-PPS_usTimeRMS)+8)>>4; }
+      PPS_usTimeRMS += ((int32_t)((ErrSqr>>4)-PPS_usTimeRMS)+2)>>2; }
     else                                                          // if this was the very first edge in the series
     { PPS_usPrecTime  = PPS_Intr_usTime<<4;
       PPS_usTimeRMS   = 4<<4;
