@@ -185,6 +185,23 @@ class ADSL_Packet
    }
 
    int PrintGNSS(char *Out) const
+   { uint8_t Type=SatSNR.Header.GNSStype;
+     if(Type==0) return PrintSatSNR(Out);
+     if(Type==1) return PrintSatPPS(Out);
+     int Len=0;
+     return 0; }
+
+   int PrintSatPPS(char *Out) const
+   { int Len=0;
+     uint8_t RefClock=SatPPS.Data.RefClock; if(RefClock==0) RefClock=1;
+     Len+=sprintf(Out+Len, " SatPPS: %08X:%08X/%dMHz/%3.1fus %+dppm %3.1fus %ds",
+              SatPPS.Data.UTC, SatPPS.Data.ClockTime, SatPPS.Data.RefClock,
+              (1.0/RefClock)*SatPPS.Data.ClockTimeRMS,
+              SatPPS.Data.PPSerror, (1.0/RefClock)*SatPPS.Data.PPSresid,
+              SatPPS.Data.PPScount );
+     return Len; }
+
+   int PrintSatSNR(char *Out) const
    { int Len=0;
      const char *SysName[5] = { "QZ", "GP", "GL", "GA", "BD" };
      Len+=sprintf(Out+Len, " SatSNR:");
