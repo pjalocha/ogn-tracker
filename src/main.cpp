@@ -209,7 +209,7 @@ static void TFT_BL_Init(void)
 
 static void TFT_BL(uint8_t Lev) { ledcWrite(TFT_BL_Chan, Lev); }
 
-static void TFT_DrawID(bool WithAP)
+static void TFT_DrawID(bool WithAP=0)
 { char Line[128];
   TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
@@ -242,6 +242,24 @@ static void TFT_DrawID(bool WithAP)
   TFT.setTextSize(1);
   TFT.setCursor(2, 72);
   TFT.print(Line); }
+
+static void TFT_DrawSat(void)
+{ char Line[32];
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
+  TFT.setTextSize(1);
+
+  int Vert=14;
+  for(uint8_t Sys=0; Sys<=4; Sys++)
+  { int Len=sprintf(Line, "%s:%d:%d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
+    uint8_t SNR=GPS_SatMon.VisSNR[Sys];
+    if(SNR>0) Len+=sprintf(Line+Len, " %4.1fdB", 0.25*SNR);
+         // else Len+=sprintf(Line+Len, " --.-dB");
+    Line[Len]=0;
+    TFT.setCursor(2, Vert); TFT.print(Line);
+    Vert+=14; }
+}
 
 static void TFT_DrawGPS(const GPS_Position *GPS)
 { char Line[32];
@@ -290,6 +308,18 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   Line[Len]=0;
   TFT.setCursor(2, 64); TFT.print(Line); }
 
+const  int TFT_Pages=3;
+static int TFT_Page =0;
+static int TFT_PageChange =1;
+
+static void TFT_DrawPage(const GPS_Position *GPS)
+{ // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
+  if(TFT_Page==0) return TFT_DrawID();
+  if(TFT_Page==1) return TFT_DrawSat();
+  if(GPS) return TFT_DrawGPS(GPS);
+     else return TFT_DrawID();
+}
+
 #endif
 
 // =======================================================================================================
@@ -298,8 +328,17 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
 static Button2 Button(Button_Pin);
 static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
-static void Button_Single(Button2 Butt) { }
+static void Button_Single(Button2 Butt)
+{
+#ifdef WITH_ST7735
+  TFT_Page++;
+  if(TFT_Page>=TFT_Pages) TFT_Page=0;
+  TFT_PageChange=1;
+#endif
+}
+
 static void Button_Double(Button2 Butt) { }
+
 static void Button_Long(Button2 Butt)
 {
 #ifdef WITH_SLEEP
@@ -1106,12 +1145,13 @@ void loop()
 #ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();
+  if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
+  // if(GPS && !GPS->isTimeValid()) GPS==0;
+  if(TFT_PageChange)
+  { TFT_DrawPage(GPS);
+    TFT_PageChange=0; }
   if(GPS!=PrevGPS)
-  { if(GPS)
-    { // TFT_BL(0);
-      TFT_DrawGPS(GPS);
-      // TFT_BL(128);
-    }
+  { TFT_PageChange=1;
     PrevGPS=GPS; }
 #endif
 #ifdef WITH_BLE_SPP

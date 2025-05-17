@@ -10,11 +10,11 @@
 
 // extern uint8_t GPS_PowerMode;               // 0=shutdown, 1=reduced, 2=normal
 
-#ifdef WITH_ESP32
+// #ifdef WITH_ESP32
 const  uint8_t GPS_PosPipeSize         = 16; // number of GPS positions held in a pipe
-#else
-const  uint8_t GPS_PosPipeSize         =  4; // number of GPS positions held in a pipe
-#endif
+// #else
+// const  uint8_t GPS_PosPipeSize         =  4; // number of GPS positions held in a pipe
+// #endif
 
 extern uint8_t      GPS_PosIdx;                   // Pipe index, increments with every GPS position received
 extern GPS_Position GPS_Pos[GPS_PosPipeSize];    // GPS position pipe

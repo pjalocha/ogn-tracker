@@ -85,7 +85,7 @@ static union
                                                                                                    // for the autobaud on the GPS port
 const int GPS_BurstTimeout = 100; // [ms]
 
-static uint32_t GPS_BaudRate = 4800;     // [bps] current baudrate on the GPS port
+static uint32_t GPS_BaudRate = 115200;   // [bps] current baudrate on the GPS port
 static uint32_t GPS_nextBaudRate(void)   // produce next (possible) GPS baudrate (for autobaud)
 { if(GPS_BaudRate>=460800) GPS_BaudRate=4800;
   else if(GPS_BaudRate==38400) GPS_BaudRate=57600;
@@ -579,7 +579,7 @@ static void GPS_BurstEnd(void)                                             // wh
   GPS_SatCnt=GPS_SatMon.CalcStats(GPS_SatSNR);
   GPS_SatMon.PrintStats(Line);
   if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 10))
-  { Serial.printf("GPS: %s\n", Line);
+  { Serial.printf("%s\n", Line);
     xSemaphoreGive(CONS_Mutex); }
 
   // Serial.printf("GPS: %02X %s\n", GPS_Status.Flags, Line);
