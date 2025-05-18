@@ -399,9 +399,12 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   Line[Len]=0;
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14; }
 
-const  int TFT_Pages=5;
-static int TFT_Page =0;
-static int TFT_PageChange =1;
+const  uint8_t  TFT_Pages=5;
+static uint8_t  TFT_Page       = 0;       // page currently on display
+static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
+static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
+static uint32_t TFT_PageActive = 0;       // [ms] last time the page was active (button pressed)
+const  uint32_t TFT_PageTimeout = 30000;  // [ms] timeout to turn off the TFT backlight
 
 static void TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
@@ -424,9 +427,12 @@ static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 static void Button_Single(Button2 Butt)
 {
 #ifdef WITH_ST7735
-  TFT_Page++;
-  if(TFT_Page>=TFT_Pages) TFT_Page=0;
-  TFT_PageChange=1;
+  if(TFT_PageOFF) TFT_PageOFF=0;
+  else
+  { TFT_Page++;
+    if(TFT_Page>=TFT_Pages) TFT_Page=0;
+    TFT_PageChange=1; }
+  TFT_PageActive=millis();
 #endif
 }
 
@@ -1253,6 +1259,10 @@ void loop()
     TFT_PageChange=0; }
   if(GPS!=PrevGPS)
   { TFT_PageChange=1;
+    uint32_t Age = millis()-TFT_PageActive;
+    TFT_PageOFF = Age>TFT_PageTimeout;
+    if(TFT_PageOFF) TFT_BL(0);
+              else  TFT_BL(128);
     PrevGPS=GPS; }
 #endif
 #ifdef WITH_BLE_SPP
