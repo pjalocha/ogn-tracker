@@ -215,22 +215,25 @@ static void TFT_DrawID(bool WithAP=0)
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);
   TFT.setTextSize(1);
-  TFT.setCursor(2, 16);
+
+  int Vert=16;
+  TFT.setCursor(2, Vert);
   Parameters.Print(Line); Line[10]=0;
   TFT.print(Line);
+  Vert+=14;
   if(Parameters.Reg[0])
-  { TFT.setCursor(2, 32);
+  { TFT.setCursor(2, Vert);
     sprintf(Line, "Reg: %s", Parameters.Reg);
-    TFT.print(Line); }
+    TFT.print(Line); Vert+=14; }
   if(Parameters.Pilot[0])
-  { TFT.setCursor(2, 48);
+  { TFT.setCursor(2, Vert);
     sprintf(Line, "Plt: %s", Parameters.Pilot);
-    TFT.print(Line); }
+    TFT.print(Line); Vert+=14; }
 #ifdef WITH_AP
   if(WithAP)
-  { TFT.setCursor(2, 64);
+  { TFT.setCursor(2, Vert);
     sprintf(Line, "AP: %s", Parameters.APname);
-    TFT.print(Line); }
+    TFT.print(Line); Vert+=14; }
 #endif
   uint64_t ID=getUniqueID();
   uint8_t Len=Format_String(Line, "#");
@@ -250,7 +253,7 @@ static void TFT_DrawSat(void)
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
 
-  int Vert=14;
+  int Vert=16;
   for(uint8_t Sys=0; Sys<=4; Sys++)
   { int Len=sprintf(Line, "%s:%d:%d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
     uint8_t SNR=GPS_SatMon.VisSNR[Sys];
@@ -261,6 +264,93 @@ static void TFT_DrawSat(void)
     Vert+=14; }
 }
 
+static void TFT_DrawRF(void)
+{ char Line[32];
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
+  TFT.setTextSize(1);
+
+  int Vert=16;
+  uint8_t Len=0;
+#ifdef WITH_SX1262
+  Len+=Format_String(Line+Len, "SX1262");
+#endif
+#ifdef WITH_SX1276
+  Len+=Format_String(Line+Len, "SX1276");
+#endif
+  Line[Len++]=':';
+  Len+=Format_SignDec(Line+Len, (int16_t)Parameters.TxPower);              // Tx power
+  Len+=Format_String(Line+Len, "dBm");
+  // Line[Len++]=' ';
+  // Len+=Format_SignDec(Line+Len, (int32_t)Parameters.RFchipFreqCorr, 2, 1); // frequency correction
+  // Len+=Format_String(Line+Len, "ppm");
+  Line[Len]=0;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+  sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+  sprintf(Line, "Rx: %d:%d pkt", Radio_RxCount[1], Radio_RxCount[2]);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+  Len=0;
+  Len+=Format_String(Line+Len, Radio_FreqPlan.getPlanName());               // name of the frequency plan
+  Line[Len++]=' ';
+  Len+=Format_UnsDec(Line+Len, (uint32_t)(Radio_FreqPlan.getCenterFreq()/100000), 3, 1); // center frequency
+  Len+=Format_String(Line+Len, "M");
+  Line[Len]=0;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+}
+
+static void TFT_DrawBaro(const GPS_Position *GPS)
+{ char Line[32];
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
+  TFT.setTextSize(1);
+
+  int Vert=16;
+  uint8_t Len=Format_String(Line+Len, "Baro ");
+  if(GPS && GPS->hasBaro)
+  { Len+=Format_UnsDec(Line+Len, (GPS->Pressure+20)/40, 5, 1);
+    Len+=Format_String(Line+Len, "hPa "); }
+  else Len+=Format_String(Line+Len, "----.-hPa ");
+  Line[Len]=0;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+  Len=0;
+  if(GPS && GPS->hasBaro)
+  { Len+=Format_SignDec(Line+Len, (GPS->StdAltitude+5)/10, 4);
+    Len+=Format_String(Line+Len, "m ");
+    Len+=Format_SignDec(Line+Len, GPS->ClimbRate, 2, 1);
+    Len+=Format_String(Line+Len, "m/s "); }
+  else
+  { Len+=Format_String(Line+Len, "----m");
+    Len+=Format_String(Line+Len, " --.-m/s "); }
+  Line[Len]=0;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+  Len=0;
+  if(GPS && GPS->hasBaro)
+  { Len+=Format_SignDec(Line+Len, GPS->Temperature, 2, 1);
+    Line[Len++]=0xB0;
+    Line[Len++]='C';
+    Line[Len++]=' ';
+    Len+=Format_SignDec(Line+Len, GPS->Humidity, 2, 1);
+    Line[Len++]='%'; }
+  else Len+=Format_String(Line+Len, "---.-C --.-% ");
+  Line[Len]=0;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+  if(GPS && GPS->hasBaro)
+  { float Dew = DewPoint(0.1f*GPS->Temperature, 0.1f*GPS->Humidity);
+    sprintf(Line, "Dew: %+5.1fC", Dew);
+    Line[5]=0xB0;
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+  }
+}
+
 static void TFT_DrawGPS(const GPS_Position *GPS)
 { char Line[32];
   TFT.fillScreen(ST77XX_DARKBLUE);
@@ -268,6 +358,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
 
+  int Vert=16;
   uint8_t Len=0;
   strcpy(Line, "--.-- --:--:--");
   if(GPS && GPS->isDateValid())
@@ -278,7 +369,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   { Format_UnsDec (Line+ 6, (uint32_t)GPS->Hour,  2, 0);
     Format_UnsDec (Line+ 9, (uint32_t)GPS->Min,   2, 0);
     Format_UnsDec (Line+12, (uint32_t)GPS->Sec,   2, 0); }
-  TFT.setCursor(2, 16); TFT.print(Line);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   Len=0;
   Len+=Format_String(Line+Len, "Lat: ");
@@ -287,7 +378,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
     Line[Len++]=0xB0; }
   else Len+=Format_String(Line+Len, "---.-----");
   Line[Len]=0;
-  TFT.setCursor(2, 32); TFT.print(Line);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
   Len=0;
   Len+=Format_String(Line+Len, "Lon:");
   if(GPS && GPS->isValid())
@@ -295,7 +386,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
     Line[Len++]=0xB0; }
   else Len+=Format_String(Line+Len, "----.-----");
   Line[Len]=0;
-  TFT.setCursor(2, 48); TFT.print(Line);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
   Len=0;
   Len+=Format_String(Line+Len, "Alt: ");
   if(GPS && GPS->isValid())
@@ -306,9 +397,9 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   }
   else Len+=Format_String(Line+Len, "-----.-  ");
   Line[Len]=0;
-  TFT.setCursor(2, 64); TFT.print(Line); }
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14; }
 
-const  int TFT_Pages=3;
+const  int TFT_Pages=5;
 static int TFT_Page =0;
 static int TFT_PageChange =1;
 
@@ -316,8 +407,10 @@ static void TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
   if(TFT_Page==0) return TFT_DrawID();
   if(TFT_Page==1) return TFT_DrawSat();
-  if(GPS) return TFT_DrawGPS(GPS);
-     else return TFT_DrawID();
+  if(TFT_Page==2) return TFT_DrawRF();
+  if(!GPS) return TFT_DrawID();
+  if(TFT_Page==3) return TFT_DrawBaro(GPS);
+  return TFT_DrawGPS(GPS);
 }
 
 #endif

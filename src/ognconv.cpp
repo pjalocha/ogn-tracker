@@ -45,12 +45,13 @@ uint8_t AcftType_ADSBtoOGN(uint8_t AcftCat)
 { // if(AcftCat&0x38) return 0;
   uint8_t Upp = AcftCat>>4;
   uint8_t Low = AcftCat&7;
+  if(Upp==0x0) return Low;
   if(Upp==0xA)
   { if(Low==1) return 8;
     if(Low==7) return 3;
     return 9; }
-  if(Upp==0xB)
-  { const uint8_t Map[8] = { 0, 0xB, 1, 4, 7, 0, 0xD, 0 };
+  if(Upp==0xB)          //      B1, B2,B3,B4,B5,  B6, B7
+  { const uint8_t Map[8] = { 0,  1,0xB, 4, 7, 0, 0xD, 0 };
     return Map[Low]; }
   if(Upp==0xC)
   { if(Low>=4) return 0xF;
@@ -465,5 +466,13 @@ float BaroAlt(float P)                     // altitude [m] for given pressure [P
   { if(P>BaroRefTable[Idx+1].Pb) break; }
   BaroRef &Ref = BaroRefTable[Idx];
   return BaroAlt(P, Ref.hb, Ref.Pb, Ref.Tb, Ref.Lb /* , Ref.gb */ ); }
+
+float DewPoint(float T, float RH) // https://iridl.ldeo.columbia.edu/dochelp/QA/Basic/dewpoint.html
+{ const float T0 = 273.15f;                       // [K]
+  const float E0 = 0.611f;                        // [hPa]
+  const float LRv = 5423.0f;                      // [K]
+  float Es = E0*expf(LRv*(1.0f/T0-1.0f/(T+T0)));  // [hPa]
+  float E = 0.01f*RH*Es; if(E<=0) return 0;       // [hPa]
+  return 1.0f/(1.0f/T0-logf(E/E0)/LRv)-T0; }      // [degC]
 
 // ==============================================================================================
