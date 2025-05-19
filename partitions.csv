@@ -1,13 +1,17 @@
 # Espressif ESP32 Partition Table
 # Name, Type, SubType, Offset, Size, Flags
-# for parameter storage
+# start at offset: 36 KB
+# for parameter storage: 24 KB
 nvs,data,nvs,0x9000,24K,
+# 4 KB
 phy_init,data,phy,0xf000,4K,
-# application (code)
+# application (code): 1800 KB
 factory,app,factory,0x10000,1800K,
-# SPIFFS in Flash
+# SPIFFS in Flash: 2048 kB
 intlog,data,spiffs,,0x200000,
-# FAT in Flash
+# FAT in Flash: 2048 KB
 # intlog,data,fat,,0x200000,
+# for core dumps: 64 KB
 coredump, data,coredump,,0x10000,
-
+# Total: 36+24+4+1800+2048+64 = 3976 KB
+# this is a layout for 4MB flash and no OTA but 2MB for log files
