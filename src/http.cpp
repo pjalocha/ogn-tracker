@@ -749,7 +749,7 @@ static void Table_Relay(httpd_req_t *Req)
   httpd_resp_sendstr_chunk(Req, "<thead><tr><th>Relay</th><th>Rank</th><th>[sec]</th></tr></thead>\n<tbody>\n");
 
   for( uint8_t Idx=0; Idx<RelayQueueSize; Idx++)
-  { OGN_RxPacket<OGN_Packet> *Packet = RelayQueue.Packet+Idx; if(Packet->Rank==0) continue;
+  { OGN_RxPacket<OGN_Packet> *Packet = OGN_RelayQueue.Packet+Idx; if(Packet->Rank==0) continue;
     Len =Format_String(Line, "<tr><td>");
     Line[Len++]='0'+Packet->Packet.Header.AddrType;
     Line[Len++]=':';
