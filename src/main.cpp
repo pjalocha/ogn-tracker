@@ -263,8 +263,10 @@ static void TFT_DrawID(bool WithAP=0)
   uint16_t FrameColor=ST77XX_WHITE;
   if(Full<=2) { CellColor=ST77XX_YELLOW; }
   if(Full<=1) { CellColor=FrameColor=ST77XX_RED; }
+  static uint8_t Flip=0;
+  if(BatteryVoltageRate>0 && Flip&1) Full++;
   TFT_DrawBatt(146, 30, 8, Cells, Full, CellColor, FrameColor);
-
+  Flip++;
 }
 
 static void TFT_DrawSat(void)
