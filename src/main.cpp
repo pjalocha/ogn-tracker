@@ -964,7 +964,7 @@ void setup()
 #endif
 
 #ifdef WITH_BLE_SPP
-  if(!StartAP && ameters.BTname[0])
+  if(!StartAP && Parameters.BTname[0])
   { Serial.printf("Start BLE (Arduino) Serial Port: %s\n", Parameters.BTname);
     BLE_SPP_Start(Parameters.BTname); }
 #endif
