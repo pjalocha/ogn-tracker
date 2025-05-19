@@ -209,6 +209,16 @@ static void TFT_BL_Init(void)
 
 static void TFT_BL(uint8_t Lev) { ledcWrite(TFT_BL_Chan, Lev); }
 
+static void TFT_DrawBatt(uint16_t X, uint16_t Y, uint16_t CellSize,
+                         uint16_t Cells, uint16_t Full,
+                         uint16_t CellColor, uint16_t FrameColor)
+{ TFT.drawRect(X, Y, CellSize+4, (CellSize+1)*Cells+3, FrameColor);
+  TFT.drawRect(X+2, Y-3, CellSize, 3, FrameColor);
+  if(Full>Cells) Full=Cells;
+  for(uint16_t Cell=0; Cell<Full; Cell++)
+  { TFT.fillRect(X+2, Y+(Cells-1-Cell)*(CellSize+1)+2, CellSize, CellSize, CellColor); }
+}
+
 static void TFT_DrawID(bool WithAP=0)
 { char Line[128];
   TFT.fillScreen(ST77XX_DARKBLUE);
@@ -244,7 +254,18 @@ static void TFT_DrawID(bool WithAP=0)
   TFT.setFont(0);
   TFT.setTextSize(1);
   TFT.setCursor(2, 72);
-  TFT.print(Line); }
+  TFT.print(Line);
+
+   int16_t BattVolt=BatterySense();                               // [mV] measure battery voltage
+  uint16_t Cells=5;
+   int16_t Full=(BattVolt-3300)/160; if(Full<0) Full=0;
+  uint16_t CellColor=ST77XX_GREEN;
+  uint16_t FrameColor=ST77XX_WHITE;
+  if(Full<=2) { CellColor=ST77XX_YELLOW; }
+  if(Full<=1) { CellColor=FrameColor=ST77XX_RED; }
+  TFT_DrawBatt(140, 30, 8, Cells, Full, CellColor, FrameColor);
+
+}
 
 static void TFT_DrawSat(void)
 { char Line[32];
@@ -403,8 +424,10 @@ const  uint8_t  TFT_Pages=5;
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
+#ifdef WITH_TFT_DIM
 static uint32_t TFT_PageActive = 0;       // [ms] last time the page was active (button pressed)
-const  uint32_t TFT_PageTimeout = 30000;  // [ms] timeout to turn off the TFT backlight
+const  uint32_t TFT_PageTimeout = (uint32_t)60000*WITH_TFT_DIM;  // [ms] timeout to turn off the TFT backlight
+#endif
 
 static void TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
@@ -1259,8 +1282,12 @@ void loop()
     TFT_PageChange=0; }
   if(GPS!=PrevGPS)
   { TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
     uint32_t Age = millis()-TFT_PageActive;
     TFT_PageOFF = Age>TFT_PageTimeout;
+#else
+    TFT_PageOFF = 0;
+#endif
     if(TFT_PageOFF) TFT_BL(0);
               else  TFT_BL(128);
     PrevGPS=GPS; }
