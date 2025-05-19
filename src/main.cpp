@@ -212,8 +212,8 @@ static void TFT_BL(uint8_t Lev) { ledcWrite(TFT_BL_Chan, Lev); }
 static void TFT_DrawBatt(uint16_t X, uint16_t Y, uint16_t CellSize,
                          uint16_t Cells, uint16_t Full,
                          uint16_t CellColor, uint16_t FrameColor)
-{ TFT.drawRect(X, Y, CellSize+4, (CellSize+1)*Cells+3, FrameColor);
-  TFT.drawRect(X+2, Y-3, CellSize, 3, FrameColor);
+{ TFT.drawRect(X, Y, CellSize+4, (CellSize+1)*Cells+3, FrameColor);   // draw the main box
+  TFT.drawRect(X+2, Y-4, CellSize, 4, FrameColor);                    // draw the tip
   if(Full>Cells) Full=Cells;
   for(uint16_t Cell=0; Cell<Full; Cell++)
   { TFT.fillRect(X+2, Y+(Cells-1-Cell)*(CellSize+1)+2, CellSize, CellSize, CellColor); }
@@ -263,7 +263,7 @@ static void TFT_DrawID(bool WithAP=0)
   uint16_t FrameColor=ST77XX_WHITE;
   if(Full<=2) { CellColor=ST77XX_YELLOW; }
   if(Full<=1) { CellColor=FrameColor=ST77XX_RED; }
-  TFT_DrawBatt(140, 30, 8, Cells, Full, CellColor, FrameColor);
+  TFT_DrawBatt(146, 30, 8, Cells, Full, CellColor, FrameColor);
 
 }
 
