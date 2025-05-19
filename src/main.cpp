@@ -256,7 +256,7 @@ static void TFT_DrawID(bool WithAP=0)
   TFT.setCursor(2, 72);
   TFT.print(Line);
 
-   int16_t BattVolt=BatterySense();                               // [mV] measure battery voltage
+   int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
   uint16_t Cells=5;
    int16_t Full=(BattVolt-3300)/160; if(Full<0) Full=0;
   uint16_t CellColor=ST77XX_GREEN;
