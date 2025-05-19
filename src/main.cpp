@@ -518,9 +518,9 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 #ifdef WITH_AXP
   if(HardwareStatus.AXP192 || HardwareStatus.AXP202) return AXP.getBattVoltage();
 #endif
-// #ifdef ADC_BattSenseEna
-//   digitalWrite(ADC_BattSenseEna, HIGH);
-// #endif
+#ifdef ADC_BattSenseEna
+  digitalWrite(ADC_BattSenseEna, HIGH);
+#endif
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
@@ -532,17 +532,16 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 #else
   Volt = Volt*2;
 #endif
-  
+
 #ifdef BATT_ADC_BIAS
   if(Volt>=BATT_ADC_BIAS) Volt-=BATT_ADC_BIAS;
 #else
   const uint16_t Bias = 50;  // apparently, there is 80mV bias in the battery voltage measurement
   if(Volt>=Bias) Volt-=Bias;
 #endif
-
-// #ifdef ADC_BattSenseEna
-//   digitalWrite(ADC_BattSenseEna, LOW);
-// #endif
+#ifdef ADC_BattSenseEna
+  digitalWrite(ADC_BattSenseEna, LOW);
+#endif
   return Volt; } // [mV]
 
 // =======================================================================================================
