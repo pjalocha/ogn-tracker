@@ -527,6 +527,7 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 #endif
 #ifdef ADC_BattSenseEna
   digitalWrite(ADC_BattSenseEna, HIGH);
+  delay(1);
 #endif
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
