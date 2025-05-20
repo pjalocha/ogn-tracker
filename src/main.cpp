@@ -263,7 +263,7 @@ static void TFT_DrawID(bool WithAP=0)
 
    int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
   uint16_t Cells=5;
-   int16_t Full=(BattVolt-3300)/160; if(Full<0) Full=0;
+   int16_t Full=(BattVolt-3300+80)/160; if(Full<0) Full=0;
   uint16_t CellColor=ST77XX_GREEN;
   uint16_t FrameColor=ST77XX_WHITE;
   if(Full<=2) { CellColor=ST77XX_YELLOW; }
