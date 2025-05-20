@@ -237,14 +237,19 @@ static void TFT_DrawID(bool WithAP=0)
     TFT.print(Line); Vert+=14; }
   if(Parameters.Pilot[0])
   { TFT.setCursor(2, Vert);
-    sprintf(Line, "Plt: %s", Parameters.Pilot);
+    sprintf(Line, "Plt:%s", Parameters.Pilot);
     TFT.print(Line); Vert+=14; }
 #ifdef WITH_AP
   if(WithAP)
   { TFT.setCursor(2, Vert);
-    sprintf(Line, "AP: %s", Parameters.APname);
+    sprintf(Line, "AP:%s", Parameters.APname);
     TFT.print(Line); Vert+=14; }
 #endif
+  if(Vert<60)
+  { TFT.setCursor(2, Vert);
+    sprintf(Line, "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
+    TFT.print(Line); Vert+=14; }
+
   uint64_t ID=getUniqueID();
   uint8_t Len=Format_String(Line, "#");
   Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
