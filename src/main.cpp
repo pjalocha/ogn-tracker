@@ -574,9 +574,13 @@ int  CONS_UART_Free(void)
 { return Serial.availableForWrite(); }
 
 int  CONS_UART_Read (uint8_t &Byte)
-{ int Ret=Serial.read(); if(Ret>=0) { Byte=Ret; return 1; }
+{ char Char;
+  int Ret=Serial.read(); if(Ret>=0) { Byte=Ret; return 1; }
 #ifdef WITH_BT4_SPP
   Ret=BT_SPP_Read(Byte); if(Ret>0) { return 1; }
+#endif
+#ifdef WITH_BLE_SPP
+  Ret=BLE_SPP_RxFIFO.Read(Char); if(Ret>0) { Byte=Char; return 1; }
 #endif
 #ifdef WITH_BT_SPP
   Ret=BTserial.read(); if(Ret>=0) { Byte=Ret; return 1; }
@@ -1271,6 +1275,9 @@ void loop()
 #ifdef Button_Pin
   Button.loop();
 #endif
+#ifdef WITH_BLE_SPP
+  BLE_SPP_Check();
+#endif
   // if(ProcessInput()==0) vTaskDelay(1);
   while(ProcessInput()>0);
 #ifdef WITH_ST7735
@@ -1292,9 +1299,6 @@ void loop()
     if(TFT_PageOFF) TFT_BL(0);
               else  TFT_BL(128);
     PrevGPS=GPS; }
-#endif
-#ifdef WITH_BLE_SPP
-  BLE_SPP_Check();
 #endif
 }
 
