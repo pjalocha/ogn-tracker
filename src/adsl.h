@@ -441,8 +441,10 @@ class ADSL_Packet
 
     uint16_t getSpeed(void) const { return UnsVRdecode<uint16_t,6>(Position[6]); }              // [0.25 m/s]
     void setSpeed(uint16_t Speed) { Position[6] = UnsVRencode<uint16_t,6>(Speed); }             // [0.25 m/s]
+    bool hasSpeed(void) const { return Position[6]!=0xFF; }
+    void clrSpeed(void) { Position[6]=0xFF; }
 
-   int32_t getAlt(void) const                                                                  // [m]
+   int32_t getAlt(void) const                                                                   // [m]
    { int32_t Word=Position[8]&0x3F; Word<<=8; Word|=Position[7];
      return UnsVRdecode<int32_t,12>(Word)-320; }
    void setAlt(int32_t Alt)
@@ -450,6 +452,8 @@ class ADSL_Packet
      int32_t Word=UnsVRencode<uint32_t,12>(Alt);
      Position[7]=Word;
      Position[8] = (Position[8]&0xC0) | (Word>>8); }
+   bool hasAlt(void) const { return (Position[8]&0x3F)==0x3F && Position[7]==0xFF; }             // is altitude valid ?
+   void clrAlt(void) { Position[8]|=0x3F; Position[7]=0xFF; }                                   // declare invalid altitude
 
    int16_t getClimbWord(void) const                                                             //
    { int16_t Word=Position[9]&0x7F; Word<<=2; Word|=Position[8]>>6; return Word; }
@@ -460,8 +464,8 @@ class ADSL_Packet
    void setClimbWord(int16_t Word)
    { Position[8] = (Position[8]&0x3F) | ((Word&0x03)<<6);
      Position[9] = (Position[9]&0x80) |  (Word>>2); }
-   bool hasClimb(void) const { return getClimbWord()!=0x100; }                                        // climb-rate present or absent
-   void clrClimb(void) { setClimbWord(0x100); }                                                 // declare climb-rate as absent
+   bool hasClimb(void) const { return getClimbWord()!=0x1FF; }                                  // climb-rate is valid ?
+   void clrClimb(void) { setClimbWord(0x1FF); }                                                 // declare climb-rate as absent
 
    uint16_t getTrack(void) const                                                                // 9-bit cordic
    { int16_t Word=Position[10]; Word<<=1; Word|=Position[9]>>7; return Word; }

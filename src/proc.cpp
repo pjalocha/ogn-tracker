@@ -203,10 +203,10 @@ static int getTelemSatPPS(ADSL_Packet &Packet)
   uint32_t PPSage = msTime-PPS_Intr_msTime;                         // [ms] how old the last PPS is
   if(PPSage>20000) return 0;
   uint32_t UTC = GPS_TimeSync.UTC;
-  uint32_t UTCage = msTime-GPS_TimeSync.sysTime;                    // [ms] time synce last ref. UTC
+  uint32_t UTCage = msTime-GPS_TimeSync.sysTime;                    // [ms] time since last ref. UTC
   PPSage -= UTCage;                                                 //
   PPSage += 500;
-  Packet.SatPPS.Data.UTC = UTC - PPSage/1000;                       // [sec] the UTC time of the 
+  Packet.SatPPS.Data.UTC = UTC - PPSage/1000;                       // [sec] the UTC time of the last PPS interrupt
   Packet.SatPPS.Data.ClockTime = msTime-PPS_usPrecTime;             //
   Packet.SatPPS.Data.ClockTimeRMS = Limit(IntSqrt(PPS_usTimeRMS<<4), (uint32_t)0, (uint32_t)255);
   Packet.SatPPS.Data.RefClock = 16;                                 // [MHz]
