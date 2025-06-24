@@ -191,6 +191,7 @@ template <class Type>
   if(X>Upp) return Upp;
   return X; }
 
+#ifdef GPS_PinPPS
 static int getTelemSatPPS(ADSL_Packet &Packet)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
@@ -216,6 +217,9 @@ static int getTelemSatPPS(ADSL_Packet &Packet)
   Packet.SatPPS.Data.PPSerror = Limit(FreqError, (int32_t)-127, (int32_t)+127);
   Packet.SatPPS.Data.PPSresid = Limit(IntSqrt(PPS_usPeriodRMS<<4), (uint32_t)0, (uint32_t)255);
   return 1; }
+#else
+static int getTelemSatPPS(ADSL_Packet &Packet) { return 0; }
+#endif
 
 static void getTelemSatSNR(ADSL_Packet &Packet)
 { Packet.Init(0x42);
