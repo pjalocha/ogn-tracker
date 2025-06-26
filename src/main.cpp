@@ -235,12 +235,13 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y)
 
 static void TFT_DrawID(bool WithAP=0)
 { char Line[128];
-  TFT.fillScreen(ST77XX_DARKBLUE);
+  // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);
   TFT.setTextSize(1);
 
   int Vert=16;
+  TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert);
   Parameters.Print(Line); Line[10]=0;
   TFT.print(Line);
@@ -248,22 +249,27 @@ static void TFT_DrawID(bool WithAP=0)
   if(Parameters.Reg[0])
   { TFT.setCursor(2, Vert);
     sprintf(Line, "Reg: %s", Parameters.Reg);
+    TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.print(Line); Vert+=14; }
   if(Parameters.Pilot[0])
   { TFT.setCursor(2, Vert);
     sprintf(Line, "Plt:%s", Parameters.Pilot);
+    TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.print(Line); Vert+=14; }
 #ifdef WITH_AP
   if(WithAP)
   { TFT.setCursor(2, Vert);
     sprintf(Line, "AP:%s", Parameters.APname);
+    TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.print(Line); Vert+=14; }
 #endif
   if(Vert<60)
   { TFT.setCursor(2, Vert);
     sprintf(Line, "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
+    TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.print(Line); Vert+=14; }
 
+  TFT.fillRect(0, Vert-11, TFT.width(), TFT.height()-Vert+14, ST77XX_DARKBLUE);
   uint64_t ID=getUniqueID();
   uint8_t Len=Format_String(Line, "#");
   Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
@@ -279,7 +285,7 @@ static void TFT_DrawID(bool WithAP=0)
 
 static void TFT_DrawSat(void)
 { char Line[32];
-  TFT.fillScreen(ST77XX_DARKBLUE);
+  // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
@@ -291,14 +297,16 @@ static void TFT_DrawSat(void)
     if(SNR>0) Len+=sprintf(Line+Len, " %4.1fdB", 0.25*SNR);
          // else Len+=sprintf(Line+Len, " --.-dB");
     Line[Len]=0;
+    TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.setCursor(2, Vert); TFT.print(Line);
     Vert+=14; }
+  TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
 
   TFT_DrawBatt(146, 30); }
 
 static void TFT_DrawRF(void)
 { char Line[32];
-  TFT.fillScreen(ST77XX_DARKBLUE);
+  // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
@@ -318,11 +326,14 @@ static void TFT_DrawRF(void)
   // Len+=Format_SignDec(Line+Len, (int32_t)Parameters.RFchipFreqCorr, 2, 1); // frequency correction
   // Len+=Format_String(Line+Len, "ppm");
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
   sprintf(Line, "Rx: %d:%d pkt", Radio_RxCount[1], Radio_RxCount[2]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   Len=0;
@@ -331,13 +342,14 @@ static void TFT_DrawRF(void)
   Len+=Format_UnsDec(Line+Len, (uint32_t)(Radio_FreqPlan.getCenterFreq()/100000), 3, 1); // center frequency
   Len+=Format_String(Line+Len, "M");
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
-}
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); }
 
 static void TFT_DrawBaro(const GPS_Position *GPS)
 { char Line[32];
-  TFT.fillScreen(ST77XX_DARKBLUE);
+  // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
@@ -349,6 +361,7 @@ static void TFT_DrawBaro(const GPS_Position *GPS)
     Len+=Format_String(Line+Len, "hPa "); }
   else Len+=Format_String(Line+Len, "----.-hPa ");
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   Len=0;
@@ -361,6 +374,7 @@ static void TFT_DrawBaro(const GPS_Position *GPS)
   { Len+=Format_String(Line+Len, "----m");
     Len+=Format_String(Line+Len, " --.-m/s "); }
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   Len=0;
@@ -373,19 +387,23 @@ static void TFT_DrawBaro(const GPS_Position *GPS)
     Line[Len++]='%'; }
   else Len+=Format_String(Line+Len, "---.-C --.-% ");
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   if(GPS && GPS->hasBaro)
   { float Dew = DewPoint(0.1f*GPS->Temperature, 0.1f*GPS->Humidity);
     sprintf(Line, "Dew: %+5.1fC", Dew);
     Line[5]=0xB0;
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+    TFT.setCursor(2, Vert); TFT.print(Line);
   }
-}
+
+  Vert+=16;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); }
 
 static void TFT_DrawGPS(const GPS_Position *GPS)
 { char Line[32];
-  TFT.fillScreen(ST77XX_DARKBLUE);
+  // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
@@ -401,6 +419,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   { Format_UnsDec (Line+ 6, (uint32_t)GPS->Hour,  2, 0);
     Format_UnsDec (Line+ 9, (uint32_t)GPS->Min,   2, 0);
     Format_UnsDec (Line+12, (uint32_t)GPS->Sec,   2, 0); }
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   Len=0;
@@ -411,6 +430,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
     /* Line[Len++]=0xB0; */ }
   else Len+=Format_String(Line+Len, "---.-----");
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line);
   TFT.setCursor(TFT.getCursorX(), Vert-4); TFT.write('o');
   Vert+=16;
@@ -422,6 +442,7 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
     /* Line[Len++]=0xB0; */ }
   else Len+=Format_String(Line+Len, "----.-----");
   Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line);
   TFT.setCursor(TFT.getCursorX(), Vert-4); TFT.write('o');
   Vert+=16;
@@ -436,8 +457,10 @@ static void TFT_DrawGPS(const GPS_Position *GPS)
   else Len+=Format_String(Line+Len, "-----.-");
   Line[Len++]='m'; Line[Len++]=' ';
   Line[Len]=0;
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
+  TFT.fillRect(0, Vert-11, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT_DrawBatt(146, 30); }
 
 const  uint8_t  TFT_Pages=5;
@@ -778,38 +801,45 @@ void setup()
 
   Serial.printf("OGN-Tracker: Hard:%s Soft:%s\n", Parameters.Hard, Parameters.Soft);
 
+#ifdef BOARD_HAS_PSRAM
+  if(psramFound()) Serial.printf("PSRAM:%d/%dkB ", ESP.getFreePsram()>>10, ESP.getPsramSize()>>10);
+#endif
+  Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
+
 #ifdef WITH_ST7735
   TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
+#ifdef TFT_SckFreq
   TFT_SPI.setFrequency(TFT_SckFreq);
+#endif
   TFT.initR(TFT_MODEL);
   TFT.setRotation(1);
-  TFT.fillScreen(ST77XX_BLUE);
+  TFT.fillScreen(ST77XX_DARKBLUE);
   TFT_BL_Init();
   TFT_BL(128);
 #ifdef WITH_SLEEP
-  if(!Parameters.PowerON)
+  if(!Parameters.PowerON)                  // if the tracker has been turned off by the user
   { TFT.setTextColor(ST77XX_WHITE);
     TFT.setTextSize(2);
     TFT.setCursor(32, 16);
-    TFT.print("Confirm");
+    TFT.print("Confirm");                  // ask for confirmation to avoid acidential turn on
     TFT.setCursor(30, 48);
     TFT.print("Power-ON");
     int Pressed=0;
-    for(int Wait=0; Wait<2000; Wait++)
+    for(int Wait=0; Wait<2000; Wait++)     // wait 2sec for confirmation
     { delay(1);
       if(!Button_isPressed()) { Pressed=0; continue; }
       Pressed++;
-      if(Pressed>=20) { Parameters.PowerON=1; break; }
+      if(Pressed>=20) { Parameters.PowerON=1; break; } // if button pressed for 20ms
     }
-    if(Parameters.PowerON)
+    if(Parameters.PowerON)                 // if the button pressed
     { Parameters.WriteToNVS(); }
-    else
-    { TFT_BL(0);
-      Vext_ON(0);
+    else                                   // if not pressed: user did not confirm power-on
+    { TFT_BL(0);                           // backlight to zero
+      Vext_ON(0);                          // turn off external devices
 #ifdef ADC_BattSenseEna
       BatterySenseEnable(0);
 #endif
-      esp_deep_sleep_start(); }
+      esp_deep_sleep_start(); }            // enter deep sleep
   }
 #endif
 #endif

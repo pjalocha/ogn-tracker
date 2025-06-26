@@ -250,7 +250,7 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   Packet.Telemetry.GPS.SNR=SNR;
   uint16_t BattVolt = BatterySense();                               // [mV] measure battery voltage
   Packet.Telemetry.Battery.Voltage  = EncodeUR2V8(BattVolt/4);
-  int BattCap = ((int)BattVolt-3200)/16;                            // approx. formula
+  int BattCap = ((int)BattVolt-3300)/16;                            // approx. formula
   Packet.Telemetry.Battery.Capacity = Limit(BattCap, 0, 63);
   Packet.Telemetry.Radio.RxNoise = Limit(120+(int)floorf(Radio_BkgRSSI+0.5), 0, 63);
   Packet.Telemetry.Radio.RxRate  = EncodeUR2V4(floorf(Radio_PktRate*4+0.5f));
