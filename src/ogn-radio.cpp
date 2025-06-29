@@ -294,7 +294,16 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   }
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
-  if(SysID>=8)
+#ifdef DEBUG_PRINT
+    if(SysID>=8 && xSemaphoreTake(CONS_Mutex, 20))
+    { Serial.printf("RadioRx: Sys:%02X [%d]/%d Chan:%d %+4.1fdBm ",
+         SysID, PktLen, RxLen, Channel, -0.5*RxPkt->RSSI);
+      for(uint8_t Idx=0; Idx<PktLen; Idx++)
+      { Serial.printf("%02X", RxPkt->Data[Idx]); }
+      Serial.printf("\n");
+      xSemaphoreGive(CONS_Mutex); }
+#endif
+  if(SysID>=8)  // process further packets received with shorter SYNC which are common for two systems like OGN and ADS-L
   { uint8_t SyncErr = Count1s(RxPkt->Err[0])+Count1s(RxPkt->Err[1])+Count1s(RxPkt->Err[2]);
     if(SysID==Radio_SysID_OGN_ADSL && SyncErr<=2)
     { const uint8_t SignADSL[3] = { 0x24, 0xB1, 0x80 } ;
@@ -306,15 +315,6 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
       else if(DiffBits(RxPkt->Data, SignOGN, MaskOGN, 3)<=1)
       { RxPkt->BitShift(21); PktLen=26; SysID=Radio_SysID_OGN; }
     }
-#ifdef DEBUG_PRINT
-    if(SysID>=8 && xSemaphoreTake(CONS_Mutex, 20))
-    { Serial.printf("RadioRx: Sys:%02X [%d]/%d Chan:%d %+4.1fdBm \n",
-         SysID, PktLen, RxLen, Channel, -0.5*RxPkt->RSSI);
-      for(uint8_t Idx=0; Idx<PktLen; Idx++)
-      { Serial.printf("%02X", RxPkt->Data[Idx]); }
-      Serial.printf("\n");
-      xSemaphoreGive(CONS_Mutex); }
-#endif
   }
   RxPkt->Bytes   = PktLen;                                               // [bytes] actual packet size
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
@@ -326,6 +326,8 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
              1e-3*millis(), Channel, SysID, PktLen, Manch?'M':'_', ManchErr, -0.5*RxPkt->RSSI);
       for(uint8_t Idx=0; Idx<PktLen; Idx++)
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
+      if(SysID==Radio_SysID_OGN) { Serial.printf(" (%d)", LDPC_Check((const uint32_t *)RxPkt->Data)); }
+      if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkPI(RxPkt->Data, 24)); }
       Serial.printf("\n");
     xSemaphoreGive(CONS_Mutex); }
 // #endif
@@ -368,10 +370,12 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
+// #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("Radio_ManchSlot(%dms, %s, Tx:%d, Rx:%02X) %5.1f/%5.1fMHz %1.0fdBm [%d/%d]\n",
               msTimeLen, TxPacket?"RX/TX":"RX/--", TxSysID, RxSysID, RxFreq, TxFreq, TxPower, RxPktLen, TxPktLen);
     xSemaphoreGive(CONS_Mutex); }
+// #endif
   int PktCount=0;
   uint32_t msStart = millis();
   Radio.standby();

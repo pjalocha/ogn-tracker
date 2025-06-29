@@ -176,7 +176,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      unsigned int DataLen   : 4;                      // 0..14 number of bytes in the message
      unsigned int ReportType: 4;                      // 15 for the manufacturer specific mesage
      unsigned int ManufID   : 8;                      // Manufacturer identification: 0 for Cube-Board
-   } ManufMsg;                                        // manufacturer-specific message
+   } __attribute__((packed)) ManufMsg;                // manufacturer-specific message
 
   } ;
 

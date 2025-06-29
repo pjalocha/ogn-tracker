@@ -6,7 +6,7 @@
 
 class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
-   static const uint8_t MaxBytes=40;  // [bytes] number of bytes in the packet
+   static const uint8_t MaxBytes=48;  // [bytes] number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
    uint16_t msTime;                   // [ms] reception time since the PPS[Time]
    union
@@ -22,7 +22,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
     int8_t SNR;                       // [0.25dB]
     int8_t FreqErr;                   // [0.1kHz]
    uint8_t Bytes;                     // [bytes] actual packet size
-   uint8_t Data[MaxBytes];            // decoded data bits/bytes
+   uint8_t Data[MaxBytes];            // decoded data bits/bytes (aligned to 32-bit)
    uint8_t Err [MaxBytes];            // Manchester decoding errors (for systems with Manchester encoding)
 
   public:

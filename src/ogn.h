@@ -128,7 +128,7 @@ template <class OGNx_Packet=OGN1_Packet>
      }
      return Bytes; }
 */
-} ;
+} /* __attribute__((packed)) */ ;
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -146,7 +146,7 @@ template <class OGNx_Packet>
      { uint8_t SNR : 6;        // [dB]
        uint8_t Prot: 1;
        uint8_t Rx  : 1;        // received or (own) transmitted ?
-     } ;
+     } __attribute__((packed)) ;
    } ;
    uint8_t    Check;           // simple control sum
 
@@ -165,7 +165,7 @@ template <class OGNx_Packet>
      return Check^0xA5; }
    void setCheck(void) { Check=calcCheck(); }
    bool isCorrect(void) const { return calcCheck()==Check; }
-} ;
+} __attribute__((packed)) ;
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -189,7 +189,7 @@ template <class OGNx_Packet=OGN1_Packet>
        bool Correct :1;   // correctly received or corrected by FEC
        uint8_t RxErr:4;   // number of bit errors corrected upon reception
        uint8_t Warn :2;   // LookOut warning level
-     } ;
+     } __attribute__((packed)) ;
    } ;
 
    uint8_t RxChan;        // RF channel where the packet was received
@@ -518,7 +518,7 @@ template <class OGNx_Packet=OGN1_Packet>
      { printf(" %02X", Packet.Byte()[Idx]); }
      printf(" (%d)\n", LDPC_Check(Packet.Byte())); }
 
-} ;
+} /* __attribute__((packed)) */ ;
 
 #ifdef WITH_PPM
 
