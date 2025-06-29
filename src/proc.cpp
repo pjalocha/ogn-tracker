@@ -593,8 +593,8 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
   // TickType_t ExecTime=xTaskGetTickCount();
 
   uint8_t Check = RxPkt->Decode(*RxPacket, Decoder);
-  // Serial.printf("DecodeRxOGN  : #%d %02X:%06X Err:%d Corr:%d Check:%d\n",
-  //    RxPkt->Channel, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address, RxPkt->ErrCount(), RxPacket->RxErr, Check);
+  Serial.printf("DecodeRxOGN  : #%d %02X:%06X Err:%d Corr:%d Check:%d\n",
+     RxPkt->Channel, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address, RxPkt->ErrCount(), RxPacket->RxErr, Check);
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
   RxPacket->Packet.Dewhiten();
   ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
@@ -603,7 +603,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 { uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
   ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
   int CorrErr=ADSL_Packet::Correct(RxPkt->Data, RxPkt->Err);
-  // Serial.printf("DecodeRxADSL: #%d Err:%d Corr:%d\n", RxPkt->Channel, RxPkt->ErrCount(), CorrErr);
+  Serial.printf("DecodeRxADSL: #%d Err:%d Corr:%d\n", RxPkt->Channel, RxPkt->ErrCount(), CorrErr);
   if(CorrErr<0) return;
   memcpy(&(RxPacket->Packet.Version), RxPkt->Data, RxPacket->Packet.TxBytes-3);
   RxPacket->RxErr   = CorrErr;
@@ -617,9 +617,8 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
-  if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
-
-}
+  // if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
+  return; }
 
 // -------------------------------------------------------------------------------------------------------------------
 
