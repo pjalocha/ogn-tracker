@@ -386,6 +386,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   State=Radio.disableAddressFiltering();                            // don't want any of such features
+  if(State) ErrState=State;
   // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
   // if(SYNC[0]==0x55)
   //   State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
@@ -449,8 +450,9 @@ static int Radio_ConfigHDR(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=2) //
   if(State) ErrState=State;
   State=Radio.variablePacketLengthMode();                           // variable packet length mode
   if(State) ErrState=State;
-  State=Radio.disableAddressFiltering();                            // don't want any of such features
 #ifdef WITH_SX1276
+  State=Radio.disableAddressFiltering();                            // don't want any of such features
+  if(State) ErrState=State;
   // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
   if(SYNC[0]==0x55)
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polar>
