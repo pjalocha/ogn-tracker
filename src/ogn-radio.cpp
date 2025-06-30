@@ -467,24 +467,31 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
   // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
   return ErrState; }                                                // this call takes 18-19 ms
 
-static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
+static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit a PilotAware packet
 { memcpy(Radio_TxPacket, PAW_SYNC+1, 7);                            // first copy the remaining 7 bytes of the pre-data part
-  memcpy(Radio_TxPacket+7, Packet.Byte, Packet.Size);               // copy packet to the buffer (internal CRC is already set)
-  Packet.Whiten(Radio_TxPacket+7, Packet.Size);                     // whiten
-  Radio_TxPacket[7+Packet.Size] = Packet.CRC8(Radio_TxPacket+7, Packet.Size); // add external CRC
+  memcpy(Radio_TxPacket+7, Packet, PktSize);                        // copy packet to the buffer (internal CRC is already set)
+  PAW_Packet::Whiten(Radio_TxPacket+7, PktSize);                    // whiten
+  Radio_TxPacket[7+PktSize] = PAW_Packet::CRC8(Radio_TxPacket+7, PktSize); // add external CRC
   Radio_TxCount[Radio_SysID_PAW]++;
-  return Radio_TxFSK(Radio_TxPacket, 7+Packet.Size+1); }            // send the packet out
+  return Radio_TxFSK(Radio_TxPacket, 7+PktSize+1); }                // send the packet out
 
+static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
+{ return Radio_TxLDR(Packet.Byte, Packet.Size); }
+
+static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit an ADS-L packet
+{ return Radio_TxLDR(&Packet.Version, Packet.TxBytes-3); }
+
+/*
 static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit an ADS-L position packet
 { Radio_TxPacket[0]=PAW_SYNC[1];
   memcpy(Radio_TxPacket+1, &(Packet.Length), Packet.TxBytes-2);     // copy ADS-L packet starting from the Length byte
   return Radio_TxFSK(Radio_TxPacket, Packet.TxBytes-1); }
 
-static int Radio_TxLDR(const OGN_TxPacket<OGN1_Packet> &Packet)     // transmit an ADS-L position packet
+static int Radio_TxLDR(const OGN_TxPacket<OGN1_Packet> &Packet)     // transmit an OGN packet
 { Radio_TxPacket[0]=PAW_SYNC[1]^0x0F;                               // SYNC with inverted last nibble
   memcpy(Radio_TxPacket+1, &Packet, Packet.Bytes);                  // OGN packet with FEC
   return Radio_TxFSK(Radio_TxPacket, Packet.Bytes+1); }             // send it out
-
+*/
 // =======================================================================================================
 
 static int Radio_ConfigHDR(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=2) // Radio setup for O-band ADS-L HDR

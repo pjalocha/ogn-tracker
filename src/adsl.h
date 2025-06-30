@@ -309,6 +309,10 @@ class ADSL_Packet
 
    static void set4bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; Byte[3]=Word>>24; }
 
+   uint8_t getVersion(void) const { return Version&0x0F; }     // currently version 0
+   bool  hasSignature(void) const { return Version&0x10; }
+   uint8_t getEncrKey(void) const { return (Version>>5)&3; }   // 0 = XXTEA scrambling, 3 = no scrambling
+
    bool isRelay(void)     const { return Address[3]&0x80; }
    void setRelay(uint8_t Relay=1)  { Address[3] = (Address[3]&0x7F) | (Relay<<7); }
 
