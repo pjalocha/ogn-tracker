@@ -771,18 +771,18 @@ void setup()
 #ifdef WITH_LOG
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
 #endif
-  xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
+  xTaskCreate(vTaskGPS    ,  "GPS"  ,  4000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
-  xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
+  xTaskCreate(vTaskSENS   ,  "SENS" ,  4000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
-  xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(Radio_Task  ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(vTaskPROC   ,  "PROC" ,  4000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
+  xTaskCreate(Radio_Task  ,  "RF"   ,  4000, NULL, 1, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
-    xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
+    xTaskCreate(vTaskAP,  "AP",  4000, NULL, 0, NULL);
 #endif
 #ifdef WITH_UPLOAD
-  xTaskCreate(vTaskUPLOAD,"UPLOAD",3000, NULL, 0, NULL);
+  xTaskCreate(vTaskUPLOAD,"UPLOAD",4000, NULL, 0, NULL);
 #endif
 
 }

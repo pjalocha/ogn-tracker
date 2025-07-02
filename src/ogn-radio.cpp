@@ -294,7 +294,16 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   }
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
-  if(SysID>=8)
+#ifdef DEBUG_PRINT
+    if(SysID>=8 && xSemaphoreTake(CONS_Mutex, 20))
+    { Serial.printf("RadioRx: Sys:%02X [%d]/%d Chan:%d %+4.1fdBm ",
+         SysID, PktLen, RxLen, Channel, -0.5*RxPkt->RSSI);
+      for(uint8_t Idx=0; Idx<PktLen; Idx++)
+      { Serial.printf("%02X", RxPkt->Data[Idx]); }
+      Serial.printf("\n");
+      xSemaphoreGive(CONS_Mutex); }
+#endif
+  if(SysID>=8)  // process further packets received with shorter SYNC which are common for two systems like OGN and ADS-L
   { uint8_t SyncErr = Count1s(RxPkt->Err[0])+Count1s(RxPkt->Err[1])+Count1s(RxPkt->Err[2]);
     if(SysID==Radio_SysID_OGN_ADSL && SyncErr<=2)
     { const uint8_t SignADSL[3] = { 0x24, 0xB1, 0x80 } ;
@@ -306,15 +315,6 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
       else if(DiffBits(RxPkt->Data, SignOGN, MaskOGN, 3)<=1)
       { RxPkt->BitShift(21); PktLen=26; SysID=Radio_SysID_OGN; }
     }
-#ifdef DEBUG_PRINT
-    if(SysID>=8 && xSemaphoreTake(CONS_Mutex, 20))
-    { Serial.printf("RadioRx: Sys:%02X [%d]/%d Chan:%d %+4.1fdBm \n",
-         SysID, PktLen, RxLen, Channel, -0.5*RxPkt->RSSI);
-      for(uint8_t Idx=0; Idx<PktLen; Idx++)
-      { Serial.printf("%02X", RxPkt->Data[Idx]); }
-      Serial.printf("\n");
-      xSemaphoreGive(CONS_Mutex); }
-#endif
   }
   RxPkt->Bytes   = PktLen;                                               // [bytes] actual packet size
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
@@ -326,6 +326,8 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
              1e-3*millis(), Channel, SysID, PktLen, Manch?'M':'_', ManchErr, -0.5*RxPkt->RSSI);
       for(uint8_t Idx=0; Idx<PktLen; Idx++)
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
+      if(SysID==Radio_SysID_OGN) { Serial.printf(" (%d)", LDPC_Check((const uint32_t *)RxPkt->Data)); }
+      if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkPI(RxPkt->Data, 24)); }
       Serial.printf("\n");
     xSemaphoreGive(CONS_Mutex); }
 // #endif
@@ -368,10 +370,12 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
+// #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("Radio_ManchSlot(%dms, %s, Tx:%d, Rx:%02X) %5.1f/%5.1fMHz %1.0fdBm [%d/%d]\n",
               msTimeLen, TxPacket?"RX/TX":"RX/--", TxSysID, RxSysID, RxFreq, TxFreq, TxPower, RxPktLen, TxPktLen);
     xSemaphoreGive(CONS_Mutex); }
+// #endif
   int PktCount=0;
   uint32_t msStart = millis();
   Radio.standby();
@@ -463,24 +467,31 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
   // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
   return ErrState; }                                                // this call takes 18-19 ms
 
-static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
+static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit a PilotAware packet
 { memcpy(Radio_TxPacket, PAW_SYNC+1, 7);                            // first copy the remaining 7 bytes of the pre-data part
-  memcpy(Radio_TxPacket+7, Packet.Byte, Packet.Size);               // copy packet to the buffer (internal CRC is already set)
-  Packet.Whiten(Radio_TxPacket+7, Packet.Size);                     // whiten
-  Radio_TxPacket[7+Packet.Size] = Packet.CRC8(Radio_TxPacket+7, Packet.Size); // add external CRC
+  memcpy(Radio_TxPacket+7, Packet, PktSize);                        // copy packet to the buffer (internal CRC is already set)
+  PAW_Packet::Whiten(Radio_TxPacket+7, PktSize);                    // whiten
+  Radio_TxPacket[7+PktSize] = PAW_Packet::CRC8(Radio_TxPacket+7, PktSize); // add external CRC
   Radio_TxCount[Radio_SysID_PAW]++;
-  return Radio_TxFSK(Radio_TxPacket, 7+Packet.Size+1); }            // send the packet out
+  return Radio_TxFSK(Radio_TxPacket, 7+PktSize+1); }                // send the packet out
 
+static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
+{ return Radio_TxLDR(Packet.Byte, Packet.Size); }
+
+static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit an ADS-L packet
+{ return Radio_TxLDR(&Packet.Version, Packet.TxBytes-3); }
+
+/*
 static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit an ADS-L position packet
 { Radio_TxPacket[0]=PAW_SYNC[1];
   memcpy(Radio_TxPacket+1, &(Packet.Length), Packet.TxBytes-2);     // copy ADS-L packet starting from the Length byte
   return Radio_TxFSK(Radio_TxPacket, Packet.TxBytes-1); }
 
-static int Radio_TxLDR(const OGN_TxPacket<OGN1_Packet> &Packet)     // transmit an ADS-L position packet
+static int Radio_TxLDR(const OGN_TxPacket<OGN1_Packet> &Packet)     // transmit an OGN packet
 { Radio_TxPacket[0]=PAW_SYNC[1]^0x0F;                               // SYNC with inverted last nibble
   memcpy(Radio_TxPacket+1, &Packet, Packet.Bytes);                  // OGN packet with FEC
   return Radio_TxFSK(Radio_TxPacket, Packet.Bytes+1); }             // send it out
-
+*/
 // =======================================================================================================
 
 static int Radio_ConfigHDR(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=2) // Radio setup for O-band ADS-L HDR
