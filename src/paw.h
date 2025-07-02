@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "adsl.h"
 #include "ogn1.h"
 #include "format.h"
 
@@ -171,7 +172,10 @@ class PAW_Packet
    void setCRC(void) { CRC = IntCRC(Byte, Size, 0x00); }                  // set the internal CRC of the packet
 
    uint8_t IntCRC(void) const { return IntCRC(Byte, Size, 0x00); }        // over all bytes it should be a zero
-                                                                          // thus XOR of all bytes including the CRC should be a zero
+   bool isPAW(void) const { return IntCRC()==0x00; }                      // thus XOR of all bytes including the CRC should be a zero
+
+   uint32_t ADSL_CRC(void) const { return ADSL_Packet::checkPI(Byte, Size); }   // ADS-L CRC check should be 0x000000 for an ADS-L packet
+   bool isADSL(void) const { return ADSL_CRC()==0x000000; }
 
    static uint8_t IntCRC(const uint8_t *Packet, int Len=Size, uint8_t CRC=0x00) // internal PAW packet CRC
    { for(int Idx=0; Idx<Len; Idx++)
