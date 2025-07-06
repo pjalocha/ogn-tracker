@@ -46,6 +46,10 @@ extern  int32_t Radio_TxCredit;
 extern float    Radio_BkgRSSI;        // [dBm] background noise seen by the receiver
 extern float    Radio_PktRate;        // [Hz]
 
+extern const char *Radio_ChipType;    // "SX1262" or "SX1276"
+extern uint8_t Radio_ChipVersion;
+extern int8_t Radio_ChipTemperature;  // [degC]
+
 void Radio_Task(void *Parms);
 
 #ifdef WITH_LORAWAN

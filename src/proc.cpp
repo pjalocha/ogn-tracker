@@ -244,6 +244,9 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   Packet.setRelay(0);
   Packet.Telemetry.Header.TelemType=0x0;                            // 0 => device status
   if(GPS) GPS->EncodeTelemetry(Packet);
+#ifdef WITH_SX1276
+  if(Packet.Telemetry.Baro.Temperature==(-128)) Packet.Telemetry.Baro.Temperature=Radio_ChipTemperature*2;
+#endif
   uint8_t SNR = (GPS_SatSNR+2)/4;                                   // encode number of satellites and SNR in the Status packet
   if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
         else { SNR=0; }
@@ -735,6 +738,9 @@ void vTaskPROC(void* pvParameters)
 #endif
     if(Position)
     { Position->EncodeStatus(StatPacket.Packet);             // encode GPS altitude and pressure/temperature/humidity
+#ifdef WITH_SX1276
+      if(!StatPacket.Packet.hasTemperature()) StatPacket.Packet.EncodeTemperature((int16_t)Radio_ChipTemperature*10);
+#endif
       /* Flight.Process(*Position); */ }                     // flight monitor: takeoff/landing
     else
     { StatPacket.Packet.Status.FixQuality=0; StatPacket.Packet.Status.Satellites=0; } // or lack of the GPS lock
