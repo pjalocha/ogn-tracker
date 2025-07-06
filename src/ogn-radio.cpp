@@ -83,13 +83,16 @@ const float Radio_TxPwrGain = 0;                       // [dBm] gain of a PA or 
 #ifdef WITH_SX1276
 static SX1276 Radio = new Module(Radio_PinCS, Radio_PinIRQ, Radio_PinRST, -1);                // create SX1276 RF module
 static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ); }
-static const char *RF_ChipType = "SX1276";
+ const char *Radio_ChipType = "SX1276";
 #endif
 #ifdef WITH_SX1262
 static SX1262 Radio = new Module(Radio_PinCS, Radio_PinIRQ1, Radio_PinRST, Radio_PinBusy);    // create sx1262 RF module
 static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ1); }
-static const char *RF_ChipType = "SX1262";
+ const char *Radio_ChipType = "SX1262";
 #endif
+
+ uint8_t Radio_ChipVersion     = 0x00;
+ int8_t  Radio_ChipTemperature = -128;
 
 // =======================================================================================================
 // Errors:
@@ -778,11 +781,10 @@ void Radio_Task(void *Parms)
 
 #ifdef WITH_SX1276
   int State = Radio.beginFSK(868.2,          100.0,           50.0,        234.3,           14,              8);
-  uint8_t chipVer = Radio.getChipVersion();
-  if(State==RADIOLIB_ERR_NONE && chipVer==0x12) HardwareStatus.Radio=1;
+  Radio_ChipVersion = Radio.getChipVersion();
+  if(State==RADIOLIB_ERR_NONE && Radio_ChipVersion==0x12) HardwareStatus.Radio=1;
                           // else LED_OGN_Red();
-  // uint8_t chipVer = getChipVersion();
-  // getTemp();
+  Radio_ChipTemperature = Radio.getTempRaw()+Parameters.RFchipTempCorr;
 #endif
 #ifdef WITH_SX1262
   int State = Radio.beginFSK(868.2,          100.0,           50.0,        234.3,            0,              8,           1.6,         0);
@@ -799,7 +801,7 @@ void Radio_Task(void *Parms)
   TimeSync &TimeRef = GPS_TimeSync;
   char Line[120];
 
-  int Len=sprintf(Line, "RF chip %s%s detected", RF_ChipType, HardwareStatus.Radio?"":" NOT");
+  int Len=sprintf(Line, "RF chip %s%s detected", Radio_ChipType, HardwareStatus.Radio?"":" NOT");
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.println(Line);
     xSemaphoreGive(CONS_Mutex); }
@@ -995,6 +997,9 @@ void Radio_Task(void *Parms)
              Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Parameters.TxPower, 450, OgnPacket2?OgnPacket2->Byte():0, Radio_SysID_OGN,
                              Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Radio_SysID_OGN, TimeRef);
 */
+#ifdef WITH_SX1276
+    Radio_ChipTemperature = Radio.getTempRaw()+Parameters.RFchipTempCorr;
+#endif
 
 #ifdef WITH_LORAWAN
     if(WANtx)

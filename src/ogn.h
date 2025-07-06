@@ -1637,7 +1637,7 @@ class GPS_Position: public GPS_Time
        Packet.Telemetry.Baro.Temperature=Temp;
        if(hasHum) Packet.Telemetry.Baro.Humidity = ((int32_t)Humidity<<6)/1000;
              else Packet.Telemetry.Baro.Humidity = 0;     }
-     else
+     else                                                              // if no pressure/temperature sensor
      { Packet.Telemetry.Baro.Pressure    =    0;
        Packet.Telemetry.Baro.Humidity    =    0;
        Packet.Telemetry.Baro.Temperature = -128;
