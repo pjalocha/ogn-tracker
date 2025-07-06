@@ -344,9 +344,9 @@ static void ReadStatus(OGN_Packet &Packet)
 #endif
 
 // #ifdef WITH_SX1262
-  if(Packet.Status.Pressure==0) Packet.clrTemperature();
+//   if(Packet.Status.Pressure==0) Packet.clrTemperature();
 // #else
-  // if(Packet.Status.Pressure==0) Packet.EncodeTemperature(TRX.chipTemp*10); // [0.1degC]
+//   if(Packet.Status.Pressure==0) Packet.EncodeTemperature(Radio_ChipTemperature*10); // [0.1degC]
 // #endif
   Packet.Status.RadioNoise = floorf(-2*Radio_BkgRSSI+0.f); // TRX.averRSSI;                         // [-0.5dBm] write radio noise to the status packet
 
