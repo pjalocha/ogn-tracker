@@ -24,7 +24,7 @@ class ADSL_Packet
    { uint32_t Word[5];       // this part to be scrambled/encrypted, is aligned to 32-bit
      uint8_t  Byte[20];
      struct                  // this is aligned to 32-bit
-     { uint8_t Type;         // 0x02=iConspicuity, 0x41=Telemetry, bit #7 = Unicast
+     { uint8_t Type;         // 0x02=iConspicuity, 0x42=Telemetry, bit #7 = Unicast
        uint8_t Address  [4]; // Address[30]/Reserved[1]/RelayForward[1] (not aligned to 32-bit !)
        union
        { uint8_t Meta     [2]; // Time[6]/Cat[5]/Emergency[3]/FlightState[2]
@@ -174,8 +174,11 @@ class ADSL_Packet
        Word[Idx]=0;
      this->Type=Type; }
 
+   bool isPosition (void) const { return Type==0x02; }
+   bool isTelemetry(void) const { return Type==0x42; }
+
    void Print(void) const
-   { if(Type==0x02)
+   { if(isPosition())
        printf(" v%02X %4.1fs: %02X:%06X [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s\n",
          Version, 0.25*TimeStamp, getAddrTable(), getAddress(), FNTtoFloat(getLat()), FNTtoFloat(getLon()),
          getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed());
@@ -252,11 +255,11 @@ class ADSL_Packet
 
    int Print(char *Out) const
    { Out[0]=0;
-     if(Type==0x02)
+     if(isPosition())
        return sprintf(Out, "%02X:%06X R%d %4.1fs [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s",
          getAddrTable(), getAddress(), isRelay(), 0.25*TimeStamp, FNTtoFloat(getLat()), FNTtoFloat(getLon()),
          getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed());
-     if(Type==0x42)
+     if(isTelemetry())
      { int Len=0;
        if(Telemetry.Header.TelemType==0)
        { Len=sprintf(Out, "%02X:%06X %4.1fs", getAddrTable(), getAddress(), 0.25*Telemetry.Header.TimeStamp);
@@ -439,6 +442,9 @@ class ADSL_Packet
 
     void setLatOGN(int32_t Lat)  { setLat(OGNtoFNT(Lat)); }
     void setLonOGN(int32_t Lon)  { setLon(OGNtoFNT(Lon)); }
+
+    void setLatUBX(int32_t Lat)  { setLat(UBXtoFNT(Lat)); }
+    void setLonUBX(int32_t Lon)  { setLon(UBXtoFNT(Lon)); }
 
     void    setLat(int32_t Lat)  { Lat = (Lat+0x40)>>7; set3bytes(Position  , Lat); }           // FANET-cordic
     void    setLon(int32_t Lon)  { Lon = (Lon+0x80)>>8; set3bytes(Position+3, Lon); }           // FANET-cordic

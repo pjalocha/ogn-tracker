@@ -1194,6 +1194,20 @@ class GPS_Position: public GPS_Time
      calcLatitudeCosine();
      NMEAframes++; return 1; }
 
+   uint8_t WriteLK8EX1(char *NMEA, uint32_t BattVolt)
+   { uint8_t Len=Format_String(NMEA, "$LK8EX1,");
+     if(hasBaro) Len+=Format_UnsDec(NMEA+Len, (Pressure+2)/4);       // [Pa] pressure
+     NMEA[Len++]=',';
+     if(hasBaro) Len+=Format_SignDec(NMEA+Len, (StdAltitude+5)/10, 1, 0, 1);
+     NMEA[Len++]=',';
+     if(hasClimb) Len+=Format_SignDec(NMEA+Len, ClimbRate, 2, 1, 1);  // [cm/s] climb/sink rate (by GPS or pressure sensor)
+     NMEA[Len++]=',';
+     if(hasBaro) Len+=Format_SignDec(NMEA+Len, Temperature, 2, 1, 1); // [degC] temperature
+     NMEA[Len++]=',';
+     Len+=Format_UnsDec(NMEA+Len, BattVolt, 4, 3);                    // [mV] Battery voltage
+     Len+=NMEA_AppendCheckCRNL(NMEA, Len);
+     NMEA[Len]=0; return Len; }
+
    uint8_t WritePGRMZ(char *NMEA)
    { uint8_t Len=Format_String(NMEA, "$PGRMZ,");
      if(hasBaro) Len+=Format_SignDec(NMEA+Len, MetersToFeet(StdAltitude)/10, 1, 0, 1);
@@ -1327,8 +1341,8 @@ class GPS_Position: public GPS_Time
      NMEAframes++; return 1; }
 
    int8_t ReadGSV(NMEA_RxMsg &RxMsg)
-   { if(RxMsg.Parms<3) return -1;
-     for( int Parm=3; Parm<RxMsg.Parms; )
+   { if(RxMsg.Parms<4) return -1;
+     for( int Parm=3; Parm<RxMsg.Parms-4; )
      { int8_t PRN =Read_Dec2((const char *)RxMsg.ParmPtr(Parm++)); if(PRN<=0) break;      // PRN number
        int8_t Elev=Read_Dec2((const char *)RxMsg.ParmPtr(Parm++)); if(Elev<0) break;      // [deg] elevation
       int16_t Azim=Read_Dec3((const char *)RxMsg.ParmPtr(Parm++)); if(Azim<0) break;      // [deg] azimuth
@@ -1341,8 +1355,8 @@ class GPS_Position: public GPS_Time
      if(memcmp(GSV+3, "GSV", 3)!=0) return -1;
      if(GSV[1]!='G' && GSV[1]!='B') return -1;
      uint8_t Index[24]; int8_t Parms=IndexNMEA(Index, GSV);
-     if(Parms<3) return -2;                                              // index parameters and check the sum
-     for( int Parm=3; Parm<Parms; )                                      // up to 4 sats per packet
+     if(Parms<4) return -2;                                             // index parameters and check the sum
+     for( int Parm=3; Parm<Parms-4; )                                   // up to 4 sats per packet
      { int8_t PRN =Read_Dec2(GSV+Index[Parm++]); if(PRN<=0) break;      // PRN number
        int8_t Elev=Read_Dec2(GSV+Index[Parm++]); if(Elev<0) break;      // [deg] elevation
       int16_t Azim=Read_Dec3(GSV+Index[Parm++]); if(Azim<0) break;      // [deg] azimuth
@@ -1508,12 +1522,13 @@ class GPS_Position: public GPS_Time
      if(hasBaro) { Packet.setQNE((StdAltitude+5)/10); }
    }
 
-   void Encode(GDL90_REPORT &Report) const
+   void Encode(GDL90_REPORT &Report, bool FakeAlt=0) const
    { Report.setAccuracy(9, 9);
      int32_t Lat = getCordicLatitude();                                     // Latitude:  [0.0001/60deg] => [cordic]
      int32_t Lon = getCordicLongitude();                                    // Longitude: [0.0001/60deg] => [cordic]
      int32_t Alt = Altitude;                                                // [0.1m]
      if(hasBaro) Alt = StdAltitude;
+     if(FakeAlt) Alt = Altitude+GeoidSeparation;                            //
      Alt=MetersToFeet(Alt); Alt=(Alt+5)/10;                                 // [feet]
      Report.setLatitude(Lat);
      Report.setLongitude(Lon);
@@ -1805,7 +1820,7 @@ class GPS_Position: public GPS_Time
      char LonW = Out[Len-2];
      Out[Len-2]=Out[Len-3]; Out[Len-3]=Out[Len-4]; Out[Len-4]='.';
      Out[Len++]=Icon[1];
-     Len+=Format_UnsDec(Out+Len, (uint32_t)Heading/10, 3);                              // [deg] Heading
+     Len+=Format_UnsDec(Out+Len, (uint32_t)Heading/10, 3);                    // [deg] Heading
      Out[Len++]='/';
      Len+=Format_UnsDec(Out+Len, ((uint32_t)Speed*199+512)>>10, 3);           // [kt] speed
      Out[Len++] = '/'; Out[Len++] = 'A'; Out[Len++] = '='; Len+=Format_UnsDec(Out+Len, ((uint32_t)MetersToFeet(Altitude)+5)/10, 6); // [feet] altitude
@@ -1855,7 +1870,7 @@ class GPS_Position: public GPS_Time
      { Len+=WriteIGCcoord(Out+Len, Latitude, 2, "NS");            // DDMM.MMM latitude
        Len+=WriteIGCcoord(Out+Len, Longitude, 3, "EW");           // DDDMM.MMM longitude
        Out[Len++] = FixMode>2 ? 'A':'V'; }                        // fix mode
-     else Len+=Format_String(Out+Len, "                    ");    // is position not valid then leave empty
+     else Len+=Format_String(Out+Len, "                 V");      // is position not valid then leave empty
      if(hasBaro)                                                  // if pressure data is there
      { int32_t Alt = StdAltitude/10;                              // [m] pressure altitude
        if(Alt<0) { Alt = (-Alt); Out[Len++] = '-'; Len+=Format_UnsDec(Out+Len, (uint32_t)Alt, 4); } // -AAAA (when negative)
@@ -1868,7 +1883,7 @@ class GPS_Position: public GPS_Time
      } else Len+=Format_String(Out+Len, "     ");
      Out[Len++]='\n'; Out[Len]=0; return Len; }
 
-  private:
+  // private:
 
    int8_t ReadLatitude(char Sign, const char *Value)
    { int8_t Deg=Read_Dec2(Value); if(Deg<0) return -1;
