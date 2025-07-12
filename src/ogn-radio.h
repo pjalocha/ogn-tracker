@@ -34,7 +34,7 @@ extern FIFO<ADSL_Packet,              4> ADSL_TxFIFO;
 extern FIFO<FANET_Packet,             4> FNT_TxFIFO;
 extern FIFO<PAW_Packet,               4> PAW_TxFIFO;
 
-extern FIFO<FSK_RxPacket,            64> FSK_RxFIFO;
+extern FIFO<FSK_RxPacket,            32> FSK_RxFIFO;
 extern FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
 
 extern FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme

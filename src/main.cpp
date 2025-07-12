@@ -703,7 +703,7 @@ void setup()
     { esp_core_dump_bt_info_t &BackTrace = DumpSummary->exc_bt_info;
       InfoLen=sprintf(Info, "Crash-dump: Task:%s PC:%08x [%d]\n", DumpSummary->exc_task, DumpSummary->exc_pc, BackTrace.depth);
       for(uint32_t Idx=0; Idx<BackTrace.depth && Idx<16; Idx++)
-      { InfoLen+=sprintf(Info+InfoLen, " %08x", BackTrace.bt[Idx]); }
+      { InfoLen+=sprintf(Info+InfoLen, " 0x%08x", BackTrace.bt[Idx]); }
     }
     free(DumpSummary); }
   if(InfoLen) Serial.println(Info);

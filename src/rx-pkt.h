@@ -12,8 +12,8 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
    union
    { uint16_t Flags;
      struct
-     { uint8_t Channel;               // [   ] channel where the packet has been received
-       uint8_t SysID   :6;            // [] 1=OGN, 2=ADS-L, ...
+     { uint8_t Channel;               // [ ] radio channel where the packet has been received
+       uint8_t SysID   :6;            // [ ] 1=OGN, 2=ADS-L, ...
        bool Manchester :1;            // ADS-L and OGN are Manchester encoded on M-Band but not O-Band
        bool GoodCRC    :1;            // correct CRC has been detected
      } __attribute__((packed)) ;
@@ -29,16 +29,18 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
 
    // shift to the left a series of bytes by given number of bits
    static uint8_t BitShift(uint8_t *Data, uint8_t Bytes, uint8_t Shift)
-   { if(Shift==0) return Bytes;                                                  // if nothing to shift then we are done
-     uint8_t Ofs=Shift>>3; Shift&=7;                                        // split off the byte and bit part part
-     if(Shift==0) { Bytes-=Ofs; memmove(Data, Data+Ofs, Bytes); return Bytes; }  // if bit part is zero then simple move data
+   { if(Shift==0) return Bytes;                        // if nothing to shift then we are done
+     uint8_t ByteOfs=Shift>>3; Shift&=7;               // split off the byte and bit part part
+     if(Shift==0)                                      // if bit part is zero then simple move data
+     { Bytes-=ByteOfs;                                 // there are now less bytes
+       memmove(Data, Data+ByteOfs, Bytes);
+       return Bytes; }                                 // return the number of bytes, which is same or lower
      uint8_t CmplShift=8-Shift;
-     uint8_t Byte=Data[Ofs]<<Shift;
-     uint8_t Idx=0;
-     Bytes-=Ofs;
-     for( ; Idx<Bytes; Idx++)
-     { uint8_t SrcByte=Data[Idx+Ofs+1];
-       Data[Idx] = Byte | (SrcByte>>CmplShift);
+     uint8_t Byte=Data[ByteOfs]<<Shift;                // take the first byte and shift it
+     Bytes-=ByteOfs;
+     for(uint8_t Idx=0; Idx<Bytes; Idx++)
+     { uint8_t SrcByte=Data[ByteOfs+Idx+1];            // take the next byte
+       Data[Idx] = Byte | (SrcByte>>CmplShift);        // (Byte1<<Shift) | (Byte2>>(8-Shift))
        Byte = SrcByte<<Shift; }
      return Bytes; }
 

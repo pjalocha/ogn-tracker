@@ -23,7 +23,7 @@
  FIFO<PAW_Packet,               4> PAW_TxFIFO;
 
  // queues for received packets
- FIFO<FSK_RxPacket,            64> FSK_RxFIFO;
+ FIFO<FSK_RxPacket,            32> FSK_RxFIFO;
  FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
 
  QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
@@ -136,7 +136,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
-  State=Radio.setPreambleLength(RxMode?0:16);                       // [bits] minimal preamble
+  State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
 #endif
 #ifdef WITH_SX1276
   State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
@@ -239,8 +239,8 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
   return State; }
 #endif
 
-static uint8_t Radio_TxPacket[80];                 // Manchester-encoded packet just before transmission
-static uint8_t Radio_RxPacket[80];                 // Manchester-encoded packet just after reception
+static uint8_t Radio_TxPacket[96];                 // Manchester-encoded packet just before transmission
+static uint8_t Radio_RxPacket[96];                 // Manchester-encoded packet just after reception
 
 static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // transmit a packet using Manchester encoding
 { int TxLen=ManchEncode(Radio_TxPacket, Packet, Len);                    // Manchester encode
@@ -256,8 +256,9 @@ static int DiffBits(const uint8_t *Data, const uint8_t *Ref, const uint8_t *Mask
 static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef)
 { if(!Radio_IRQ()) return 0;                                             // use the IRQ line: not raised, then no received packet
   FSK_RxPacket *RxPkt = FSK_RxFIFO.getWrite();                           // get place for a new packet in the queue
+  int RxLen=Radio.getPacketLength();
 #ifdef WITH_SX1262
-  uint32_t PktStat = Radio.getPacketStatus();                            // get RSSI
+  uint32_t PktStat = Radio.getPacketStatus();                            // get RSSI of the packet
   Random.RX += PktStat;
   RxPkt->RSSI = PktStat;                                                 // [-0.5dBm] average RSSI on the packet
   // float RSSI    = Radio.getRSSI();
@@ -276,9 +277,8 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   RxPkt->msTime = msTime-TimeRef.sysTime;                                // [ms] time since the reference PPS
   RxPkt->Time = TimeRef.UTC;                                             // [sec] UTC PPS
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
-  int RxLen;
   if(Manch)                                                              // if Manchester encoding expected
-  { RxLen=Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
+  { Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
     // Radio.startReceive();
     uint8_t PktIdx=0;
     for(uint8_t Idx=0; Idx<PktLen; Idx++)                                  // loop over packet bytes
@@ -290,22 +290,22 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
       RxPkt->Err [Idx]=(ErrH <<4) | ErrL ; }                             // and Manchester errors
   }
   else                                                                   // if no Manchester encoding expected
-  { RxLen=Radio.readData(RxPkt->Data, PktLen);                                 // get packet into the Data
+  { Radio.readData(RxPkt->Data, PktLen);                           // get packet into the Data
     // Radio.startReceive();
     for(uint8_t Idx=0; Idx<PktLen; Idx++)
       RxPkt->Err[Idx]=0;                                                 // clear manchester errors
   }
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
-#ifdef DEBUG_PRINT
+// #ifdef DEBUG_PRINT
     if(SysID>=8 && xSemaphoreTake(CONS_Mutex, 20))
-    { Serial.printf("RadioRx: Sys:%02X [%d]/%d Chan:%d %+4.1fdBm ",
-         SysID, PktLen, RxLen, Channel, -0.5*RxPkt->RSSI);
+    { Serial.printf("RadioRx: Sys:%02X [%d%c]/%d #%d %+4.1fdBm ",
+         SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
       for(uint8_t Idx=0; Idx<PktLen; Idx++)
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
-      Serial.printf("\n");
+      Serial.printf(" %c%c\n", FNT_TxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
       xSemaphoreGive(CONS_Mutex); }
-#endif
+// #endif
   if(SysID>=8)  // process further packets received with shorter SYNC which are common for two systems like OGN and ADS-L
   { uint8_t SyncErr = Count1s(RxPkt->Err[0])+Count1s(RxPkt->Err[1])+Count1s(RxPkt->Err[2]);
     if(SysID==Radio_SysID_OGN_ADSL && SyncErr<=2)
@@ -331,11 +331,11 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
       if(SysID==Radio_SysID_OGN) { Serial.printf(" (%d)", LDPC_Check((const uint32_t *)RxPkt->Data)); }
       if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkPI(RxPkt->Data, 24)); }
-      Serial.printf("\n");
+      Serial.printf(" %c%c\n", FNT_TxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     xSemaphoreGive(CONS_Mutex); }
 // #endif
   FSK_RxFIFO.Write();                                                    // complete the write into the queue of received packets
-  Radio_RxCount[SysID]++;
+  if(SysID<8) Radio_RxCount[SysID]++;
   return 1; }
 
 // keep receiving packets for a given time [ms] - put received packets into FSK_RxFIFO
@@ -373,12 +373,12 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
-// #ifdef DEBUG_PRINT
+#ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("Radio_ManchSlot(%dms, %s, Tx:%d, Rx:%02X) %5.1f/%5.1fMHz %1.0fdBm [%d/%d]\n",
               msTimeLen, TxPacket?"RX/TX":"RX/--", TxSysID, RxSysID, RxFreq, TxFreq, TxPower, RxPktLen, TxPktLen);
     xSemaphoreGive(CONS_Mutex); }
-// #endif
+#endif
   int PktCount=0;
   uint32_t msStart = millis();
   Radio.standby();
@@ -478,8 +478,8 @@ static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24, bool Whiten=1)
   Radio_TxCount[Radio_SysID_PAW]++;
   return Radio_TxFSK(Radio_TxPacket, 7+PktSize+1); }                // send the packet out
 
-static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet
-{ return Radio_TxLDR(Packet.Byte, Packet.Size, 1); }
+static int Radio_TxPAW(const PAW_Packet &Packet)                    // transmit a PilotAware packet, which could be an ADS-L !
+{ return Radio_TxLDR(Packet.Byte, Packet.Size, !Packet.isADSL()); } // very dirthy but needs to stay for now
 
 static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit an ADS-L packet
 { return Radio_TxLDR(&Packet.Version, Packet.TxBytes-3, 0); }
@@ -562,8 +562,10 @@ static int Radio_FANETrxPacket(TimeSync &TimeRef)                  // attemp to 
   if(PktLen>RxPkt->MaxBytes) { PktLen=RxPkt->MaxBytes; RxPkt->badCRC=1; } // if ppacket size above what we expected
   if(Radio.readData(RxPkt->Byte, PktLen)!=RADIOLIB_ERR_NONE) RxPkt->badCRC=1; // get the packet from the Radio
   RxPkt->Len=PktLen;
-  // Serial.printf("FNT Rx[%d] %06X %3.1fdB %3.1fdBm %+4.1fkHz %c\n",
-  //          PktLen, RxPkt->getAddr(), SNR, RSSI, 1e-3*FreqOfs, RxPkt->badCRC?'-':'+');
+#ifdef DEBUG_PRINT
+  Serial.printf("FNT%06X [%d] %3.1fdB %3.1fdBm %+4.1fkHz %c\n",
+           RxPkt->getAddr(), PktLen, SNR, RSSI, 1e-3*FreqOfs, RxPkt->badCRC?'-':'+');
+#endif
   RxPkt->msTime  = msTime-TimeRef.sysTime;                         // [ms] time since the reference PPS
   RxPkt->sTime   = TimeRef.UTC;                                    // [sec] UTC PPS
   RxPkt->FreqOfs = floorf(0.1*FreqOfs+0.5);
@@ -799,7 +801,7 @@ void Radio_Task(void *Parms)
 #endif
 
   TimeSync &TimeRef = GPS_TimeSync;
-  char Line[120];
+  char Line[160];
 
   int Len=sprintf(Line, "RF chip %s%s detected", Radio_ChipType, HardwareStatus.Radio?"":" NOT");
   if(xSemaphoreTake(CONS_Mutex, 20))
@@ -858,15 +860,16 @@ void Radio_Task(void *Parms)
 
 #ifdef WITH_PAW
     const PAW_Packet *PawPacket = PAW_TxFIFO.getRead();
-    if(PawPacket) PAW_TxFIFO.Read();
     uint32_t FreqPAW = Radio_FreqPlan.getFreqOBAND();
     if(PawPacket && FreqPAW)                         // if there is a packet to be transmitted and the frequency plan allows it
     { Radio.standby();
       int Ret=Radio_ConfigLDR();
-      // Serial.printf("PAW: Freq:%7.3fMHz (%d)\n", 1e-6*Freq, Ret);
       Radio.setFrequency(1e-6*FreqPAW);
       Radio_ConfigTxPower(Parameters.TxPower+13); // we can transmit PAW with higher power
+      Serial.printf("TxPAW: Freq:%7.3fMHz/%ddBm (%d) [%X:%X:%08X]\n",
+               1e-6*FreqPAW, Parameters.TxPower+13, Ret, (int)PAW_TxFIFO.ReadPtr, (int)PAW_TxFIFO.WritePtr, (int)PawPacket);
       Radio_TxPAW(*PawPacket); }
+    if(PawPacket) PAW_TxFIFO.Read();
 #endif
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
     if(OgnPacket1) OGN_TxFIFO.Read();
@@ -1077,10 +1080,15 @@ void Radio_Task(void *Parms)
     Radio_TxCredit+= 10;                                // [ms]
     if(Radio_TxCredit>60000) Radio_TxCredit=60000;
 
-    int LineLen=sprintf(Line, "Radio: Tx: %d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %d:%d",
+    int LineLen=sprintf(Line,
+     "Radio: Tx: %d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %d:%d [%d] %c%c%c%c%c%c",
              Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5],
              Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5],
-             Radio_BkgRSSI, PktCount, Radio_PktRate, 0.001*Radio_TxCredit, Odd, Oband);
+             Radio_BkgRSSI, PktCount, Radio_PktRate, 0.001*Radio_TxCredit, Odd, Oband,
+             uxTaskGetStackHighWaterMark(NULL),
+             FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
+             OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
+             FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     SysLog_Line(Line, LineLen, 1, 25);
     if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
