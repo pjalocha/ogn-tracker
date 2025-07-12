@@ -48,7 +48,7 @@ class PAW_Packet
          struct
          { uint8_t  AcftType:4; // [22] lower nibble is the aircraft-type like for FLARM/OGN, upper nibble possibly retransmit flag
            uint8_t  Relay   :4; // [22] to be worked out: 1 or 2 signal some kind of relay
-         } ;
+         } __attribute__((packed)) ;
        } ;
        uint8_t  CRC;            // [23] internal CRC: a XOR of all bytes
      }  __attribute__((packed)) ;

@@ -77,7 +77,7 @@ static Delay<uint16_t, 32> BatteryVoltagePipe;
 uint32_t BatteryVoltage = 0;          // [1/256 mV] low-pass filtered battery voltage
  int32_t BatteryVoltageRate = 0;      // [1/256 mV/sec] low-pass filtered battery voltage rise/drop rate
 
-static char           Line[128];      // for printing out to the console, etc.
+static char           Line[160];      // for printing out to the console, etc.
 
 static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN Gallager/LDPC code
 
@@ -596,8 +596,8 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
   // TickType_t ExecTime=xTaskGetTickCount();
 
   uint8_t Check = RxPkt->Decode(*RxPacket, Decoder);
-  Serial.printf("DecodeRxOGN  : #%d %02X:%06X Err:%d Corr:%d Check:%d [%d]\n",
-     RxPkt->Channel, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address,
+  Serial.printf("DecodeRxOGN  : #%d [%d] %02X:%06X Err:%d Corr:%d Check:%d [%d]\n",
+     RxPkt->Channel, RxPkt->Bytes, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address,
      RxPkt->ErrCount(), RxPacket->RxErr, Check, RxPacketIdx);
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
   RxPacket->Packet.Dewhiten();
@@ -607,9 +607,10 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 { uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
   ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
   int CorrErr=ADSL_Packet::Correct(RxPkt->Data, RxPkt->Err);
-  Serial.printf("DecodeRxADSL: #%d Err:%d Corr:%d [%d]\n", RxPkt->Channel, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
+  Serial.printf("DecodeRxADSL: #%d [%d] Err:%d Corr:%d [%d]\n",
+          RxPkt->Channel, RxPkt->Bytes, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
   if(CorrErr<0) return;
-  return; // for debug
+  // return; // for debug
   memcpy(&(RxPacket->Packet.Version), RxPkt->Data, RxPacket->Packet.TxBytes-3);
   RxPacket->RxErr   = CorrErr;
   RxPacket->RxChan  = RxPkt->Channel;
@@ -621,8 +622,8 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
-{ if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
-  if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
+{ // if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
+  // if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
   return; }
 
 // -------------------------------------------------------------------------------------------------------------------

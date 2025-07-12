@@ -15,7 +15,12 @@ template <class Type, const unsigned Size> // size must be (!) a power of 2 like
    Type Data[Len];
 
   public:
-   void Clear(void)                       // clear all stored data
+   FIFO() { Clear(); }
+
+   bool isCorrupt(void) const
+   { return ReadPtr>=Size || WritePtr>=Size; }
+
+   void Clear(void)                          // clear all stored data
    { ReadPtr=0; WritePtr=0; }
 
    unsigned Write(Type Byte)                // write a single element
@@ -42,23 +47,23 @@ template <class Type, const unsigned Size> // size must be (!) a power of 2 like
    unsigned Write(void)                    // advance the write pointer: to be used with getWrite()
    { unsigned Ptr=WritePtr;
      Ptr++; Ptr&=PtrMask;
-     if(Ptr==ReadPtr) return 0;          // but, when the write pointer hits the read pointer then give up, do not advance
+     if(Ptr==ReadPtr) return 0;            // but, when the write pointer hits the read pointer then give up, do not advance
      WritePtr=Ptr; return 1; }
 
    unsigned Read(Type &Byte)               // read a single element
    { unsigned Ptr=ReadPtr;
-     if(Ptr==WritePtr) return 0;
+     if(Ptr==WritePtr) return 0;           // FIFO empty
      Byte=Data[Ptr];
-     Ptr++; Ptr&=PtrMask;
-     ReadPtr=Ptr; return 1; }
+     Ptr++; Ptr&=PtrMask;                  // increment pointer
+     ReadPtr=Ptr; return 1; }              // store it
 
-   void Read(void)
+   void Read(void)                         // increment the read-pointer (thus forget the oldest item)
    { unsigned Ptr=ReadPtr;
      if(Ptr==WritePtr) return;
      Ptr++; Ptr&=PtrMask;
      ReadPtr=Ptr; }
 
-   Type *getRead(void)
+   Type *getRead(void)                     // get pointer to the most recent item.
    { if(ReadPtr==WritePtr) return 0;
      return Data+ReadPtr; }
 
@@ -76,7 +81,7 @@ template <class Type, const unsigned Size> // size must be (!) a power of 2 like
    void flushReadBlock(unsigned Len)       // flush the elements which were already read: to be used after getReadBlock()
    { ReadPtr+=Len; ReadPtr&=PtrMask; }
 
-   bool isEmpty(void) const              // is the FIFO all empty ?
+   bool isEmpty(void) const                // is the FIFO all empty ?
    { return ReadPtr==WritePtr; }
 
    unsigned Write(const Type *Data, unsigned Len) // write a block of elements into the FIFO (could possibly be smarter than colling single Write many times)
