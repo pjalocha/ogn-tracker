@@ -84,9 +84,9 @@ int main(int argc, char *argv[])
   const char *PortName = "/dev/ttyACM0";                              // default serial port name
         int   BaudRate = 115200;                                      // default baud rate on the serial port
   if(argc>1)
-  { char *Colon = strchr(argv[2],':');
+  { char *Colon = strchr(argv[1],':');
     if(Colon) { Colon[0]=0; BaudRate=atol(Colon+1); }
-    PortName = argv[2]; }
+    PortName = argv[1]; }
   if(Port.Open(PortName, BaudRate)<0) { printf("Can't open %s at %dbps\n", PortName, BaudRate); return -1; }
 
   int64_t JoinEUI    = 0x70B3D57ED0035895;  // OGN application EUI
