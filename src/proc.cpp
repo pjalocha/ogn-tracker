@@ -596,9 +596,11 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
   // TickType_t ExecTime=xTaskGetTickCount();
 
   uint8_t Check = RxPkt->Decode(*RxPacket, Decoder);
+#ifdef DEBUG_PRINT
   Serial.printf("DecodeRxOGN  : #%d [%d] %02X:%06X Err:%d Corr:%d Check:%d [%d]\n",
      RxPkt->Channel, RxPkt->Bytes, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address,
      RxPkt->ErrCount(), RxPacket->RxErr, Check, RxPacketIdx);
+#endif
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
   RxPacket->Packet.Dewhiten();
   ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
@@ -607,10 +609,11 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 { uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
   ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
   int CorrErr=ADSL_Packet::Correct(RxPkt->Data, RxPkt->Err);
+#ifdef DEBUG_PRINT
   Serial.printf("DecodeRxADSL: #%d [%d] Err:%d Corr:%d [%d]\n",
           RxPkt->Channel, RxPkt->Bytes, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
+#endif
   if(CorrErr<0) return;
-  // return; // for debug
   memcpy(&(RxPacket->Packet.Version), RxPkt->Data, RxPacket->Packet.TxBytes-3);
   RxPacket->RxErr   = CorrErr;
   RxPacket->RxChan  = RxPkt->Channel;
@@ -622,8 +625,8 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
-{ // if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
-  // if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
+{ if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
+  if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
   return; }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -857,7 +860,8 @@ void vTaskPROC(void* pvParameters)
 #endif
 
 #ifdef WITH_LOOKOUT
-      const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime); // process own position, get the most dangerous target
+      // process own position, get the most dangerous target
+      const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime, Position->GeoidSeparation/10);
 #ifdef WITH_PFLAA
       if(Parameters.Verbose)
       { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);

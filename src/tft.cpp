@@ -49,7 +49,7 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y)
   TFT_DrawBatt(X, Y, 8, Cells, Full, CellColor, FrameColor);
   Flip++; }
 
-void TFT_DrawID(bool WithAP)
+int TFT_DrawID(bool WithAP)
 { char Line[128];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
@@ -97,9 +97,10 @@ void TFT_DrawID(bool WithAP)
   TFT.setCursor(2, 72);
   TFT.print(Line);
 
-  TFT_DrawBatt(146, 30); }
+  TFT_DrawBatt(146, 30);
+  return 1; }
 
-void TFT_DrawSat(void)
+int TFT_DrawSat(void)
 { char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
@@ -107,20 +108,22 @@ void TFT_DrawSat(void)
   TFT.setTextSize(1);
 
   int Vert=16;
-  for(uint8_t Sys=0; Sys<=4; Sys++)
+  for(uint8_t Sys=0; Sys<=4; Sys++)      // loop over constelations
   { int Len=sprintf(Line, "%s:%d:%d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
-    uint8_t SNR=GPS_SatMon.VisSNR[Sys];
+    uint8_t SNR=GPS_SatMon.VisSNR[Sys];  // [0.25dB]
     if(SNR>0) Len+=sprintf(Line+Len, " %4.1fdB", 0.25*SNR);
-         // else Len+=sprintf(Line+Len, " --.-dB");
     Line[Len]=0;
     TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
+    // int Bar=SNR/2;                       //
+    // TFT.fillRect(0, Vert-11, Bar, 14, ST77XX_DARKRED);
     TFT.setCursor(2, Vert); TFT.print(Line);
     Vert+=14; }
   TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
 
-  TFT_DrawBatt(146, 30); }
+  TFT_DrawBatt(146, 30);
+  return 1; }
 
-void TFT_DrawRF(void)
+int TFT_DrawRF(void)
 { char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
@@ -162,14 +165,15 @@ void TFT_DrawRF(void)
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-}
+  return 1; }
 
-void TFT_DrawBaro(const GPS_Position *GPS)
+int TFT_DrawBaro(const GPS_Position *GPS)
 { char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);
+  if(!GPS || !GPS->hasBaro) return 0;
 
   int Vert=18;
   uint8_t Len=Format_String(Line+Len, "Baro ");
@@ -216,9 +220,10 @@ void TFT_DrawBaro(const GPS_Position *GPS)
   }
 
   Vert+=16;
-  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); }
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  return 1; }
 
-void TFT_DrawGPS(const GPS_Position *GPS)
+int TFT_DrawGPS(const GPS_Position *GPS)
 { char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
@@ -278,6 +283,7 @@ void TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   TFT.fillRect(0, Vert-11, TFT.width(), 16, ST77XX_DARKBLUE);
-  TFT_DrawBatt(146, 30); }
+  TFT_DrawBatt(146, 30);
+  return 1; }
 
 #endif // WITH_ST7735

@@ -203,7 +203,12 @@ static uint32_t TFT_PageActive = 0;       // [ms] last time the page was active 
 const  uint32_t TFT_PageTimeout = (uint32_t)60000*WITH_TFT_DIM;  // [ms] timeout to turn off the TFT backlight
 #endif
 
-static void TFT_DrawPage(const GPS_Position *GPS)
+static void TFT_NextPage(void)
+{ TFT_Page++;
+  if(TFT_Page>=TFT_Pages) TFT_Page=0;
+  TFT_PageChange=1; }
+
+static int TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
   if(TFT_Page==1) return TFT_DrawID();
   if(TFT_Page==2) return TFT_DrawSat();
@@ -211,7 +216,7 @@ static void TFT_DrawPage(const GPS_Position *GPS)
   if(!GPS) return TFT_DrawID();
   if(TFT_Page==4) return TFT_DrawBaro(GPS);
   return TFT_DrawGPS(GPS);
-}
+  return 0; }
 
 #endif
 
@@ -224,11 +229,10 @@ static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 static void Button_Single(Button2 Butt)
 {
 #ifdef WITH_ST7735
-  if(TFT_PageOFF) TFT_PageOFF=0;
+  if(TFT_PageOFF)
+    TFT_PageOFF=0;
   else
-  { TFT_Page++;
-    if(TFT_Page>=TFT_Pages) TFT_Page=0;
-    TFT_PageChange=1; }
+    TFT_NextPage();
   TFT_PageActive=millis();
 #endif
 }
@@ -237,6 +241,21 @@ static void Button_Double(Button2 Butt) { }
 
 static void Button_Long(Button2 Butt)
 {
+#ifdef WITH_ST7735
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(0);
+  TFT.setTextSize(2);
+  TFT.setCursor(32, 32);
+  TFT.print("Power-OFF");
+  delay(200);
+  TFT_BL(64);
+  delay(50);
+  TFT_BL(32);
+  delay(50);
+  TFT_BL(16);
+  delay(50);
+#endif
 #ifdef WITH_SLEEP
   Parameters.PowerON=0;
   Parameters.WriteToNVS();
@@ -542,18 +561,21 @@ void setup()
   TFT.setRotation(1);
   TFT.fillScreen(ST77XX_DARKBLUE);
   TFT_BL_Init();
-  TFT_BL(128);
+  TFT_BL(0);
 #ifdef WITH_SLEEP
   if(!Parameters.PowerON)                  // if the tracker has been turned off by the user
   { TFT.setTextColor(ST77XX_WHITE);
+    TFT.setFont(0);
     TFT.setTextSize(2);
     TFT.setCursor(32, 16);
     TFT.print("Confirm");                  // ask for confirmation to avoid acidential turn on
     TFT.setCursor(30, 48);
     TFT.print("Power-ON");
+    uint8_t BLlev=0;
     int Pressed=0;
     for(int Wait=0; Wait<2000; Wait++)     // wait 2sec for confirmation
     { delay(1);
+      if(BLlev<128) { BLlev++; TFT_BL(BLlev); }
       if(!Button_isPressed()) { Pressed=0; continue; }
       Pressed++;
       if(Pressed>=20) { Parameters.PowerON=1; break; } // if button pressed for 20ms
@@ -568,8 +590,9 @@ void setup()
 #endif
       esp_deep_sleep_start(); }            // enter deep sleep
   }
-#endif
-#endif
+#endif  // WITH_SLEEP
+  TFT_BL(128);
+#endif  // WITH_ST7735
 
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
@@ -1062,8 +1085,8 @@ void loop()
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
   if(TFT_PageChange)
-  { TFT_DrawPage(GPS);
-    TFT_PageChange=0; }
+  { TFT_PageChange=0;
+    if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
   if(GPS!=PrevGPS)
   { TFT_PageChange=1;
 #ifdef WITH_TFT_DIM

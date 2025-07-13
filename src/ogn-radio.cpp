@@ -297,7 +297,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   }
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
-// #ifdef DEBUG_PRINT
+#ifdef DEBUG_PRINT
     if(SysID>=8 && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.printf("RadioRx: Sys:%02X [%d%c]/%d #%d %+4.1fdBm ",
          SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
@@ -305,7 +305,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
       Serial.printf(" %c%c\n", FNT_TxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
       xSemaphoreGive(CONS_Mutex); }
-// #endif
+#endif
   if(SysID>=8)  // process further packets received with shorter SYNC which are common for two systems like OGN and ADS-L
   { uint8_t SyncErr = Count1s(RxPkt->Err[0])+Count1s(RxPkt->Err[1])+Count1s(RxPkt->Err[2]);
     if(SysID==Radio_SysID_OGN_ADSL && SyncErr<=2)
@@ -323,7 +323,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
   uint8_t ManchErr=RxPkt->ErrCount();
   if(SysID>=8 || ManchErr>=16) return 0;
-// #ifdef DEBUG_PRINT
+#ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("RadioRx: %5.3fs [#%d:%d:%2d:%c%d] %+4.1fdBm ",
              1e-3*millis(), Channel, SysID, PktLen, Manch?'M':'_', ManchErr, -0.5*RxPkt->RSSI);
@@ -333,7 +333,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
       if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkPI(RxPkt->Data, 24)); }
       Serial.printf(" %c%c\n", FNT_TxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     xSemaphoreGive(CONS_Mutex); }
-// #endif
+#endif
   FSK_RxFIFO.Write();                                                    // complete the write into the queue of received packets
   if(SysID<8) Radio_RxCount[SysID]++;
   return 1; }
@@ -937,10 +937,10 @@ void Radio_Task(void *Parms)
     if(!Odd || OGNonly)
              // Send OGN packet (if there) and receive OGN packets
              PktCount+=Radio_ManchSlot(OGN_Chan, OGN_TxPwr, SlotLen, OGN_Pkt, Radio_SysID_OGN,
-                                       OGN_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+                                       OGN_Chan, Radio_SysID_OGN, TimeRef);
              // Send ADS-L packet (if there) and receive ADS-L packets
         else PktCount+=Radio_ManchSlot(ADSL_Chan, ADSL_TxPwr, SlotLen, ADSL_Pkt, Radio_SysID_ADSL,
-                                       ADSL_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+                                       ADSL_Chan, Radio_SysID_ADSL, TimeRef);
 
         // this is only to test ADS-L/RID transmissions
         // else Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1), Parameters.TxPower, SlotLen, AdslRID?&(AdslRID->Version):0, Radio_SysID_RID,
@@ -987,10 +987,10 @@ void Radio_Task(void *Parms)
     if( Odd || OGNonly)
              // Send OGN packet (if there) and receive OGN packets
              PktCount+=Radio_ManchSlot(OGN_Chan, OGN_TxPwr, SlotLen, OGN_Pkt, Radio_SysID_OGN,
-                                       OGN_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+                                       OGN_Chan, Radio_SysID_OGN, TimeRef);
              // Send ADS-L packet (if there) and receive ADS-L packets
         else PktCount+=Radio_ManchSlot(ADSL_Chan, ADSL_TxPwr, SlotLen, ADSL_Pkt, Radio_SysID_ADSL,
-                                       ADSL_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+                                       ADSL_Chan, Radio_SysID_ADSL, TimeRef);
         // this is only to test ADS-L/RID transmissions
         // else Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Parameters.TxPower, SlotLen, AdslRID?&(AdslRID->Version):0, Radio_SysID_RID,
         //                      Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Radio_SysID_ADSL, TimeRef);
