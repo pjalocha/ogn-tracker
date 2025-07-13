@@ -194,7 +194,7 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 
 #ifdef WITH_ST7735
 
-const  uint8_t  TFT_Pages=5;
+const  uint8_t  TFT_Pages      = 6;       // six LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
@@ -215,6 +215,7 @@ static int TFT_DrawPage(const GPS_Position *GPS)
   if(TFT_Page==3) return TFT_DrawRF();
   if(!GPS) return TFT_DrawID();
   if(TFT_Page==4) return TFT_DrawBaro(GPS);
+  if(TFT_Page==5) return TFT_DrawLoRaWAN(GPS);
   return TFT_DrawGPS(GPS);
   return 0; }
 

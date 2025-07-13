@@ -223,6 +223,51 @@ int TFT_DrawBaro(const GPS_Position *GPS)
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   return 1; }
 
+#ifdef WITH_LORAWAN
+int TFT_DrawLoRaWAN(const GPS_Position *GPS)
+{ char Line[32];
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
+  TFT.setTextSize(1);
+
+  int Vert=18;
+  const char *StateName[4] = { "Disconnec", "Join-Req", "+Joined+", "Pkt-Sent" } ;
+  int Len=Format_String(Line, "TTN: ");
+  if(WANdev.State==2) Len+=Format_Hex(Line+Len, WANdev.DevAddr);
+  else if(WANdev.State<=3) Len+=Format_String(Line+Len, StateName[WANdev.State]);
+                 else Len+=Format_Hex(Line+Len, WANdev.State);
+  Line[Len]=0;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+
+  if(WANdev.State>=2)
+  { Len =Format_String(Line    , "Up: "); Len+=Format_Hex(Line+Len, (uint16_t)WANdev.UpCount);
+    Len+=Format_String(Line+Len, "  Dn: "); Len+=Format_Hex(Line+Len, (uint16_t)WANdev.DnCount);
+    Line[Len]=0;
+    TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+
+    Len =Format_String(Line    , "Rx:");
+    Len+=Format_SignDec(Line+Len, (int32_t)WANdev.RxRSSI, 3);
+    Len+=Format_String(Line+Len, "dBm ");
+    Len+=Format_SignDec(Line+Len, ((int32_t)WANdev.RxSNR*10+2)>>2, 2, 1);
+    Len+=Format_String(Line+Len, "dB");
+    Line[Len]=0;
+    TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16; }
+  else
+  { TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16;
+    TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16; }
+
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16;
+
+  return 1; }
+#else
+int TFT_DrawLoRaWAN(const GPS_Position *GPS) { return 0; }
+#endif
+
+
 int TFT_DrawGPS(const GPS_Position *GPS)
 { char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
