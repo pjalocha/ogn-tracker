@@ -1071,7 +1071,7 @@ void Radio_Task(void *Parms)
         WANdev.RxSilent=0; }
       else                                                 // if no packet received then retreat the State
       { WANdev.State--;
-        WANdev.RxSilent++; if(WANdev.RxSilent>30) WANdev.Disconnect(); }
+        WANdev.RxSilent++; if(WANdev.RxSilent>=60) WANdev.Disconnect(); }
     }
     WANdev.WriteToNVS();                                 // store new WAN state in flash
 #endif
