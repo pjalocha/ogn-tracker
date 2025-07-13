@@ -12,6 +12,9 @@ tlg2aprs:	tlg2aprs.cc
 aprs2igc:	aprs2igc.cc
 	g++ -Wall -Wno-misleading-indentation -O2 -o aprs2igc -I../src aprs2igc.cc ../src/format.cpp ../src/ognconv.cpp
 
+ttn-reg:	ttn-reg.cc
+	g++ -Wall -O2 -o ttn-reg -I../src/ ttn-reg.cc
+
 clean:
 	rm serial_dump read_log aprs2igc
 

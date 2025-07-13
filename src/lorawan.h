@@ -279,7 +279,7 @@ class LoRaWANnode
          TxOpt[TxOptLen++]=(RxSNR>>2)&0x3F;                          // Rx SNR
          continue; }
        break; }
-// #ifdef WITH_PRINTF
+#ifdef WITH_PRINTF
      printf("RxOpt: [%d] ", OptLen);
      for(int Idx=0; Idx<OptLen; Idx++)
        printf("%02X", Opt[Idx]);
@@ -287,7 +287,7 @@ class LoRaWANnode
      for(int Idx=0; Idx<TxOptLen; Idx++)
        printf("%02X", TxOpt[Idx]);
      printf("\n");
-// #endif
+#endif
    }
    // { Format_String(CONS_UART_Write, "LoRaWAN Opt: ");
    //   for(uint8_t Idx=0; Idx<Len; Idx++)

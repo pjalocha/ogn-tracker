@@ -375,8 +375,9 @@ template <const uint8_t MaxTgts=32>
      return Pos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange); }
 
    template <class OGNx_Packet>
-    const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime)                // process own position
+    const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime, int OwnGeoidSepar) // process own position
    { // printf("ProcessOwn() ... entry\n");
+     GeoidSepar=OwnGeoidSepar;
      if(hasPosition)                                                                      // in my position is valid
      { Pred=0;
        if(Pos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0)         // read the new position

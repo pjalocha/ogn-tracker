@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "adsl.h"
 #include "ogn1.h"
 #include "format.h"
 
@@ -27,7 +28,6 @@ class PAW_Packet
        { uint16_t HeadWord;     // [14]
          struct
          { uint16_t Heading:9;  // [14] [deg]
-           //  int8_t  Climb  :7;  // [64fpm] proposed extension
          } ;
        } ;
        union
@@ -41,7 +41,6 @@ class PAW_Packet
        { uint16_t SpeedWord;    // [20]
          struct
          { uint16_t Speed:10;   // [20] [kt]
-           // uint8_t  Time : 6;   // [sec] proposed extension
          } ;
        } ;
        union
@@ -49,17 +48,13 @@ class PAW_Packet
          struct
          { uint8_t  AcftType:4; // [22] lower nibble is the aircraft-type like for FLARM/OGN, upper nibble possibly retransmit flag
            uint8_t  Relay   :4; // [22] to be worked out: 1 or 2 signal some kind of relay
-           // bool     Relay   :1; // relay flag (by ground station)
-           // bool     OGN     :1; // for packets produced by OGN-Tracker - proposed extension
-           // uint8_t  AddrType:2; // address-type for OGN packets (if OGN==1) - proposed extension
-         } ;
+         } __attribute__((packed)) ;
        } ;
        uint8_t  CRC;            // [23] internal CRC: a XOR of all bytes
      }  __attribute__((packed)) ;
    }  __attribute__((packed)) ;
 
   public:
-   void Copy(const uint8_t *Data) { memcpy(Byte, Data, Size); }
    void Clear(void)
    { Byte[0]=0x24;
      for(int Idx=1; Idx<Size; Idx++)
@@ -83,7 +78,9 @@ class PAW_Packet
      Alt = Altitude;
      return 3; }
 
-   int Copy(const OGN1_Packet &Packet /* , bool Ext=0 */ )         // convert from an OGN packet
+   void Copy(const uint8_t *Data) { memcpy(Byte, Data, Size); }
+
+   int Copy(const OGN1_Packet &Packet)                     // convert from an OGN packet
    { Clear();
      Address  = Packet.Header.Address;                     // [24-bit]
      if(Packet.Header.NonPos) return 0;                    // encode only position packets
@@ -93,20 +90,9 @@ class PAW_Packet
      Speed = (398*(int32_t)Packet.DecodeSpeed()+1024)>>11; // [0.1m/s] => [kts]
      Latitude  = (0.0001f/60)*Packet.DecodeLatitude();     // [deg]
      Longitude = (0.0001f/60)*Packet.DecodeLongitude();    // [deg]
-/*
-     if(Ext)
-     { OGN=1;                                              // extended data flag
-       AddrType = Packet.Header.AddrType;                  // [2-bit]
-       Relay    = Packet.Header.Relay;                     // relay flag
-       // Time = Packet.Position.Time;                        // [sec]
-       int32_t ClimbRate = Packet.DecodeClimbRate();       // [0.1m/s]
-       ClimbRate = (ClimbRate*315+512)>>10;                // [64fpm]
-       if(ClimbRate>127) ClimbRate=127;
-       else if(ClimbRate<(-127)) ClimbRate=(-127);
-       Climb = ClimbRate; }
-*/
      SeqMsg = 0;
-     setCRC(); return 1; }
+     setCRC();
+     return 1; }
 
    int WriteStxJSON(char *JSON) const
    { int Len=0;
@@ -159,11 +145,14 @@ class PAW_Packet
     return Len; }                                                    // return number of bytes read = packet length = should be 24
 
    static void Whiten(uint8_t *Packet, int Len)                       // whitening applied to PAW packet, includes internal CRC
-   { const static uint8_t White[] = { 0x05, 0xb4, 0x05, 0xae, 0x14, 0xda,
-        0xbf, 0x83, 0xc4, 0x04, 0xb2, 0x04, 0xd6, 0x4d, 0x87, 0xe2, 0x01, 0xa3, 0x26,
-        0xac, 0xbb, 0x63, 0xf1, 0x01, 0xca, 0x07, 0xbd, 0xaf, 0x60, 0xc8, 0x12, 0xed,
-        0x04, 0xbc, 0xf6, 0x12, 0x2c, 0x01, 0xd9, 0x04, 0xb1, 0xd5, 0x03, 0xab, 0x06,
-        0xcf, 0x08, 0xe6, 0xf2, 0x07, 0xd0, 0x12, 0xc2, 0x09, 0x34, 0x20 };
+   { const static uint8_t White[] =
+     {  0x05, 0xb4, 0x05, 0xae, 0x14, 0xda, 0xbf, 0x83,
+        0xc4, 0x04, 0xb2, 0x04, 0xd6, 0x4d, 0x87, 0xe2,
+        0x01, 0xa3, 0x26, 0xac, 0xbb, 0x63, 0xf1, 0x01,
+        0xca, 0x07, 0xbd, 0xaf, 0x60, 0xc8, 0x12, 0xed,
+        0x04, 0xbc, 0xf6, 0x12, 0x2c, 0x01, 0xd9, 0x04,
+        0xb1, 0xd5, 0x03, 0xab, 0x06, 0xcf, 0x08, 0xe6,
+        0xf2, 0x07, 0xd0, 0x12, 0xc2, 0x09, 0x34, 0x20 };
      for(int Idx=0; Idx<Len; Idx++)
      { Packet[Idx]^=White[Idx]; }
    }
@@ -171,7 +160,10 @@ class PAW_Packet
    void setCRC(void) { CRC = IntCRC(Byte, Size, 0x00); }                  // set the internal CRC of the packet
 
    uint8_t IntCRC(void) const { return IntCRC(Byte, Size, 0x00); }        // over all bytes it should be a zero
-                                                                          // thus XOR of all bytes including the CRC should be a zero
+   bool isPAW(void) const { return IntCRC()==0x00; }                      // thus XOR of all bytes including the CRC should be a zero
+
+   uint32_t ADSL_CRC(void) const { return ADSL_Packet::checkPI(Byte, Size); }   // ADS-L CRC check should be 0x000000 for an ADS-L packet
+   bool isADSL(void) const { return ADSL_CRC()==0x000000; }
 
    static uint8_t IntCRC(const uint8_t *Packet, int Len=Size, uint8_t CRC=0x00) // internal PAW packet CRC
    { for(int Idx=0; Idx<Len; Idx++)
@@ -215,8 +207,6 @@ class PAW_Packet
 
 class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
 { public:
-   // PAW_Packet Packet;
-   // uint8_t  CRC;            // []        external CRC (we assume it is correct)
    uint8_t  CSNR;           // [0.5dB]  carrier Signal-to-Noise Ratio
    uint8_t   SNR;           // [0.25dB]
    int16_t FreqOfs;         // [10Hz]

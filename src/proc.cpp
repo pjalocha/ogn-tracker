@@ -77,7 +77,7 @@ static Delay<uint16_t, 32> BatteryVoltagePipe;
 uint32_t BatteryVoltage = 0;          // [1/256 mV] low-pass filtered battery voltage
  int32_t BatteryVoltageRate = 0;      // [1/256 mV/sec] low-pass filtered battery voltage rise/drop rate
 
-static char           Line[128];      // for printing out to the console, etc.
+static char           Line[160];      // for printing out to the console, etc.
 
 static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN Gallager/LDPC code
 
@@ -244,6 +244,9 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   Packet.setRelay(0);
   Packet.Telemetry.Header.TelemType=0x0;                            // 0 => device status
   if(GPS) GPS->EncodeTelemetry(Packet);
+#ifdef WITH_SX1276
+  if(Packet.Telemetry.Baro.Temperature==(-128)) Packet.Telemetry.Baro.Temperature=Radio_ChipTemperature*2;
+#endif
   uint8_t SNR = (GPS_SatSNR+2)/4;                                   // encode number of satellites and SNR in the Status packet
   if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
         else { SNR=0; }
@@ -341,9 +344,9 @@ static void ReadStatus(OGN_Packet &Packet)
 #endif
 
 // #ifdef WITH_SX1262
-  if(Packet.Status.Pressure==0) Packet.clrTemperature();
+//   if(Packet.Status.Pressure==0) Packet.clrTemperature();
 // #else
-  // if(Packet.Status.Pressure==0) Packet.EncodeTemperature(TRX.chipTemp*10); // [0.1degC]
+//   if(Packet.Status.Pressure==0) Packet.EncodeTemperature(Radio_ChipTemperature*10); // [0.1degC]
 // #endif
   Packet.Status.RadioNoise = floorf(-2*Radio_BkgRSSI+0.f); // TRX.averRSSI;                         // [-0.5dBm] write radio noise to the status packet
 
@@ -593,8 +596,11 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
   // TickType_t ExecTime=xTaskGetTickCount();
 
   uint8_t Check = RxPkt->Decode(*RxPacket, Decoder);
-  // Serial.printf("DecodeRxOGN  : #%d %02X:%06X Err:%d Corr:%d Check:%d\n",
-  //    RxPkt->Channel, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address, RxPkt->ErrCount(), RxPacket->RxErr, Check);
+#ifdef DEBUG_PRINT
+  Serial.printf("DecodeRxOGN  : #%d [%d] %02X:%06X Err:%d Corr:%d Check:%d [%d]\n",
+     RxPkt->Channel, RxPkt->Bytes, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address,
+     RxPkt->ErrCount(), RxPacket->RxErr, Check, RxPacketIdx);
+#endif
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
   RxPacket->Packet.Dewhiten();
   ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
@@ -603,7 +609,10 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 { uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
   ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
   int CorrErr=ADSL_Packet::Correct(RxPkt->Data, RxPkt->Err);
-  // Serial.printf("DecodeRxADSL: #%d Err:%d Corr:%d\n", RxPkt->Channel, RxPkt->ErrCount(), CorrErr);
+#ifdef DEBUG_PRINT
+  Serial.printf("DecodeRxADSL: #%d [%d] Err:%d Corr:%d [%d]\n",
+          RxPkt->Channel, RxPkt->Bytes, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
+#endif
   if(CorrErr<0) return;
   memcpy(&(RxPacket->Packet.Version), RxPkt->Data, RxPacket->Packet.TxBytes-3);
   RxPacket->RxErr   = CorrErr;
@@ -618,8 +627,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
   if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
-
-}
+  return; }
 
 // -------------------------------------------------------------------------------------------------------------------
 
@@ -652,9 +660,9 @@ void vTaskPROC(void* pvParameters)
   for( ; ; )
   { vTaskDelay(1);
 
-    FSK_RxPacket *RxPkt = FSK_RxFIFO.getRead();                        // check for new received packets
-    if(RxPkt)                                                          // if there is a new received packet
-    {
+    for( ; ; )
+    { FSK_RxPacket *RxPkt = FSK_RxFIFO.getRead();                        // check for new received packets
+      if(RxPkt==0) break;                                                // if there is a new received packet
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
@@ -734,6 +742,9 @@ void vTaskPROC(void* pvParameters)
 #endif
     if(Position)
     { Position->EncodeStatus(StatPacket.Packet);             // encode GPS altitude and pressure/temperature/humidity
+#ifdef WITH_SX1276
+      if(!StatPacket.Packet.hasTemperature()) StatPacket.Packet.EncodeTemperature((int16_t)Radio_ChipTemperature*10);
+#endif
       /* Flight.Process(*Position); */ }                     // flight monitor: takeoff/landing
     else
     { StatPacket.Packet.Status.FixQuality=0; StatPacket.Packet.Status.Satellites=0; } // or lack of the GPS lock
@@ -803,18 +814,19 @@ void vTaskPROC(void* pvParameters)
       Position->Sent=1;
 #ifdef WITH_ADSL
       XorShift32(Random.RX);
+      ADSL_Packet *AdslPacket=0;                                               // keep the pointer to the 
       { static uint8_t TxBackOff=0;
         if(TxBackOff) TxBackOff--;
         else if(Radio_FreqPlan.Plan<=1)                                         // ADS-L only in Europe/Africa
-        { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
-          Packet->Init();
-          Packet->setAddress (Parameters.Address);
-          Packet->setAddrTypeOGN(Parameters.AddrType);
-          Packet->setRelay(0);
-          Packet->setAcftTypeOGN(Parameters.AcftType);
-          Position->Encode(*Packet);                                           // encode position packet from the GPS
-          Packet->Scramble();
-          Packet->setCRC();
+        { AdslPacket = ADSL_TxFIFO.getWrite();
+          AdslPacket->Init();
+          AdslPacket->setAddress (Parameters.Address);
+          AdslPacket->setAddrTypeOGN(Parameters.AddrType);
+          AdslPacket->setRelay(0);
+          AdslPacket->setAcftTypeOGN(Parameters.AcftType);
+          Position->Encode(*AdslPacket);                                       // encode position packet from the GPS
+          AdslPacket->Scramble();
+          AdslPacket->setCRC();
           ADSL_TxFIFO.Write();
           if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);       // if stationary then don't transmit position every second
           if(Radio_TxCredit<=0) TxBackOff+=1; }
@@ -836,14 +848,20 @@ void vTaskPROC(void* pvParameters)
       static uint8_t PAW_BackOff=0;
       if(PAW_BackOff) PAW_BackOff--;
       else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
-      { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();
-        TxPacket->Copy(PosPacket.Packet);                                // convert OGN position packet to PilotAware
-        PAW_TxFIFO.Write();
-        PAW_BackOff = 3+Random.RX%3; }
+      { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
+        int Good=TxPacket->Copy(PosPacket.Packet);                       // convert OGN position packet to PilotAware
+#ifdef WITH_ADSL
+        if(AdslPacket && (RX&10)) { TxPacket->Copy(&(AdslPacket->Version)); Good=1; }
+#endif
+        if(Good)
+        { PAW_TxFIFO.Write();                                            // complete the write into the transmitter queue
+          PAW_BackOff = 3+Random.RX%3; }                                 // randomly choose time to transmit next PAW packet
+      }
 #endif
 
 #ifdef WITH_LOOKOUT
-      const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime); // process own position, get the most dangerous target
+      // process own position, get the most dangerous target
+      const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime, Position->GeoidSeparation/10);
 #ifdef WITH_PFLAA
       if(Parameters.Verbose)
       { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);

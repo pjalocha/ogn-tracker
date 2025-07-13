@@ -194,7 +194,7 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 
 #ifdef WITH_ST7735
 
-const  uint8_t  TFT_Pages=5;
+const  uint8_t  TFT_Pages      = 6;       // six LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
@@ -203,15 +203,21 @@ static uint32_t TFT_PageActive = 0;       // [ms] last time the page was active 
 const  uint32_t TFT_PageTimeout = (uint32_t)60000*WITH_TFT_DIM;  // [ms] timeout to turn off the TFT backlight
 #endif
 
-static void TFT_DrawPage(const GPS_Position *GPS)
+static void TFT_NextPage(void)
+{ TFT_Page++;
+  if(TFT_Page>=TFT_Pages) TFT_Page=0;
+  TFT_PageChange=1; }
+
+static int TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
   if(TFT_Page==1) return TFT_DrawID();
   if(TFT_Page==2) return TFT_DrawSat();
   if(TFT_Page==3) return TFT_DrawRF();
   if(!GPS) return TFT_DrawID();
   if(TFT_Page==4) return TFT_DrawBaro(GPS);
+  if(TFT_Page==5) return TFT_DrawLoRaWAN(GPS);
   return TFT_DrawGPS(GPS);
-}
+  return 0; }
 
 #endif
 
@@ -224,11 +230,10 @@ static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 static void Button_Single(Button2 Butt)
 {
 #ifdef WITH_ST7735
-  if(TFT_PageOFF) TFT_PageOFF=0;
+  if(TFT_PageOFF)
+    TFT_PageOFF=0;
   else
-  { TFT_Page++;
-    if(TFT_Page>=TFT_Pages) TFT_Page=0;
-    TFT_PageChange=1; }
+    TFT_NextPage();
   TFT_PageActive=millis();
 #endif
 }
@@ -237,6 +242,21 @@ static void Button_Double(Button2 Butt) { }
 
 static void Button_Long(Button2 Butt)
 {
+#ifdef WITH_ST7735
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(0);
+  TFT.setTextSize(2);
+  TFT.setCursor(32, 32);
+  TFT.print("Power-OFF");
+  delay(200);
+  TFT_BL(64);
+  delay(50);
+  TFT_BL(32);
+  delay(50);
+  TFT_BL(16);
+  delay(50);
+#endif
 #ifdef WITH_SLEEP
   Parameters.PowerON=0;
   Parameters.WriteToNVS();
@@ -542,18 +562,21 @@ void setup()
   TFT.setRotation(1);
   TFT.fillScreen(ST77XX_DARKBLUE);
   TFT_BL_Init();
-  TFT_BL(128);
+  TFT_BL(0);
 #ifdef WITH_SLEEP
   if(!Parameters.PowerON)                  // if the tracker has been turned off by the user
   { TFT.setTextColor(ST77XX_WHITE);
+    TFT.setFont(0);
     TFT.setTextSize(2);
     TFT.setCursor(32, 16);
     TFT.print("Confirm");                  // ask for confirmation to avoid acidential turn on
     TFT.setCursor(30, 48);
     TFT.print("Power-ON");
+    uint8_t BLlev=0;
     int Pressed=0;
     for(int Wait=0; Wait<2000; Wait++)     // wait 2sec for confirmation
     { delay(1);
+      if(BLlev<128) { BLlev++; TFT_BL(BLlev); }
       if(!Button_isPressed()) { Pressed=0; continue; }
       Pressed++;
       if(Pressed>=20) { Parameters.PowerON=1; break; } // if button pressed for 20ms
@@ -568,8 +591,9 @@ void setup()
 #endif
       esp_deep_sleep_start(); }            // enter deep sleep
   }
-#endif
-#endif
+#endif  // WITH_SLEEP
+  TFT_BL(128);
+#endif  // WITH_ST7735
 
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
@@ -703,7 +727,7 @@ void setup()
     { esp_core_dump_bt_info_t &BackTrace = DumpSummary->exc_bt_info;
       InfoLen=sprintf(Info, "Crash-dump: Task:%s PC:%08x [%d]\n", DumpSummary->exc_task, DumpSummary->exc_pc, BackTrace.depth);
       for(uint32_t Idx=0; Idx<BackTrace.depth && Idx<16; Idx++)
-      { InfoLen+=sprintf(Info+InfoLen, " %08x", BackTrace.bt[Idx]); }
+      { InfoLen+=sprintf(Info+InfoLen, " 0x%08x", BackTrace.bt[Idx]); }
     }
     free(DumpSummary); }
   if(InfoLen) Serial.println(Info);
@@ -771,18 +795,18 @@ void setup()
 #ifdef WITH_LOG
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
 #endif
-  xTaskCreate(vTaskGPS    ,  "GPS"  ,  3000, NULL, 1, NULL);  // read data from GPS
+  xTaskCreate(vTaskGPS    ,  "GPS"  ,  4000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
-  xTaskCreate(vTaskSENS   ,  "SENS" ,  3000, NULL, 1, NULL);  // read data from pressure sensor
+  xTaskCreate(vTaskSENS   ,  "SENS" ,  4000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
-  xTaskCreate(vTaskPROC   ,  "PROC" ,  3000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(Radio_Task  ,  "RF"   ,  3000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(vTaskPROC   ,  "PROC" ,  4000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
+  xTaskCreate(Radio_Task  ,  "RF"   ,  4000, NULL, 1, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
-    xTaskCreate(vTaskAP,  "AP",  3000, NULL, 0, NULL);
+    xTaskCreate(vTaskAP,  "AP",  4000, NULL, 0, NULL);
 #endif
 #ifdef WITH_UPLOAD
-  xTaskCreate(vTaskUPLOAD,"UPLOAD",3000, NULL, 0, NULL);
+  xTaskCreate(vTaskUPLOAD,"UPLOAD",4000, NULL, 0, NULL);
 #endif
 
 }
@@ -1062,8 +1086,8 @@ void loop()
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
   if(TFT_PageChange)
-  { TFT_DrawPage(GPS);
-    TFT_PageChange=0; }
+  { TFT_PageChange=0;
+    if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
   if(GPS!=PrevGPS)
   { TFT_PageChange=1;
 #ifdef WITH_TFT_DIM
