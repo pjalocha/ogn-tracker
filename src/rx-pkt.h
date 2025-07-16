@@ -14,8 +14,8 @@ const uint8_t Radio_SysID_LDR  = 6;  // PilotAware over LDR
 const uint8_t Radio_SysID_HDR  = 7;  // ADS-L HDR
 
 // multi-system reception modes
-const uint8_t Radio_SysID_FLR_ADSL  = 0x10; // FLARM with ADS-L
-const uint8_t Radio_SysID_OGN_ADSL  = 0x11; // OGN with ADS-L
+const uint8_t Radio_SysID_FLR_ADSL  = 8; // FLARM with ADS-L
+const uint8_t Radio_SysID_OGN_ADSL  = 9; // OGN with ADS-L
 
 class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
@@ -41,8 +41,9 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
   public:
 
    static const char *SysName(uint8_t SysID)
-   { static const char *Name[8] = { "FLR", "OGN", "ADSL", "RID", "FNT", "PAW", "LDR", "HDR" } ;
-     if(SysID<8) return Name[SysID];
+   { static const char *Name[16] = { "FLR", "OGN", "ADL", "RID", "FNT", "PAW", "LDR", "HDR",
+                                     "F+A", "O+A", "---", "---", "---", "---", "---", "---" } ;
+     if(SysID<16) return Name[SysID];
      return 0; }
 
    // SYNC for various systems including multi-system reception with one SYNC

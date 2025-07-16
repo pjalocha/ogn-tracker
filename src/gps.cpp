@@ -577,10 +577,12 @@ static void GPS_BurstEnd(void)                                             // wh
 {
   GPS_SatMon.Sort();
   GPS_SatCnt=GPS_SatMon.CalcStats(GPS_SatSNR);
-  GPS_SatMon.PrintStats(Line);
-  if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 10))
-  { Serial.printf("%s\n", Line);
-    xSemaphoreGive(CONS_Mutex); }
+  if(GPS_TimeSync.UTC%10==7)
+  { GPS_SatMon.PrintStats(Line);
+    if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 10))
+    { Serial.printf("%s\n", Line);
+      xSemaphoreGive(CONS_Mutex); }
+  }
 
   // Serial.printf("GPS: %02X %s\n", GPS_Status.Flags, Line);
 #ifdef DEBUG_PRINT

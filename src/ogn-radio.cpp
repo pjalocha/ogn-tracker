@@ -247,12 +247,6 @@ static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // tran
 { int TxLen=ManchEncode(Radio_TxPacket, Packet, Len);                    // Manchester encode
   return Radio_TxFSK(Radio_TxPacket, TxLen); }
 
-static int DiffBits(const uint8_t *Data, const uint8_t *Ref, const uint8_t *Mask, int Len)
-{ int Count=0;
-  for(int Idx=0; Idx<Len; Idx++)
-  { Count+=Count1s((Data[Idx]^Ref[Idx])&Mask[Idx]); }
-  return Count; }
-
 // check if there is a new packet received:
 static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef)
 { if(!Radio_IRQ()) return 0;                                             // use the IRQ line: not raised, then no received packet
@@ -346,9 +340,13 @@ static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, bool Manch, uint8_t
 
 // =======================================================================================================
 
+static int Radio_Config(uint8_t TxSysID, bool RxMode)
+{
+  return 0; }
+
 // TX/RX slot for a Manchester-encoded protocol
-static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, const uint8_t *TxPacket, uint8_t TxSysID,
-                            uint8_t RxChannel, uint8_t RxSysID, TimeSync &TimeRef)
+static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, const uint8_t *TxPacket, uint8_t TxSysID,
+                      uint8_t RxChannel, uint8_t RxSysID, TimeSync &TimeRef)
 { // bool TxManch = TxSysID<4;
   // bool RxManch = RxSysID<4;
   uint8_t TxPktLen;
@@ -358,12 +356,15 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
   int TxSyncLen = FSK_RxPacket::SysSYNC(TxSYNC, TxPktLen, TxSysID);
   int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID);
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
+  bool SameChan = TxChannel==RxChannel;
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
 #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
-  { Serial.printf("Radio_ManchSlot(%dms, %s, Tx:%d, Rx:%02X) %5.1f/%5.1fMHz %1.0fdBm [%d/%d]\n",
-              msTimeLen, TxPacket?"RX/TX":"RX/--", TxSysID, RxSysID, RxFreq, TxFreq, TxPower, RxPktLen, TxPktLen);
+  { Serial.printf("Radio_Slot: %dms, %s, Tx:%s:%d:%5.1fMHz:%1.0fdBm, Rx:%s:%d:%5.1fMHz\n",
+              msTimeLen, TxPacket?"RX/TX":"RX/--",
+              FSK_RxPacket::SysName(TxSysID), TxPktLen, TxFreq, TxPower,
+              FSK_RxPacket::SysName(RxSysID), RxPktLen, RxFreq);
     xSemaphoreGive(CONS_Mutex); }
 #endif
   int PktCount=0;
@@ -382,12 +383,12 @@ static int Radio_ManchSlot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen,
     Radio.standby();
     Radio_ConfigManchFSK(TxPktLen, 0, TxSYNC, TxSyncLen);           // configure for transmission
     Radio_ConfigTxPower(TxPower);
-    Radio.setFrequency(TxFreq);                                     // set frequency
+    if(!SameChan) Radio.setFrequency(TxFreq);                       // set frequency
     Radio_TxManchFSK(TxPacket, TxPktLen);                           // transmit the packet
     Radio_TxCount[TxSysID]++;
     Radio.standby();
     Radio_ConfigManchFSK(RxPktLen, 1, RxSYNC, RxSyncLen);           // configure for receiving
-    Radio.setFrequency(RxFreq);                                     // set frequency
+    if(!SameChan) Radio.setFrequency(RxFreq);                       // set frequency
 #ifdef WITH_SX1276
     // Radio.setAFC(0);                                             // enable AFC
 #endif
@@ -430,7 +431,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
 #endif
   State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 2 bytes, the rest we have to do in software
   if(State) ErrState=State;
-  State=Radio.setPreambleLength(RxMode?16:64);                      // [bits] very long preamble for Pilot-Aware
+  State=Radio.setPreambleLength(RxMode?16:40);                      // [bits] very long preamble for Pilot-Aware
   if(State) ErrState=State;
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
   if(State) ErrState=State;
@@ -926,11 +927,11 @@ void Radio_Task(void *Parms)
     // the first time-slot
     if(!Odd || OGNonly)
              // Send OGN packet (if there) and receive OGN packets
-             PktCount+=Radio_ManchSlot(OGN_Chan, OGN_TxPwr, SlotLen, OGN_Pkt, Radio_SysID_OGN,
-                                       OGN_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+             PktCount+=Radio_Slot(OGN_Chan, OGN_TxPwr, SlotLen, OGN_Pkt, Radio_SysID_OGN,
+                                  OGN_Chan, Radio_SysID_OGN_ADSL, TimeRef);
              // Send ADS-L packet (if there) and receive ADS-L packets
-        else PktCount+=Radio_ManchSlot(ADSL_Chan, ADSL_TxPwr, SlotLen, ADSL_Pkt, Radio_SysID_ADSL,
-                                       ADSL_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+        else PktCount+=Radio_Slot(ADSL_Chan, ADSL_TxPwr, SlotLen, ADSL_Pkt, Radio_SysID_ADSL,
+                                  ADSL_Chan, Radio_SysID_OGN_ADSL, TimeRef);
 
         // this is only to test ADS-L/RID transmissions
         // else Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1), Parameters.TxPower, SlotLen, AdslRID?&(AdslRID->Version):0, Radio_SysID_RID,
@@ -976,11 +977,11 @@ void Radio_Task(void *Parms)
     // the second time-slot
     if( Odd || OGNonly)
              // Send OGN packet (if there) and receive OGN packets
-             PktCount+=Radio_ManchSlot(OGN_Chan, OGN_TxPwr, SlotLen, OGN_Pkt, Radio_SysID_OGN,
-                                       OGN_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+             PktCount+=Radio_Slot(OGN_Chan, OGN_TxPwr, SlotLen, OGN_Pkt, Radio_SysID_OGN,
+                                  OGN_Chan, Radio_SysID_OGN_ADSL, TimeRef);
              // Send ADS-L packet (if there) and receive ADS-L packets
-        else PktCount+=Radio_ManchSlot(ADSL_Chan, ADSL_TxPwr, SlotLen, ADSL_Pkt, Radio_SysID_ADSL,
-                                       ADSL_Chan, Radio_SysID_OGN_ADSL, TimeRef);
+        else PktCount+=Radio_Slot(ADSL_Chan, ADSL_TxPwr, SlotLen, ADSL_Pkt, Radio_SysID_ADSL,
+                                  ADSL_Chan, Radio_SysID_OGN_ADSL, TimeRef);
         // this is only to test ADS-L/RID transmissions
         // else Radio_ManchSlot(Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Parameters.TxPower, SlotLen, AdslRID?&(AdslRID->Version):0, Radio_SysID_RID,
         //                      Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1), Radio_SysID_ADSL, TimeRef);
@@ -1070,15 +1071,16 @@ void Radio_Task(void *Parms)
     Radio_TxCredit+= 10;                                // [ms]
     if(Radio_TxCredit>60000) Radio_TxCredit=60000;
 
+    if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %d:%d [%d] %c%c%c%c%c%c",
+     "Radio: Tx: %d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %d:%d [%d]",
              Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5],
              Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5],
              Radio_BkgRSSI, PktCount, Radio_PktRate, 0.001*Radio_TxCredit, Odd, Oband,
-             uxTaskGetStackHighWaterMark(NULL),
-             FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
-             OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
-             FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
+             uxTaskGetStackHighWaterMark(NULL));
+             // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
+             // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
+             // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     SysLog_Line(Line, LineLen, 1, 25);
     if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
