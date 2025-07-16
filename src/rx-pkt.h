@@ -4,9 +4,22 @@
 #include "bitcount.h"
 #include "ogn.h"
 
+const uint8_t Radio_SysID_FLR  = 0;  //
+const uint8_t Radio_SysID_OGN  = 1;
+const uint8_t Radio_SysID_ADSL = 2;
+const uint8_t Radio_SysID_RID  = 3;
+const uint8_t Radio_SysID_FNT  = 4;  // LoRa modulation
+const uint8_t Radio_SysID_PAW  = 5;  // ADS-L over LDR
+const uint8_t Radio_SysID_LDR  = 6;  // PilotAware over LDR
+const uint8_t Radio_SysID_HDR  = 7;  // ADS-L HDR
+
+// multi-system reception modes
+const uint8_t Radio_SysID_FLR_ADSL  = 0x10; // FLARM with ADS-L
+const uint8_t Radio_SysID_OGN_ADSL  = 0x11; // OGN with ADS-L
+
 class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
-   static const uint8_t MaxBytes=48;  // [bytes] number of bytes in the packet
+   static const uint8_t MaxBytes=48;  // [bytes] max. number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
    uint16_t msTime;                   // [ms] reception time since the PPS[Time]
    union
@@ -26,6 +39,58 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
    uint8_t Err [MaxBytes];            // Manchester decoding errors (for systems with Manchester encoding)
 
   public:
+
+   static const char *SysName(uint8_t SysID)
+   { static const char *Name[8] = { "FLR", "OGN", "ADSL", "RID", "FNT", "PAW", "LDR", "HDR" } ;
+     if(SysID<8) return Name[SysID];
+     return 0; }
+
+   // SYNC for various systems including multi-system reception with one SYNC
+   static int SysSYNC(const uint8_t * &SYNC, uint8_t &PktLen, uint8_t SysID)
+   { static const uint8_t SYNC_FLR6[10] = { 0x55, 0x99, 0xA5, 0xA9, 0x55, 0x66, 0x65, 0x96, 0x00, 0x00 };
+     static const uint8_t SYNC_OGN1[10] = { 0xAA, 0x66, 0x55, 0xA5, 0x96, 0x99, 0x96, 0x5A, 0x00, 0x00 };
+     static const uint8_t SYNC_ADSL[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA9, 0x6A, 0x00, 0x00 };
+     static const uint8_t SYNC_LDR [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18, 0x71, 0x00, 0x00 };
+     static const uint8_t SYNC_FLR_ADSL[4] = { 0x56, 0x66, 0x00, 0x00 } ;
+     static const uint8_t SYNC_OGN_ADSL[4] = { 0x99, 0x95, 0x00, 0x00 } ;
+     SYNC = 0; PktLen=0;
+     if(SysID==Radio_SysID_FLR)      { SYNC=SYNC_FLR6;     PktLen=26;   return 8; }
+     if(SysID==Radio_SysID_OGN)      { SYNC=SYNC_OGN1;     PktLen=26;   return 8; }
+     if(SysID==Radio_SysID_ADSL)     { SYNC=SYNC_ADSL;     PktLen=24;   return 8; }
+     if(SysID==Radio_SysID_PAW)      { SYNC=SYNC_LDR;      PktLen=31;   return 2; }
+     if(SysID==Radio_SysID_LDR)      { SYNC=SYNC_LDR;      PktLen=31;   return 2; }
+     if(SysID==Radio_SysID_FLR_ADSL) { SYNC=SYNC_FLR_ADSL; PktLen=26+3; return 2; }
+     if(SysID==Radio_SysID_OGN_ADSL) { SYNC=SYNC_OGN_ADSL; PktLen=26+3; return 2; }
+     return 0; }
+
+   static int DiffBits(const uint8_t *Data, const uint8_t *Ref, const uint8_t *Mask, int Len)
+   { int Count=0;
+     for(int Idx=0; Idx<Len; Idx++)
+     { Count+=Count1s((Data[Idx]^Ref[Idx])&Mask[Idx]); }
+     return Count; }
+
+   uint8_t DecodeSysID(void) // resolve multi-system receptions into unique types
+   { if(SysID==Radio_SysID_OGN_ADSL)                       // if OGN+ADSL SYNC
+     { const uint8_t SignADSL[3] = { 0x24, 0xB1, 0x80 } ;
+       const uint8_t MaskADSL[3] = { 0xFF, 0xFF, 0xF0 } ;
+       const uint8_t SignOGN [3] = { 0x9B, 0x2B, 0x60 } ;
+       const uint8_t MaskOGN [3] = { 0xFF, 0xFF, 0xF8 } ;
+            if(DiffBits(Data, SignADSL, MaskADSL, 3)<=1)
+       { BitShift(20); Bytes=24; SysID=Radio_SysID_ADSL; }
+       else if(DiffBits(Data, SignOGN, MaskOGN, 3)<=1)
+       { BitShift(21); Bytes=26; SysID=Radio_SysID_OGN; }
+       return SysID; }
+     if(SysID==Radio_SysID_FLR_ADSL)                       // if FLARM+ADSL SYNC
+     { const uint8_t SignADSL[3] = { 0xE4, 0x96, 0x30 } ;
+       const uint8_t MaskADSL[3] = { 0xFF, 0xFF, 0xFE } ;
+       const uint8_t SignFLR [3] = { 0x63, 0xF5, 0x6C } ;
+       const uint8_t MaskFLR [3] = { 0xFF, 0xFF, 0xFE } ;
+            if(DiffBits(Data, SignADSL, MaskADSL, 3)<=1)
+       { BitShift(23); Bytes=24; SysID=Radio_SysID_ADSL; }
+       else if(DiffBits(Data, SignFLR, MaskFLR, 3)<=1)
+       { BitShift(23); Bytes=26; SysID=Radio_SysID_FLR; }
+       return SysID; }
+     return SysID; }
 
    // shift to the left a series of bytes by given number of bits
    static uint8_t BitShift(uint8_t *Data, uint8_t Bytes, uint8_t Shift)

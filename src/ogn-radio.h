@@ -15,18 +15,20 @@
 
 #include "paw.h"
 
+/* move to rx-pkt.h
 const uint8_t Radio_SysID_FLR  = 0;  //
 const uint8_t Radio_SysID_OGN  = 1;
 const uint8_t Radio_SysID_ADSL = 2;
 const uint8_t Radio_SysID_RID  = 3;
 const uint8_t Radio_SysID_FNT  = 4;  // LoRa modulation
-const uint8_t Radio_SysID_PAW  = 5;  // PAW or ADS-L LDR
+const uint8_t Radio_SysID_PAW  = 5;  // PAW or ADS-L over LDR
 const uint8_t Radio_SysID_HDR  = 6;  // ADS-L HDR
 
 const uint8_t Radio_SysID_FLR_ADSL  = 0x10; // FLARM with ADS-L
 const uint8_t Radio_SysID_OGN_ADSL  = 0x11; // OGN with ADS-L
 
 extern const char *Radio_SysName[8];
+*/
 
 extern FIFO<OGN_TxPacket<OGN_Packet>, 4> OGN_TxFIFO;
 extern FIFO<ADSL_Packet,              4> ADSL_TxFIFO;
