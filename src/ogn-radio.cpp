@@ -166,7 +166,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
   else if(SYNC[0]==0xAA)
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
-  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
@@ -321,6 +321,16 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   if(SysID<8) Radio_RxCount[SysID]++;
   return 1; }
 
+static float Radio_liveRSSI(void)  // read the current RSSI level (assume we are already in receive mode)
+{
+#ifdef WITH_SX1262
+  return Radio.getRSSI(false);     // not for last packet but the live RSSI
+#endif
+#ifdef WITH_SX1276
+  return Radio.getRSSI(false, true); // not for packet, skip switching to receive
+#endif
+}
+
 // keep receiving packets for a given time [ms] - put received packets into FSK_RxFIFO
 static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, bool Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef)
 { uint32_t msStart = millis();                                     // [ms] start of the slot
@@ -330,12 +340,7 @@ static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, bool Manch, uint8_t
     PktCount+=Radio_Receive(PktLen, Manch, SysID, Channel, TimeRef);   // check if a packet has been received
     uint32_t msTime = millis()-msStart;                            // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
-#ifdef WITH_SX1262
-  Radio_BkgRSSI += Radio_BkgUpdate*(Radio.getRSSI(false)-Radio_BkgRSSI);      // [dBm] measure the noise level at the end of the slot and average
-#endif
-#ifdef WITH_SX1276
-  Radio_BkgRSSI += Radio_BkgUpdate*(Radio.getRSSI(false, true)-Radio_BkgRSSI);     // [dBm] measure the noise level at the end of the slot and average
-#endif
+  Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI); // [dBm] measure the noise level at the end of the slot and average
   return PktCount; }                                               // return number of received packets
 
 // =======================================================================================================
@@ -378,8 +383,20 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   Radio.startReceive();                                             // start receiving
   XorShift64(Random.Word);                                          // randomize
   if(TxPacket)                                                      // if there is packet to be sent out
-  { int TxTime = 25+Random.RX%(msTimeLen-50);                       // random time to wait before transmission
+  { int TxTime;
+    if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-200); }
+            else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     PktCount+=Radio_Receive(TxTime, RxPktLen, 1, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
+    for(int TxThres=10 ; ; )                                        // listen-before-talk
+    { if(!SameChan) break;                                          // not if channels are different
+      uint32_t msTime=millis()-msStart; if(msTime+20>=msTimeLen) break; // how much time left before the end of slot ?
+      float RSSI=Radio_liveRSSI(); Random.RX+=RSSI;                 // [dBm] Live RSSI
+      if(RSSI<Radio_BkgRSSI+TxThres)                                // if RSSI lower than 10dB(+) above average
+      { Radio_BkgRSSI+=Radio_BkgUpdate*(RSSI-Radio_BkgRSSI); break; } //then go for transmission
+      XorShift64(Random.Word);                                      // but if higher than
+      TxTime = 10+Random.RX%19;                                     // wait for a random time
+      PktCount+=Radio_Receive(TxTime, RxPktLen, 1, RxSysID, RxChannel, TimeRef); // and keep listen a bit more
+      TxThres+=3; }
     Radio.standby();
     Radio_ConfigManchFSK(TxPktLen, 0, TxSYNC, TxSyncLen);           // configure for transmission
     Radio_ConfigTxPower(TxPower);
@@ -449,7 +466,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
   State=Radio.invertPreamble(true);                                 // true=0xAA, false=0x55
   // State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
-  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
@@ -520,7 +537,7 @@ static int Radio_ConfigHDR(const uint8_t *SYNC=OBAND_SYNC, uint8_t SYNClen=2) //
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polar>
   else if(SYNC[0]==0xAA)
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polar>
-  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
   State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before M>
