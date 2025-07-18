@@ -151,7 +151,10 @@ int TFT_DrawRF(void)
   sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
-  sprintf(Line, "Rx: %d:%d pkt", Radio_RxCount[1], Radio_RxCount[2]);
+  uint32_t Sum=0;
+  for(uint8_t Sys=0; Sys<8; Sys++)
+    Sum+=Radio_RxCount[Sys];
+  sprintf(Line, "Rx: %d pkt", Sum);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
