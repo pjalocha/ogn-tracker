@@ -739,7 +739,7 @@ void Radio_Task(void *Parms)
   WANdev.Reset(getUniqueID(), Parameters.AppKey);     // set default LoRaWAN config.
   if(WANdev.ReadFromNVS()!=ESP_OK)                    // if can't read the LoRaWAN setup from NVS
   { WANdev.WriteToNVS(); }                            // then store the default
-  if(Parameters.hasAppKey())                          // if there is an AppKey in the Paramters
+  if(Parameters.hasAppKey())                          // if there is an AppKey in the Parameters
   { if(!Parameters.sameAppKey(WANdev.AppKey))         // if LoRaWAN key different from the one in Parameters
     { WANdev.Reset(getUniqueID(), Parameters.AppKey); // then reset LoRaWAN to this key
       WANdev.Enable=1;

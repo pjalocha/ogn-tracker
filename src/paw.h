@@ -61,8 +61,7 @@ class PAW_Packet
        Byte[Idx]=0; }
 
    uint8_t getAddrType(void) const            // get (or guess) address-type
-   { // if(OGN) return AddrType;                 // if OGN-Tracker then AddrType is explicit
-     if(AcftType==0xF) return 3;              // if fixed object then OGN-type
+   { if(AcftType==0xF) return 3;              // if fixed object then OGN-type
      if(Address<0xD00000) return 1;           // ICAO-type
      if(Address<0xE00000) return 2;           // FLARM-type
      return 3; }                              // OGN-type
@@ -220,9 +219,14 @@ class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
             Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs); }
 
    int Print(char *Out) const
-   { return sprintf(Out, "%d.%03ds %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
+   { if(!isADSL())
+       return sprintf(Out, "%d.%03ds %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
             Time, nsTime/1000000, TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed,
-            Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs); }
+            Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs);
+     ADSL_Packet ADSL; memcpy(&ADSL.Version, Byte, 24); ADSL.Descramble();
+     int Len=ADSL.Print(Out);
+     Len+=sprintf(Out+Len, " %3.1f/%3.1fdB %+4.1fkHz\n", 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs);
+     return Len; }
 
    uint32_t getSlotTime(void) const
    { if(nsTime>=150000000) return Time;
