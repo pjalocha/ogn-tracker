@@ -624,9 +624,14 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   //          RxPkt->Channel, RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), RxPkt->ErrCount(), CorrErr);
   ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time); }
 
+static void DecodeRxLDR(FSK_RxPacket *RxPkt)
+{
+}
+
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
   if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
+  if(RxPkt->SysID==Radio_SysID_LDR ) return DecodeRxLDR (RxPkt);
   return; }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -850,9 +855,9 @@ void vTaskPROC(void* pvParameters)
       else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
       { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
         int Good=TxPacket->Copy(PosPacket.Packet);                       // convert OGN position packet to PilotAware
-#ifdef WITH_ADSL
-        if(AdslPacket && (RX&10)) { TxPacket->Copy(&(AdslPacket->Version)); Good=1; }
-#endif
+// #ifdef WITH_ADSL
+//         if(AdslPacket && (RX&10)) { TxPacket->Copy(&(AdslPacket->Version)); Good=1; }
+// #endif
         if(Good)
         { PAW_TxFIFO.Write();                                            // complete the write into the transmitter queue
           PAW_BackOff = 3+Random.RX%3; }                                 // randomly choose time to transmit next PAW packet
