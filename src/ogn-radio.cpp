@@ -268,7 +268,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
   if(State) ErrState=State;
   State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
   if(State) ErrState=State;
-  State=Radio.fixedPacketLengthMode(PktLen+8);                      // [bytes] Fixed packet size mode
+  State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   State=Radio.disableAddressFiltering();                            // don't want any of such features
@@ -458,7 +458,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
       TxThres+=3; }
     Radio.standby();
     if(TxManch) Radio_ConfigManchFSK(TxPktLen, 0, TxSYNC, TxSyncLen); // configure for transmission
-           else Radio_ConfigLDR     (TxPktLen, 0, TxSYNC, TxSyncLen);
+           else Radio_ConfigLDR   (TxPktLen+7, 0, TxSYNC, TxSyncLen);
     Radio_ConfigTxPower(TxPower);
     if(!SameChan) Radio.setFrequency(TxFreq);                         // set frequency
     if(TxManch) Radio_TxManchFSK(TxPacket, TxPktLen);                 // transmit the packet
