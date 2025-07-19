@@ -123,9 +123,34 @@ int TFT_DrawSat(void)
   TFT_DrawBatt(146, 30);
   return 1; }
 
+int TFT_DrawRFcounts(void)
+{ char Line[32];
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);
+  TFT.setTextSize(1);
+  int Vert=16;
+
+  sprintf(Line, "OGN : %d", Radio_RxCount[1]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+
+  sprintf(Line, "ADSL: %d", Radio_RxCount[2]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+
+  sprintf(Line, "LDR : %d", Radio_RxCount[5]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+
+  sprintf(Line, "FNT : %d", Radio_RxCount[4]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  return 1; }
+
 int TFT_DrawRF(void)
 { char Line[32];
-  // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(&FreeMono9pt7b);            // a better fitting font, but it has different vertical alignment
   TFT.setTextSize(1);

@@ -26,6 +26,7 @@ void TFT_BL(uint8_t Lev);
 int TFT_DrawID(bool WithAP=0);
 int TFT_DrawSat(void);
 int TFT_DrawRF(void);
+int TFT_DrawRFcounts(void);
 int TFT_DrawBaro(const GPS_Position *GPS);
 int TFT_DrawGPS(const GPS_Position *GPS);
 int TFT_DrawLoRaWAN(const GPS_Position *GPS);

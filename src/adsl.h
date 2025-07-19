@@ -8,7 +8,6 @@
 #include "ognconv.h"
 #include "bitcount.h"
 #include "format.h"
-// #include "crc1021.h"
 
 class ADSL_Packet
 { public:

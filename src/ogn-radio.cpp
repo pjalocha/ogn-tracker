@@ -16,15 +16,15 @@
  FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
 
  // quques for transmitted packets
- FIFO<OGN_TxPacket<OGN_Packet>, 4> OGN_TxFIFO;
- FIFO<ADSL_Packet,              4> ADSL_TxFIFO;
+ FIFO<OGN_TxPacket<OGN_Packet>, 4> OGN_TxFIFO;              // OGN packets to be transmitted
+ FIFO<ADSL_Packet,              4> ADSL_TxFIFO;             // ADS-L packets to be transmitted
  // FIFO<ADSL_RID,                 4> RID_TxFIFO;
- FIFO<FANET_Packet,             4> FNT_TxFIFO;
- FIFO<PAW_Packet,               4> PAW_TxFIFO;
+ FIFO<FANET_Packet,             4> FNT_TxFIFO;              // FANET packets to be transmitted
+ FIFO<PAW_Packet,               4> PAW_TxFIFO;              // PilotAware packets to be transmitted
 
  // queues for received packets
- FIFO<FSK_RxPacket,            32> FSK_RxFIFO;
- FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
+ FIFO<FSK_RxPacket,            32> FSK_RxFIFO;              // received packets of OGN, ADS-L, LDR
+ FIFO<FANET_RxPacket,           8> FNT_RxFIFO;              // received FANET packets
 
  QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
 

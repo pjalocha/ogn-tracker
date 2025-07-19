@@ -22,7 +22,7 @@ class LookOut_Target           // describes a flying aircrafts
    { uint32_t        ID;      // ID of the target = aircraft ID
      struct
      { uint32_t  Address:24;  // 24-bit address
-       uint8_t  AddrType: 8;  // ADS-L address-type 
+       uint8_t  AddrType: 8;  // ADS-L address-type
      } ;
    } ;
    Acft_RelPos     Pos;        // Position relative to the reference Lat/Lon/Alt

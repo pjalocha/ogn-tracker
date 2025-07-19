@@ -591,13 +591,9 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 static void DecodeRxOGN(FSK_RxPacket *RxPkt)
 { uint8_t RxPacketIdx  = OGN_RelayQueue.getNew();                   // get place for this new packet
   OGN_RxPacket<OGN_Packet> *RxPacket = OGN_RelayQueue[RxPacketIdx];
-  // PrintRelayQueue(RxPacketIdx);                              // for debug
-  // RxPacket->RxRSSI=RxPkt.RSSI;
-  // TickType_t ExecTime=xTaskGetTickCount();
-
   uint8_t Check = RxPkt->Decode(*RxPacket, Decoder);
 #ifdef DEBUG_PRINT
-  Serial.printf("DecodeRxOGN  : #%d [%d] %02X:%06X Err:%d Corr:%d Check:%d [%d]\n",
+  Serial.printf("DecodeRxOGN : #%d [%d] %02X:%06X Err:%d Corr:%d Check:%d [%d]\n",
      RxPkt->Channel, RxPkt->Bytes, RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address,
      RxPkt->ErrCount(), RxPacket->RxErr, Check, RxPacketIdx);
 #endif
@@ -608,7 +604,8 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
 static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 { uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
   ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
-  int CorrErr=ADSL_Packet::Correct(RxPkt->Data, RxPkt->Err);
+  int CorrErr=RxPkt->ErrCount();
+  if(RxPkt->Manchester) CorrErr=ADSL_Packet::Correct(RxPkt->Data, RxPkt->Err);
 #ifdef DEBUG_PRINT
   Serial.printf("DecodeRxADSL: #%d [%d] Err:%d Corr:%d [%d]\n",
           RxPkt->Channel, RxPkt->Bytes, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
@@ -625,8 +622,34 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time); }
 
 static void DecodeRxLDR(FSK_RxPacket *RxPkt)
-{
-}
+{ if(RxPkt->Bytes!=25 || RxPkt->Manchester) return;
+  uint32_t CRC = ADSL_Packet::checkPI(RxPkt->Data, 24);
+  uint8_t CRC8 = PAW_Packet::CRC8(RxPkt->Data, 24);
+  if(CRC!=0 && CRC8!=RxPkt->Data[24])
+  { uint8_t ErrBit=ADSL_Packet::FindCRCsyndrome(CRC);
+    if(ErrBit!=0xFF)
+    { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
+      ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
+      CRC=0x000000;
+      CRC8 = PAW_Packet::CRC8(RxPkt->Data, 24); }
+  }
+  if(CRC8!=RxPkt->Data[24]) return;
+  if(CRC==0)
+  { // Serial.printf("LDR: good ADS-L\n");
+    DecodeRxADSL(RxPkt);
+    return; }
+  PAW_Packet::Whiten(RxPkt->Data, 24);
+  if(PAW_Packet::IntCRC(RxPkt->Data, 24)!=0x00) return;
+  // Serial.printf("LDR: good PAW\n");
+  PAW_Packet *PAW = (PAW_Packet *)RxPkt->Data;
+  uint8_t RxPacketIdx  = OGN_RelayQueue.getNew();
+  OGN_RxPacket<OGN_Packet> *RxPacket = OGN_RelayQueue[RxPacketIdx];
+  PAW->Write(RxPacket->Packet);
+  RxPacket->RxErr  = 0;
+  RxPacket->RxChan = RxPkt->Channel;
+  RxPacket->RxRSSI = RxPkt->RSSI;
+  RxPacket->Correct = 1;
+  ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
@@ -854,7 +877,7 @@ void vTaskPROC(void* pvParameters)
       if(PAW_BackOff) PAW_BackOff--;
       else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
       { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
-        int Good=TxPacket->Copy(PosPacket.Packet);                       // convert OGN position packet to PilotAware
+        int Good=TxPacket->Read(PosPacket.Packet);                       // convert OGN position packet to PilotAware
 // #ifdef WITH_ADSL
 //         if(AdslPacket && (RX&10)) { TxPacket->Copy(&(AdslPacket->Version)); Good=1; }
 // #endif

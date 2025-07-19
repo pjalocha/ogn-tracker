@@ -77,9 +77,28 @@ class PAW_Packet
      Alt = Altitude;
      return 3; }
 
-   void Copy(const uint8_t *Data) { memcpy(Byte, Data, Size); }
+   int Write(const uint8_t *Data) { memcpy(Byte, Data, Size); }
 
-   int Copy(const OGN1_Packet &Packet)                     // convert from an OGN packet
+   int Write(OGN1_Packet &Packet)                          // convert to an OGN packet
+   { Packet.HeaderWord=0;
+     Packet.Header.Address = Address;
+     Packet.Header.AddrType = Address<0xD00000?1:3;        // ICAO or OGN address-type ?
+     Packet.calcAddrParity();
+     Packet.Position.AcftType = AcftType;
+     Packet.EncodeAltitude(Altitude);
+     Packet.EncodeHeading(Heading*10);
+     Packet.EncodeSpeed(((uint32_t)Speed*527+512)>>10);    // [knot] => [0.1m/s]
+     Packet.EncodeLatitude(600000.0f*Latitude);
+     Packet.EncodeLongitude(600000.0f*Longitude);
+     Packet.Position.FixMode=1;
+     Packet.Position.FixQuality=1;
+     Packet.EncodeDOP(10);
+     Packet.clrTurnRate();
+     Packet.clrClimbRate();
+     Packet.clrBaro();
+     return 1; }
+
+   int Read(const OGN1_Packet &Packet)                     // convert from an OGN packet
    { Clear();
      Address  = Packet.Header.Address;                     // [24-bit]
      if(Packet.Header.NonPos) return 0;                    // encode only position packets
@@ -132,7 +151,6 @@ class PAW_Packet
             TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed, Seq, Msg[0], Msg[1], Msg[2]);
      for(int Idx=0; Idx<3; Idx++)
      { printf("%c", Msg[Idx]<' '?'.':Msg[Idx]); }
-     // printf(" %c%c%c\n", Relay?'R':'_', OGN?'O':'_', '0'+AddrType);
        printf(" %04X %04X\n", HeadWord, SpeedWord); }
 
   uint8_t Read(const char *Inp)                                      // read packet from a hex dump
