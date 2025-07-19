@@ -109,14 +109,15 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1276
-  State=Radio.setRxBandwidth(200.0);                                // [kHz]  bandwidth - single side
-  if(State) ErrState=State;
-  State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
-  if(State) ErrState=State;
-  State=Radio.setAFC(0);                                            // enable AFC
-  if(State) ErrState=State;
-  State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
-  if(State) ErrState=State;
+  if(RxMode)
+  { State=Radio.setRxBandwidth(200.0);                                // [kHz]  bandwidth - single side
+    if(State) ErrState=State;
+    State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
+    if(State) ErrState=State;
+    State=Radio.setAFC(0);                                            // enable AFC
+    if(State) ErrState=State;
+    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+    if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
   State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
@@ -159,7 +160,12 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
   return ErrState; }                                                   // this call takes 18-19 ms
 
-static int Radio_ConfigTxPower(float TxPower)      // set trannsmitter power
+static int Radio_setFrequency(float Freq)            // set receive/transmit frequency
+{ Freq += (0.0000001f*Parameters.RFchipFreqCorr)*Freq;   // apply frequency correction
+  Radio.setFrequency(Freq);
+  return 0; }
+
+static int Radio_setTxPower(float TxPower)         // set trannsmitter power
 { TxPower-=Radio_TxPwrGain;
   if(TxPower<0) TxPower=0;
 #ifdef WITH_SX1276
@@ -232,7 +238,7 @@ static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // tran
 // =======================================================================================================
 
 // Radio setup for PilotAware: GFSK, 38.4kbps, +/-12.5kHz and ADS-L/OGN LDR
-static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const uint8_t *SYNC=SYNC_LDR, uint8_t SYNClen=2)
+static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, const uint8_t *SYNC=SYNC_LDR, uint8_t SYNClen=2)
 { int ErrState=0; int State=0;
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
@@ -243,7 +249,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
     State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
 #endif
   if(State) ErrState=State;
-  State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
+  State=Radio.setDataShaping(RADIOLIB_SHAPING_1_0);                 // [BT]   FSK modulation shaping
   if(State) ErrState=State;
   State=Radio.setBitRate(38.4);                                     // [kpbs] 38.4kbps bit rate
   if(State) ErrState=State;
@@ -252,17 +258,18 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
   State=Radio.setRxBandwidth(58.6);                                 // [kHz]  50kHz bandwidth
   if(State) ErrState=State;
 #ifdef WITH_SX1276
-  State=Radio.setAFC(0);                                            // disable AFC
-  State=Radio.setAFCBandwidth(58.6);                                // [kHz]  auto-frequency-tune bandwidth
-  if(State) ErrState=State;
-  State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
-  if(State) ErrState=State;
-  State=Radio.setAFC(1);                                            // enable AFC
-  if(State) ErrState=State;
+  if(RxMode)
+  { State=Radio.setAFC(0);                                            // disable AFC
+    State=Radio.setAFCBandwidth(58.6);                                // [kHz]  auto-frequency-tune bandwidth
+    if(State) ErrState=State;
+    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+    if(State) ErrState=State;
+    State=Radio.setAFC(0);                                            // enable AFC
+    if(State) ErrState=State; }
 #endif
-  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 2 bytes, the rest we have to do in software
-  if(State) ErrState=State;
   State=Radio.setPreambleLength(RxMode?16:40);                      // [bits] very long preamble for Pilot-Aware
+  if(State) ErrState=State;
+  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 2 bytes, the rest we have to do in software
   if(State) ErrState=State;
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);
   if(State) ErrState=State;
@@ -277,7 +284,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size, bool RxMode=0, const
   // if(SYNC[0]==0x55)
   //   State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
   // else if(SYNC[0]==0xAA)
-    State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
+  // State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
   State=Radio.invertPreamble(true);                                 // true=0xAA, false=0x55
   // State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
   State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
@@ -431,21 +438,23 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     xSemaphoreGive(CONS_Mutex); }
 #endif
   int PktCount=0;
-  uint32_t msStart = millis();
+  uint32_t msStart = millis();                                      // note then slot starts
   Radio.standby();
   if(RxManch) Radio_ConfigManchFSK(RxPktLen, 1, RxSYNC, RxSyncLen); // configure for reception
          else Radio_ConfigLDR     (RxPktLen, 1, RxSYNC, RxSyncLen);
-  Radio.setFrequency(RxFreq);                                       // set frequency
+  Radio_setFrequency(RxFreq);                                       // set frequency
 #ifdef WITH_SX1276
   // Radio.setAFC(0);                                               // enable AFC
 #endif
   Radio.startReceive();                                             // start receiving
   XorShift64(Random.Word);                                          // randomize
+  // if(!TxManch) TxPacket=0; // for debug
   if(TxPacket)                                                      // if there is packet to be sent out
   { int TxTime;
     if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-200); }
             else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     PktCount+=Radio_Receive(TxTime, RxPktLen, RxManch, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
+// #ifdef WITH_LBT
     for(int TxThres=10 ; ; )                                        // listen-before-talk
     { if(!SameChan) break;                                          // not if channels are different
       uint32_t msTime=millis()-msStart; if(msTime+20>=msTimeLen) break; // how much time left before the end of slot ?
@@ -456,18 +465,19 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
       TxTime = 10+Random.RX%19;                                     // wait for a random time
       PktCount+=Radio_Receive(TxTime, RxPktLen, RxManch, RxSysID, RxChannel, TimeRef); // and keep listen a bit more
       TxThres+=3; }
+// #endif
     Radio.standby();
     if(TxManch) Radio_ConfigManchFSK(TxPktLen, 0, TxSYNC, TxSyncLen); // configure for transmission
            else Radio_ConfigLDR   (TxPktLen+7, 0, TxSYNC, TxSyncLen);
-    Radio_ConfigTxPower(TxPower);
-    if(!SameChan) Radio.setFrequency(TxFreq);                         // set frequency
+    Radio_setTxPower(TxPower);
+    Radio_setFrequency(TxFreq);                         // set frequency
     if(TxManch) Radio_TxManchFSK(TxPacket, TxPktLen);                 // transmit the packet
            else Radio_TxLDR     (TxPacket, TxPktLen);
     Radio_TxCount[TxSysID]++;
     Radio.standby();
-    if(RxManch) Radio_ConfigManchFSK(RxPktLen, 1, RxSYNC, RxSyncLen); // configure for receiving
+    if(RxManch) Radio_ConfigManchFSK(RxPktLen, 1, RxSYNC, RxSyncLen); // configure for reception
            else Radio_ConfigLDR     (RxPktLen, 1, RxSYNC, RxSyncLen);
-    if(!SameChan) Radio.setFrequency(RxFreq);                          // set frequency
+    Radio_setFrequency(RxFreq);                          // set frequency
 #ifdef WITH_SX1276
     // Radio.setAFC(0);                                                // enable AFC
 #endif
@@ -615,7 +625,7 @@ static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_
   uint32_t msStart = millis();                       // [ms]
   Radio.standby();
   Radio_ConfigFANET();                               // setup for FANET, includes switching from FSK to LoRa
-  Radio.setFrequency(Freq);                          // set frequency
+  Radio_setFrequency(Freq);                          // set frequency
   Radio.startReceive();                              // start receiving
   XorShift64(Random.Word);                           // randomize
   int PktCount=0;
@@ -624,7 +634,7 @@ static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_
     if(msTimeLen>35) TxTime+=Random.RX%(msTimeLen-35);   // random transmission time
     PktCount+=Radio_RxFANET(TxTime, TimeRef);            // keep receiving till transmission time
     Radio.standby();
-    Radio_ConfigTxPower(TxPower);
+    Radio_setTxPower(TxPower);
     // uint32_t msTxTime=millis();
     Radio_TxFANET(*TxPacket);                        // transmit the packet
     // msTxTime = millis()-msTxTime;
@@ -701,8 +711,8 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
 
   const float BaseFreq = 867.1;
   const float ChanStep =   0.2;
-  Radio.setFrequency(BaseFreq+ChanStep*Chan);          // set frequency
-  if(TX) Radio_ConfigTxPower(TxPower);
+  Radio_setFrequency(BaseFreq+ChanStep*Chan);          // set frequency
+  if(TX) Radio_setTxPower(TxPower);
 
 }
 
@@ -810,7 +820,7 @@ void Radio_Task(void *Parms)
     uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();           // frequency to transmit FANET
     if(FreqFNT)
     { Radio_ConfigFANET();
-      Radio.setFrequency(1e-6*FreqFNT);
+      Radio_setFrequency(1e-6*FreqFNT);
       Radio.startReceive();                                      // start receiving FANET
       for( ; ; )
       { PktCount+=Radio_FANETrxPacket(TimeRef);                  // any packet received ?
@@ -847,8 +857,8 @@ void Radio_Task(void *Parms)
     if(PawPacket && FreqPAW)                         // if there is a packet to be transmitted and the frequency plan allows it
     { Radio.standby();
       int Ret=Radio_ConfigLDR();
-      Radio.setFrequency(1e-6*FreqPAW);
-      Radio_ConfigTxPower(Parameters.TxPower+13); // we can transmit PAW with higher power
+      Radio_setFrequency(1e-6*FreqPAW);
+      Radio_setTxPower(Parameters.TxPower+13);       // we can transmit PAW with higher power
       Serial.printf("TxPAW: Freq:%7.3fMHz/%ddBm (%d) [%X:%X:%08X]\n",
                1e-6*FreqPAW, Parameters.TxPower+13, Ret, (int)PAW_TxFIFO.ReadPtr, (int)PAW_TxFIFO.WritePtr, (int)PawPacket);
       Radio_TxPAW(*PawPacket); }

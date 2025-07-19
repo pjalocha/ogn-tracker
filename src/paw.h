@@ -77,7 +77,7 @@ class PAW_Packet
      Alt = Altitude;
      return 3; }
 
-   int Write(const uint8_t *Data) { memcpy(Byte, Data, Size); }
+   void Write(const uint8_t *Data) { memcpy(Byte, Data, Size); }
 
    int Write(OGN1_Packet &Packet)                          // convert to an OGN packet
    { Packet.HeaderWord=0;
