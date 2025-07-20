@@ -51,6 +51,18 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
      // if(R) printf(" R:%+8.1fm [%+7.1f, %+7.1f]", 0.5*R, 0.5*Ox, 0.5*Oy);
      printf("\n"); }
 
+   int Print(char *Out) const
+   { int Len=sprintf(Out, "%+7.1fs: [%+7.1f,%+7.1f,%+7.1f]m %5.1fm/s %05.1fdeg",
+                           0.5*T, 0.5*X, 0.5*Y, 0.5*Z, 0.5*Speed, (360.0/0x10000)*Heading);
+     if(hasClimb) Len+=sprintf(Out+Len, " %+5.1fm/s", 0.5*Climb);
+             else Len+=sprintf(Out+Len, " ---.-m/s");
+     if(hasTurn)  Len+=sprintf(Out+Len, " %+5.1fdeg/s", (360.0/0x10000)*Turn);
+             else Len+=sprintf(Out+Len, " ---.-deg/s");
+     Len+sprintf(Out+Len, " [%4.1fm]", 0.5*Error);
+     // printf(" [%+6.2f,%+6.2f]m/s^2", 0.0625*Ax, 0.0625*Ay);
+     // if(R) printf(" R:%+8.1fm [%+7.1f, %+7.1f]", 0.5*R, 0.5*Ox, 0.5*Oy);
+     return Len; }
+
    void Clear(void)
    { T =0;
      X =0; Y =0; Z =0;

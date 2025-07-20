@@ -92,15 +92,18 @@ class LookOut_Target           // describes a flying aircrafts
    void Print(void) const
    { if(Call[0]) printf("%-8s", Call);
            else  printf("%08X", ID);
-     printf("/%+5.1fs/%7.1fm/%7.1fm/%5.1fs/%5.1fm/%+5.1fs/w%d",
-                0.5*Pred, 0.5*DistMargin, 0.5*HorDist, 0.5*TimeMargin, 0.5*MissDist, 0.5*MissTime, WarnLevel);
+     printf("/%+5.1fs/%7.1fm/%7.1fm/%5.1fs/%5.1fm/%+5.1fs/w%d ",
+            0.5*Pred, 0.5*DistMargin, 0.5*HorDist, 0.5*TimeMargin, 0.5*MissDist, 0.5*MissTime, WarnLevel);
      // printf(" [%+7.1f,%+7.1f,%+7.1f]m [%+5.1f,%+5.1f,%+5.1f]m/s", 0.5*dX, 0.5*dY, 0.5*dZ, 0.5*Vx, 0.5*Vy, 0.5*Vz);
      // printf(" [%+5.2f,%+5.2f]m/s^-2", 0.0625*Ax, 0.0625*Ay);
      Pos.Print(); }
 
-   uint8_t Print(char *output)
-   { uint8_t Len=0;
-
+   int Print(char *Out) const
+   { int Len=0;
+     if(Call[0]) Len+=sprintf(Out+Len, "%-8s", Call);
+           else  Len+=sprintf(Out+Len, "%08X", ID);
+     Len+=sprintf(Out+Len, "/%+5.1fs/%7.1fm/%7.1fm/%5.1fs/%5.1fm/%+5.1fs/w%d",
+                0.5*Pred, 0.5*DistMargin, 0.5*HorDist, 0.5*TimeMargin, 0.5*MissDist, 0.5*MissTime, WarnLevel);
      return Len; }
 
    uint8_t WritePFLAA(char *NMEA)

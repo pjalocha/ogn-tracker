@@ -885,6 +885,18 @@ static void ReadParameters(void)  // read parameters requested by the user in th
 }
 #endif
 
+#ifdef WITH_LOOKOUT
+static void ListTraffic(void)
+{ char Line[160];
+  for( uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
+  { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
+    int Len=Tgt->Print(Line);
+    Line[Len++]=' ';
+    Len+=Tgt->Pos.Print(Line+Len);
+    Serial.printf("%2d: %s\n", Idx, Line); }
+}
+#endif
+
 #ifdef WITH_LOG
 static void ListLogFile(void)
 { if(NMEA.Parms!=1) return;
@@ -1012,20 +1024,6 @@ static void ProcessCtrlX(void)
     ESP.restart(); }
   LastTime=Time; }
 
-static void ProcessCtrlL(void)                                    // print system state to the console
-{
-#ifdef WITH_SPIFFS
-  FlashLog_ListFiles();
-#endif
-}
-
-static void ProcessCtrlO(void)                                    // print system state to the console
-{
-#ifdef WITH_LORAWAN
-  PrintLoRaWAN();
-#endif
-}
-
 static int ProcessInput(void)
 {
   const uint8_t CtrlB = 'B'-'@';
@@ -1033,6 +1031,7 @@ static int ProcessInput(void)
   const uint8_t CtrlF = 'F'-'@';
   const uint8_t CtrlL = 'L'-'@';
   const uint8_t CtrlO = 'O'-'@';
+  const uint8_t CtrlT = 'T'-'@';
   const uint8_t CtrlX = 'X'-'@';
 
   int Count=0;
@@ -1040,17 +1039,18 @@ static int ProcessInput(void)
   { uint8_t Byte; int Err=CONS_UART_Read(Byte); if(Err<=0) break; // get byte from console, if none: exit the loop
     Count++;
 #ifndef WITH_GPS_UBX_PASS                                          // when transparency to the GPS not requested
-    if(Byte==CtrlC) ProcessCtrlC();                                // if Ctrl-C received: print parameters
-    if(Byte==CtrlF) ProcessCtrlF();                                // if Ctrl-F received: list files
-    if(Byte==CtrlL) ProcessCtrlL();                                // if Ctrl-L received: list log files
-    if(Byte==CtrlO) ProcessCtrlO();                                // if Ctrl-O received: print LoRaWAN status
-    if(Byte==CtrlX) ProcessCtrlX();                                // Ctrl-X
-//     {
-// #ifdef WITH_SPIFFS
-//       FlashLog_SaveReq=1;
-// #endif
-//       vTaskDelay(1000);
-//       esp_restart(); }                                            // if Ctrl-X received then restart
+    if(Byte==CtrlC) ProcessCtrlC();                                // if Ctrl-C: print parameters
+    if(Byte==CtrlF) ProcessCtrlF();                                // if Ctrl-F: list files
+#ifdef WITH_SPIFFS
+    if(Byte==CtrlL) FlashLog_ListFiles();                          // if Ctrl-L: list log files
+#endif
+#ifdef WITH_LORAWAN
+    if(Byte==CtrlO) PrintLoRaWAN();                                // if Ctrl-O: print LoRaWAN status
+#endif
+#ifdef WITH_LOOKOUT
+    if(Byte==CtrlT) ListTraffic();                                 // if Ctrl-T: print traffic
+#endif
+    if(Byte==CtrlX) ProcessCtrlX();                                // double Ctrl-X restarts the system
 #endif // of WITH_GPS_UBX_PASS
 
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
