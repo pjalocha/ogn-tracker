@@ -192,6 +192,8 @@ class PAW_Packet
 
    uint8_t CRC8(void) { return CRC8(Byte, Size, 0x71); }            // calc. external CRC8 for the packet, Poly = 107
 
+// #define WITH_CRC8_TABLE
+#ifdef WITH_CRC8_TABLE      // CRC8 with a lookup table: probably faster
    static uint8_t CRC8(uint8_t Byte, uint8_t CRC)
    { static const uint8_t Table[256] = {
     0x00, 0x07, 0x0e, 0x09, 0x1c, 0x1b, 0x12, 0x15, 0x38, 0x3f, 0x36, 0x31,
@@ -217,6 +219,16 @@ class PAW_Packet
     0xde, 0xd9, 0xd0, 0xd7, 0xc2, 0xc5, 0xcc, 0xcb, 0xe6, 0xe1, 0xe8, 0xef,
     0xfa, 0xfd, 0xf4, 0xf3 } ;
      return Table[CRC ^ Byte]; }
+#else                       // CRC8 with direct calculation: probably slower but less flash/RAM
+   static uint8_t CRC8(uint8_t Byte, uint8_t CRC)
+   { const uint8_t Poly = 0x07;  // 0x107
+     CRC ^= Byte;
+     for(uint8_t Bit=0; Bit<8; Bit++)
+     { if(CRC&0x80) { CRC = (CRC<<1) ^ Poly; }
+               else { CRC = (CRC<<1)       ; }
+     }
+     return CRC; }
+#endif
 
 } ;
 
