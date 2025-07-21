@@ -302,7 +302,7 @@ static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit 
 { memcpy(Radio_TxPacket, SYNC_LDR+2, 6);                            // first copy the remaining 6 bytes of the pre-data part
   memcpy(Radio_TxPacket+6, Packet, PktSize);                        // copy packet to the buffer (internal CRC is already set)
   Radio_TxPacket[6+PktSize] = PAW_Packet::CRC8(Radio_TxPacket+6, PktSize); // add external CRC
-  Radio_TxCount[Radio_SysID_LDR]++;
+  // Radio_TxCount[Radio_SysID_LDR]++;                              // this is counted in the Radio_Slot()
   return Radio_TxFSK(Radio_TxPacket, 6+PktSize+1); }                // send the packet out
 
 static int Radio_TxPAW(PAW_Packet &Packet)                          // transmit a PilotAware packet, which could be an ADS-L !
@@ -1032,16 +1032,19 @@ void Radio_Task(void *Parms)
     Radio_TxCredit+= 10;                                // [ms]
     if(Radio_TxCredit>60000) Radio_TxCredit=60000;
 
+    static uint32_t PktCountSum=0;
+    PktCountSum += PktCount;
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
      "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %c%c [%d]",
        Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
        Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
-       Radio_BkgRSSI, PktCount, Radio_PktRate, 0.001*Radio_TxCredit, AdslSlot?'A':'_', Oband?'O':'_',
+       Radio_BkgRSSI, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit, AdslSlot?'A':'_', Oband?'O':'_',
        uxTaskGetStackHighWaterMark(NULL));
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
+    PktCountSum=0;
     SysLog_Line(Line, LineLen, 1, 25);
     if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);

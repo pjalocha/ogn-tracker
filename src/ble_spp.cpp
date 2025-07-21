@@ -7,7 +7,7 @@
 
 #include "ble_spp.h"
 
-#define SERVICE_UUID        "FFE0"
+#define SERVICE_UUID        "FFE0"  // this service is used by XCSoar and SkyDemon to get NMEA
 #define CHARACTERISTIC_UUID "FFE1"
 
 BLEServer* pServer = NULL;

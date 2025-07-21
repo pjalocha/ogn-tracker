@@ -676,8 +676,8 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   // we would need to patch the GGA here for the GPS which does not calc. nor correct for GeoidSepar
 #endif
   {
-#ifdef WITH_GPS_NMEA_PASS
-#else
+#ifdef WITH_GPS_NMEA_PASS                 // pass all GPS NMEA
+#else                                     // or filter them
     if(Parameters.Verbose && !NMEA.isGxGSV() && !NMEA.isGxGSA() && !NMEA.isGxTXT())
 #endif
     { if(xSemaphoreTake(CONS_Mutex, 10))
