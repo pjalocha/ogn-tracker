@@ -15,7 +15,7 @@
 
 #include "paw.h"
 
-/* move to rx-pkt.h
+/* moved to rx-pkt.h
 const uint8_t Radio_SysID_FLR  = 0;  //
 const uint8_t Radio_SysID_OGN  = 1;
 const uint8_t Radio_SysID_ADSL = 2;

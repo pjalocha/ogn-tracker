@@ -128,13 +128,6 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(State) ErrState=State;
   State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before Manchester encoding
   if(State) ErrState=State;
-  // Radio.preambleDetLength = RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_8;
-// #ifdef WITH_SX1262
-//   // Radio.writeRegister(RADIOLIB_SX126X_REG_SYNC_WORD_0, (uint8_t *)SYNC, SYNClen);
-//   State=Radio.setPacketParamsFSK(16, RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_8, RADIOLIB_SX126X_GFSK_CRC_OFF, SYNClen*8,
-//     RADIOLIB_SX126X_GFSK_ADDRESS_FILT_OFF, RADIOLIB_SX126X_GFSK_WHITENING_OFF, RADIOLIB_SX126X_GFSK_PACKET_FIXED, PktLen*2);
-//   if(State) ErrState=State;
-// #endif
   State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);                   //
   if(State) ErrState=State;
   State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
@@ -802,7 +795,9 @@ void Radio_Task(void *Parms)
     xSemaphoreGive(CONS_Mutex); }
 
   for( ; ; )
-  { int PktCount=0;
+  { if(!HardwareStatus.Radio) { delay(1000); continue; }
+
+    int PktCount=0;
     // char Line[120];
 
     // xQueueReceive(Radio_SlotMsg, &TimeRef, 2000);              // wait for "new time slot" from the GPS
@@ -859,8 +854,8 @@ void Radio_Task(void *Parms)
       int Ret=Radio_ConfigLDR();
       Radio_setFrequency(1e-6*FreqPAW);
       Radio_setTxPower(Parameters.TxPower+13);       // we can transmit PAW with higher power
-      Serial.printf("TxPAW: Freq:%7.3fMHz/%ddBm (%d) [%X:%X:%08X]\n",
-               1e-6*FreqPAW, Parameters.TxPower+13, Ret, (int)PAW_TxFIFO.ReadPtr, (int)PAW_TxFIFO.WritePtr, (int)PawPacket);
+      // Serial.printf("TxPAW: Freq:%7.3fMHz/%ddBm (%d) [%X:%X:%08X]\n",
+      //          1e-6*FreqPAW, Parameters.TxPower+13, Ret, (int)PAW_TxFIFO.ReadPtr, (int)PAW_TxFIFO.WritePtr, (int)PawPacket);
       Radio_TxPAW(*PawPacket); }
     if(PawPacket) PAW_TxFIFO.Read();
 #endif

@@ -136,7 +136,6 @@ class PAW_Packet
      // Len+=Format_SignDec(JSON+Len, RxTime, 4, 3, 1);
      Len+=sprintf(JSON+Len, ",\"lat_deg\":%8.7f,\"lon_deg\":%8.7f,\"alt_msl_m\":%d", Latitude, Longitude, Altitude);
      Len+=sprintf(JSON+Len, ",\"track_deg\":%d,\"speed_mps\":%3.1f", Heading, 0.514*Speed);
-     // if(OGN) Len+=sprintf(JSON+Len, ",\"climb_mps\":%3.1f", 0.32512*Climb);
      return Len; }
 
    uint8_t Dump(char *Out)
