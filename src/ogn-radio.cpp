@@ -120,7 +120,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
     if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
-  State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
+  State=Radio.setPreambleLength(RxMode?0:16);                       // [bits] minimal preamble
 #endif
 #ifdef WITH_SX1276
   State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
@@ -878,28 +878,29 @@ void Radio_Task(void *Parms)
     Hash *= 48271;
     XorShift32(Hash);
     Hash *= 48271;
-    bool AdslSlot = Count1s(Hash)&1;  // 1:transmit ADS-L in the 1st half, 0:transmit in the 2nd half
-    XorShift32(Hash);
-    Hash *= 48271;
-    bool Oband = EU && (Count1s(Hash)&1); // 1:transmit on O-band, 0:transmit on M-band
 
-     int8_t  TxPwr = Parameters.TxPower;
-     uint8_t TxChan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);
     const uint8_t *OGN_Pkt  = OgnPacket1  ? OgnPacket1->Byte()      : 0;
     const uint8_t *ADSL_Pkt = AdslPacket1 ? &(AdslPacket1->Version) : 0;
-
+    int8_t  TxPwr = Parameters.TxPower;
     uint8_t TxProt = Radio_SysID_OGN;
-    const uint8_t *TxPkt = OGN_Pkt;
-    if(AdslSlot && EU)
-    { TxProt = Radio_SysID_ADSL;
-      TxPkt  = ADSL_Pkt; }
     uint8_t RxProt = Radio_SysID_OGN_ADSL;
-
-    if(Oband && AdslSlot)
-    { TxPwr += 13;
-      TxChan = Radio_FreqPlan.Channels;
-      TxProt = Radio_SysID_LDR;
-      RxProt = TxProt; }
+    const uint8_t *TxPkt = 0;
+    bool    Odd=0;
+    uint8_t TxChan=0;
+    uint8_t FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 0);
+    uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);
+    if(EU)
+    { TxChan = Hash%3;
+           if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
+      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
+      else           { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR; RxProt=Radio_SysID_LDR; }
+    }
+    else
+    { Odd = Count1s(Hash)&1;
+      TxPwr+=13; TxPkt=OGN_Pkt;
+      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
+         else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
+    }
 
     msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     uint32_t SlotLen = 800-msTime;
@@ -924,23 +925,26 @@ void Radio_Task(void *Parms)
       if(RespLeft>0 && RespLeft<1000) SlotLen=RespLeft-40; } // then adjust the time slot to be there in time
 #endif
 
-    TxPwr = Parameters.TxPower;
-    TxChan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1);
     OGN_Pkt  = OgnPacket2  ? OgnPacket2->Byte()      : 0;
     ADSL_Pkt = AdslPacket2 ? &(AdslPacket2->Version) : 0;
-
+    TxPwr = Parameters.TxPower;
     TxProt = Radio_SysID_OGN;
-    TxPkt = OGN_Pkt;
-    if(!AdslSlot && EU)
-    { TxProt = Radio_SysID_ADSL;
-      TxPkt  = ADSL_Pkt; }
     RxProt = Radio_SysID_OGN_ADSL;
-
-    if(Oband && !AdslSlot)
-    { TxPwr += 13;
-      TxChan = Radio_FreqPlan.Channels;
-      TxProt = Radio_SysID_LDR;
-      RxProt = TxProt; }
+    TxPkt = 0;
+    FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 0);
+    OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1);
+    if(EU)
+    { if(TxChan==2) TxChan=0;
+           if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
+      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
+      else           { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR; RxProt=Radio_SysID_LDR; }
+    }
+    else
+    { Odd = !Odd;
+      TxPwr+=13; TxPkt=OGN_Pkt;
+      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
+         else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
+    }
 
          if(SlotLen<250) SlotLen=250;
     else if(SlotLen>480) SlotLen=480;
@@ -1031,10 +1035,10 @@ void Radio_Task(void *Parms)
     PktCountSum += PktCount;
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs %c%c [%d]",
+     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs [%d]",
        Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
        Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
-       Radio_BkgRSSI, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit, AdslSlot?'A':'_', Oband?'O':'_',
+       Radio_BkgRSSI, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit,
        uxTaskGetStackHighWaterMark(NULL));
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
