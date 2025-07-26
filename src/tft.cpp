@@ -123,6 +123,36 @@ int TFT_DrawSat(void)
   TFT_DrawBatt(146, 30);
   return 1; }
 
+int TFT_DrawLookout(void)
+{ char Line[32];
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);
+  TFT.setTextSize(1);
+  int Vert=16;
+
+  const char *AcftTypeName[16] = { "----", "Glid", "Tow ", "Heli",
+                                   "SkyD", "Drop", "Hang", "Para",
+                                   "Pwrd", "Jet ", "UFO ", "Ball",
+                                   "Zepp", "UAV ", "Car ", "Fix " } ;
+
+  Look.Sort_Dist();
+  for( uint8_t Idx=0; Idx<Look.SortSize; Idx++)
+  { const LookOut_Target *Tgt = Look.Sort[Idx]; if(!Tgt->Alloc) continue;
+    uint16_t Dir=Tgt->getBearing();                                                   // [cordic]
+    Dir = ((uint32_t)Dir*45+0x1000)>>13;                                             // [deg]
+    uint32_t Dist=Tgt->getHorDist();                                                  // [0.5m]
+    int Len=sprintf(Line, "%s %03d/%3.1fkm", AcftTypeName[Tgt->AcftType&15], Dir, 0.0005*Dist);
+    // int Len=sprintf(Line, "%02X:%06X", Tgt->AddrType, Tgt->Address);
+    // if(Tgt->DistMargin) Len+=sprintf(Line+Len, " %3.1fkm", 0.0005*Tgt->HorDist);
+    //                else Len+=sprintf(Line+Len, " %3.1fs", 0.5*Tgt->TimeMargin);
+    TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+    if(Vert-14>TFT.height()) break; }
+
+  if(Vert-14<TFT.height())
+    TFT.fillRect(0, Vert-12, TFT.width(), TFT.height()+14-Vert, ST77XX_DARKBLUE);
+  return 1; }
+
 int TFT_DrawRFcounts(void)
 { char Line[32];
   TFT.setTextColor(ST77XX_WHITE);
@@ -130,21 +160,25 @@ int TFT_DrawRFcounts(void)
   TFT.setTextSize(1);
   int Vert=16;
 
+  sprintf(Line, "FLR : %d", Radio_RxCount[0]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
   sprintf(Line, "OGN : %d", Radio_RxCount[1]);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   sprintf(Line, "ADSL: %d", Radio_RxCount[2]);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   sprintf(Line, "LDR : %d", Radio_RxCount[5]);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   sprintf(Line, "FNT : %d", Radio_RxCount[4]);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   return 1; }

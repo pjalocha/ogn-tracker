@@ -194,9 +194,12 @@ template <const uint8_t MaxTgts=32>
    const static int32_t   DistRange = 10000; // [m] drop immediately anything beyond this distance
    const static int16_t MinHorizSepar = 100; // [m] minimum horizontal separation
    const static int16_t MinVertSepar  =  50; // [m] minimum vertical separation
-   const static int16_t WarnTime      =  20; // [sec] target warning prior to impact
+   const static int16_t WarnTime      =  20; // [sec] target warning prior to closest miss
 
    Acft_RelPos PredMe, PredTgt;           // for temporary storage of predictions.
+
+   LookOut_Target *Sort[MaxTargets];      // for sorting, vector of pointers
+   uint8_t SortSize;
 
    char Line[120];                        // for printing
 
@@ -208,7 +211,22 @@ template <const uint8_t MaxTgts=32>
      WorstTgtIdx=0; WorstTgtTime=0xFF;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { Target[Idx].Clear(); }
-   }
+     SortSize=0; }
+
+   static bool Lower_Dist(LookOut_Target *A, LookOut_Target *B)
+   { if(!B->Alloc) return 1;
+     if(!A->Alloc) return 0;
+     if(A->WarnLevel>0 || B->WarnLevel>0 ) return A->WarnLevel > B->WarnLevel;
+     if(A->DistMargin>0 || B->DistMargin>0) return A->DistMargin < B->DistMargin;
+     return A->TimeMargin < B->TimeMargin; }
+
+   void Sort_Dist(void)
+   { SortSize=0;
+     for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
+     { LookOut_Target *Tgt = Target+Idx; if(!Tgt->Alloc) continue;
+       Sort[SortSize++]=Tgt; }
+     if(SortSize<=1) return;
+     std::sort(Sort, Sort+SortSize, Lower_Dist); }
 
    int16_t getRelBearing(const LookOut_Target *Tgt) const  // [360/0x10000 deg] relative bearing to the target
    { return Tgt->getBearing()-Pos.Heading; }

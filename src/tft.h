@@ -24,6 +24,7 @@ void TFT_BL_Init(void);
 void TFT_BL(uint8_t Lev);
 
 int TFT_DrawID(bool WithAP=0);
+int TFT_DrawLookout(void);
 int TFT_DrawSat(void);
 int TFT_DrawRF(void);
 int TFT_DrawRFcounts(void);
