@@ -224,62 +224,6 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 #endif
 
 // =======================================================================================================
-
-#ifdef Button_Pin
-static Button2 Button(Button_Pin);
-static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
-
-static void Button_Single(Button2 Butt)
-{
-#ifdef WITH_ST7735
-  if(TFT_PageOFF)
-    TFT_PageOFF=0;
-  else
-    TFT_NextPage();
-  TFT_PageActive=millis();
-#endif
-}
-
-static void Button_Double(Button2 Butt) { }
-
-static void Button_Long(Button2 Butt)
-{
-#ifdef WITH_ST7735
-  TFT.fillScreen(ST77XX_DARKBLUE);
-  TFT.setTextColor(ST77XX_WHITE);
-  TFT.setFont(0);
-  TFT.setTextSize(2);
-  TFT.setCursor(32, 32);
-  TFT.print("Power-OFF");
-  delay(200);
-  TFT_BL(64);
-  delay(50);
-  TFT_BL(32);
-  delay(50);
-  TFT_BL(16);
-  delay(50);
-#endif
-#ifdef WITH_SLEEP
-  Parameters.PowerON=0;
-  Parameters.WriteToNVS();
-  PowerMode=0;
-  Vext_ON(0);
-#ifdef ADC_BattSenseEna
-  BatterySenseEnable(0);
-#endif
-  esp_deep_sleep_start();
-#endif
-}
-
-static void Button_Init(void)
-{ pinMode(Button_Pin, INPUT);
-  Button.setLongClickTime(2000);
-  Button.setClickHandler(Button_Single);
-  Button.setDoubleClickHandler(Button_Double);
-  Button.setLongClickDetectedHandler(Button_Long); }
-#endif
-
-// =======================================================================================================
 // ADC to sense battery voltage
 
 static esp_adc_cal_characteristics_t *ADC_characs =
@@ -343,6 +287,62 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
   digitalWrite(ADC_BattSenseEna, LOW);
 #endif
   return Volt; } // [mV]
+
+// =======================================================================================================
+
+#ifdef Button_Pin
+static Button2 Button(Button_Pin);
+static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
+
+static void Button_Single(Button2 Butt)
+{
+#ifdef WITH_ST7735
+  if(TFT_PageOFF)
+    TFT_PageOFF=0;
+  else
+    TFT_NextPage();
+  TFT_PageActive=millis();
+#endif
+}
+
+static void Button_Double(Button2 Butt) { }
+
+static void Button_Long(Button2 Butt)
+{
+#ifdef WITH_ST7735
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(0);
+  TFT.setTextSize(2);
+  TFT.setCursor(32, 32);
+  TFT.print("Power-OFF");
+  delay(200);
+  TFT_BL(64);
+  delay(50);
+  TFT_BL(32);
+  delay(50);
+  TFT_BL(16);
+  delay(50);
+#endif
+#ifdef WITH_SLEEP
+  Parameters.PowerON=0;
+  Parameters.WriteToNVS();
+  PowerMode=0;
+  Vext_ON(0);
+#ifdef ADC_BattSenseEna
+  BatterySenseEnable(0);
+#endif
+  esp_deep_sleep_start();
+#endif // WITH_SLEEP
+}
+
+static void Button_Init(void)
+{ pinMode(Button_Pin, INPUT);
+  Button.setLongClickTime(2000);
+  Button.setClickHandler(Button_Single);
+  Button.setDoubleClickHandler(Button_Double);
+  Button.setLongClickDetectedHandler(Button_Long); }
+#endif // Button_Pin
 
 // =======================================================================================================
 

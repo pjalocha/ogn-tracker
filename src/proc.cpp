@@ -7,8 +7,7 @@
 #include "log.h"                      // LOG task: packet logging
 
 #include "ogn.h"                      // OGN packet structures, encoding/decoding/etc.
-
-// #include "rf.h"                       // RF task: transmission and reception of radio packets
+#include "flarm.h"                    // CRC, error correction and $PXFLM NMEA
 #include "ogn-radio.h"                // RF task: transmission and reception of radio packets
 #include "gps.h"                      // GPS task: get own time and position, set the GPS baudrate and navigation mode
 
@@ -655,6 +654,18 @@ static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
   if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
   if(RxPkt->SysID==Radio_SysID_LDR ) return DecodeRxLDR (RxPkt);
+  if(RxPkt->SysID==Radio_SysID_FLR)
+  { int CorrBits=Flarm_Packet::Correct(RxPkt->Data, RxPkt->Err, 4);
+    uint16_t CRC=Flarm_Packet::checkCRC(RxPkt->Data, Flarm_Packet::Bytes);
+    if(CorrBits>=0 && CRC==0x0000)
+    { int Len=sprintf(Line, "$PXFLM,");
+      for(uint8_t Idx=0; Idx<Flarm_Packet::Bytes; Idx++)
+        Len+=sprintf(Line+Len, "%02X", RxPkt->Data[Idx]);
+      Len+=NMEA_AppendCheckCRNL(Line, Len); Line[Len]=0;
+      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      Format_String(CONS_UART_Write, Line);
+      xSemaphoreGive(CONS_Mutex); }
+    return; }
   return; }
 
 // -------------------------------------------------------------------------------------------------------------------
