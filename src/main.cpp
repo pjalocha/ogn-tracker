@@ -264,6 +264,9 @@ static void Button_Long(Button2 Butt)
   Parameters.WriteToNVS();
   PowerMode=0;
   Vext_ON(0);
+#ifdef ADC_BattSenseEna
+  BatterySenseEnable(0);
+#endif
   esp_deep_sleep_start();
 #endif
 }
