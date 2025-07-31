@@ -48,8 +48,16 @@
 #include <axp20x.h>
 #endif
 
-#ifdef Button_Pin
+#ifdef WITH_RTC
+#include "driver/rtc_io.h"
+#include "soc/rtc.h"
+#endif
+
+#ifdef WITH_SLEEP
 #include <esp_sleep.h>
+#endif
+
+#ifdef Button_Pin
 #include "Button2.h"
 #endif
 
@@ -556,6 +564,20 @@ void setup()
   GPS_UART_Init();
 
   Serial.printf("OGN-Tracker: Hard:%s Soft:%s\n", Parameters.Hard, Parameters.Soft);
+
+#ifdef WITH_RTC
+  rtc_slow_freq_t RTCfreq = rtc_clk_slow_freq_get();   // check if 32.768kHz XTAL is used by RTC ?
+  if(RTCfreq!=RTC_SLOW_FREQ_32K_XTAL)                  // if not then attempt to configure it
+  { rtc_clk_32k_enable(true);
+    Serial.println("RTC: attempt to configure 32.768kHz XTAL");
+    delay(1000);
+    rtc_clk_slow_freq_set(RTC_SLOW_FREQ_32K_XTAL);
+    RTCfreq = rtc_clk_slow_freq_get(); }
+       if(RTCfreq==RTC_SLOW_FREQ_32K_XTAL) Serial.println("RTC: 32.768kHz XTAL");
+  else if(RTCfreq==RTC_SLOW_FREQ_8MD256) Serial.println("RTC: 8MHz/256 XTAL");
+  else if(RTCfreq==RTC_SLOW_FREQ_RTC) Serial.println("RTC: 150kHz RC");
+  else Serial.println("RTC: unknown source");
+#endif
 
 #ifdef BOARD_HAS_PSRAM
   if(psramFound()) Serial.printf("PSRAM:%d/%dkB ", ESP.getFreePsram()>>10, ESP.getPsramSize()>>10);

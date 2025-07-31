@@ -485,7 +485,8 @@ class ADSL_Packet
 // --------------------------------------------------------------------------------------------------------
 
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
-   int calcDistanceVectorOGN(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon, uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
+   int calcDistanceVectorOGN(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon,
+                            uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
    { LatDist = ((getLatOGN()-RefLat)*1517+0x1000)>>13;           // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
      if(abs(LatDist)>MaxDist) return -1;
      LonDist = ((getLonOGN()-RefLon)*1517+0x1000)>>13;

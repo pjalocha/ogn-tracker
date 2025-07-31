@@ -45,7 +45,7 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y)
   if(Full<=2) { CellColor=ST77XX_YELLOW; }
   if(Full<=1) { CellColor=FrameColor=ST77XX_RED; }
   static uint8_t Flip=0;
-  if(BatteryVoltageRate>0x10 && Flip&1) Full++;
+  if(BatteryVoltageRate>0 && Flip&1) Full++;
   TFT_DrawBatt(X, Y, 8, Cells, Full, CellColor, FrameColor);
   Flip++; }
 

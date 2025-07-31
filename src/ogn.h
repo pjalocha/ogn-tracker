@@ -430,7 +430,7 @@ template <class OGNx_Packet=OGN1_Packet>
    { int32_t LatDist=0, LonDist=0;
      if(Packet.calcDistanceVector(LatDist, LonDist, RefLat, RefLon, LatCos)<0) return 0;     // return zero, when distance too large
      int32_t AltDist = Packet.DecodeAltitude()-RefAlt;
-     return WritePFLAA(NMEA, Status, LatDist, LonDist, AltDist, Status); }                            // return number of formatted characters
+     return WritePFLAA(NMEA, Status, LatDist, LonDist, AltDist, Status); }                   // return number of formatted characters
 
    uint8_t WritePFLAA(char *NMEA, uint8_t Status, int32_t LatDist, int32_t LonDist, int32_t AltDist)
    { uint8_t Len=0;
