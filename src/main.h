@@ -11,7 +11,7 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.11"
+#define VERSION "0.1.12"
 #endif
 
 #ifndef SOFT_NAME
