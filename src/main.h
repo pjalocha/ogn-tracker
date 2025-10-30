@@ -58,6 +58,10 @@ uint32_t getUniqueAddress(void);
 #include "htit-tracker-pins.h"
 #endif
 
+#ifdef WITH_THINKNODE_M5
+#include "thinknode-m5-pins.h"
+#endif
+
 extern FlashParameters Parameters;
 
 extern SemaphoreHandle_t CONS_Mutex;

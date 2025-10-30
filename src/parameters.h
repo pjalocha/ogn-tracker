@@ -32,7 +32,7 @@ class FlashParameters
        uint8_t  AddrType:2;  // 0=RND, 1=ICAO, 2=FLR, 3=OGN
        uint8_t  AcftType:4;  // 1=glider, 2=towplane, 3=helicopter, etc.
        bool      NoTrack:1;  // unused
-       bool      Stealth:1;  // unused
+       bool      Stealth:1;  // used for OGN packets
      } ;
    } ;
 
