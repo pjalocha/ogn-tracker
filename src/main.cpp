@@ -557,7 +557,7 @@ void setup()
   strcpy(Parameters.Soft, SOFT_NAME);
 #endif
 
-#ifdef ARDUINO_USB_MODE
+#if ARDUINO_USB_CDC_ON_BOOT==1
   Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
 #endif
   Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
