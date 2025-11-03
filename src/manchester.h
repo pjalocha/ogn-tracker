@@ -1,3 +1,5 @@
+#ifndef __MANCHESTER_H_
+#define __MANCHESTER_H_
 
 const uint8_t ManchesterEncode[0x10] =  // lookup table for 4-bit nibbles for quick Manchester encoding
 {
@@ -39,4 +41,4 @@ const uint8_t ManchesterDecode[0x100] =  // lookup table for quick Manchester de
   0xFC, 0xED, 0xEC, 0xFD, 0xDE, 0xCF, 0xCE, 0xDF, 0xDC, 0xCD, 0xCC, 0xDD, 0xFE, 0xEF, 0xEE, 0xFF
 } ;
 
-
+#endif // __MANCHESTER_H_
