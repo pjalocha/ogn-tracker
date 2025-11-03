@@ -110,7 +110,8 @@ HardItems HardwareStatus = { 0 };
 // VS to store parameters and other data
 
 static int NVS_Init(void)
-{ esp_err_t Err = nvs_flash_init();
+{ // nvs_flash_erase();                     // for debug
+  esp_err_t Err = nvs_flash_init();
   if (Err == ESP_ERR_NVS_NO_FREE_PAGES)
   { nvs_flash_erase();
     Err = nvs_flash_init(); }
@@ -618,6 +619,7 @@ void setup()
 #endif
       esp_deep_sleep_start(); }            // enter deep sleep
   }
+  // here we could detect long press at startup to reset to defaults
 #endif  // WITH_SLEEP
   TFT_BL(128);
 #endif  // WITH_ST7735

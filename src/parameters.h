@@ -130,19 +130,19 @@ class FlashParameters
      } ;
    } ;
 
-#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
+// #if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    char BTname[16];
    // char  BTpin[16];
-#endif
+// #endif
 
-#ifdef WITH_AP
+// #ifdef WITH_AP
    char APname[32];
    char APpass[31];
    uint8_t APchan;
 uint16_t APport;
   int8_t APminSig;
   int8_t APtxPwr;
-#endif
+// #endif
 
 #ifdef WITH_STRATUX
    char StratuxWIFI[32];
@@ -229,10 +229,10 @@ uint16_t StratuxPort;
 #ifdef WITH_LORAWAN
    static void clrKey(uint8_t *Key) { for(int Idx=0; Idx<16; Idx++) Key[Idx]=0x00; }
 
-   static bool hasKey(const uint8_t *Key)                                                     // check if Key!=0
+   static bool hasKey(const uint8_t *Key)                             // check if Key is all-zero
    { for(int Idx=0; Idx<16; Idx++)
-     { if(Key[Idx]) return 1; }                                                            // if any byte is non-zero => 1
-     return 0; }
+     { if(Key[Idx]) return 1; }                                       // if any byte is non-zero then return true
+     return 0; }                                                      // return false
 
    bool hasAppKey(void)    const   { return hasKey(AppKey); }
    bool hasAppSesKey(void) const   { return hasKey(AppSesKey); }
@@ -535,6 +535,24 @@ uint16_t StratuxPort;
     if(calcCheckSum(Addr, Words)!=0) return -1;                           // verify check-sum in Flash
     return 0; }
 #endif // WITH_STM32
+
+  static char AddrTypeChar(uint8_t AddrType)
+  { if(AddrType==3) return 'O';
+    if(AddrType==2) return 'F';
+    if(AddrType==1) return 'I';
+    return 'R'; }
+
+  char AddrTypeChar(void) const { return AddrTypeChar(AddrType); }
+
+  static const char *AcftTypeName(uint8_t AcftType)
+  { const char *TypeName[16] = { "----", "Glid", "Tow ", "Heli",
+                                 "SkyD", "Drop", "Hang", "Para",
+                                 "Pwrd", "Jet ", "UFO ", "Ball",
+                                 "Zepp", "UAV ", "Car ", "Fix " } ;
+    if(AcftType<16) return TypeName[AcftType];
+    return TypeName[0]; }
+
+  const char *AcftTypeName(void) const { return AcftTypeName(AcftType); }
 
   uint8_t Print(char *Line)       // print parameters on a single line, suitable for console output
   { uint8_t Len=0;

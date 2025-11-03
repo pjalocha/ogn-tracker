@@ -262,8 +262,6 @@ class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
    int WriteStxJSON(char *JSON) const
    { int Len = PAW_Packet::WriteStxJSON(JSON);
      uint32_t PosTime=getSlotTime();
-     // if(OGN)
-     // { }
      Len+=Format_String(JSON+Len, ",\"time\":");
      Len+=Format_UnsDec(JSON+Len, PosTime);
      int64_t RxTime=(int64_t)Time-PosTime; RxTime*=1000; RxTime+=nsTime/1000000;
