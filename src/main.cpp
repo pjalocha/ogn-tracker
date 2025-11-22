@@ -693,6 +693,9 @@ void setup()
     // without the battery temperature detection function, otherwise it will cause abnormal charging
     PMU->disableTSPinMeasure();
 #ifdef WITH_TBEAM12
+    // VBACKUP coin cell 3300mV
+    PMU->setPowerChannelVoltage(XPOWERS_VBACKUP, 3300);
+    PMU->enablePowerOutput(XPOWERS_VBACKUP);
     // RF 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO2);
