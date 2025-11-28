@@ -31,8 +31,20 @@
 #define Radio_PinBusy  5 // Busy: only for SX1262
 #define Radio_SckFreq 8000000
 
+#define Buzzer_Pin     9 // GPIO  3 = Beeper
+#define Buzzer_Channel 0 // LED controller channel
+
 // I2C is not defined by manufacturer, using custom pins
 #define I2C_PinSDA  2
 #define I2C_PinSCL  1
 // #define I2C_PinSDA 48
 // #define I2C_PinSCL 47
+
+#define EPD_PinMISO     0 // connected or not ?
+#define EPD_PinMOSI    45
+#define EPD_PinSCK     38
+#define EPD_PinCS      39
+#define EPD_PinDC      40
+#define EPD_PinRST     41
+#define EPD_PinBUSY    42
+
