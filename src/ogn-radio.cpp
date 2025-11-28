@@ -9,8 +9,6 @@
 
 #include "timesync.h"
 
-#define WITH_FANET
-
 // =======================================================================================================
 
  FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
@@ -19,12 +17,21 @@
  FIFO<OGN_TxPacket<OGN_Packet>, 4> OGN_TxFIFO;              // OGN packets to be transmitted
  FIFO<ADSL_Packet,              4> ADSL_TxFIFO;             // ADS-L packets to be transmitted
  // FIFO<ADSL_RID,                 4> RID_TxFIFO;
- FIFO<FANET_Packet,             4> FNT_TxFIFO;              // FANET packets to be transmitted
+#ifdef WITH_PAW
  FIFO<PAW_Packet,               4> PAW_TxFIFO;              // PilotAware packets to be transmitted
+#endif
+#ifdef WITH_FANET
+ FIFO<FANET_Packet,             4> FNT_TxFIFO;              // FANET packets to be transmitted
+#endif
+#ifdef WITH_MESHT
+ FIFO<MESHT_Packet,             4> MSH_TxFIFO;
+#endif
 
  // queues for received packets
  FIFO<FSK_RxPacket,            32> FSK_RxFIFO;              // received packets of OGN, ADS-L, LDR
+#ifdef WITH_FANET
  FIFO<FANET_RxPacket,           8> FNT_RxFIFO;              // received FANET packets
+#endif
 
  QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
 
@@ -298,9 +305,11 @@ static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit 
   // Radio_TxCount[Radio_SysID_LDR]++;                              // this is counted in the Radio_Slot()
   return Radio_TxFSK(Radio_TxPacket, 6+PktSize+1); }                // send the packet out
 
+#ifdef WITH_PAW
 static int Radio_TxPAW(PAW_Packet &Packet)                          // transmit a PilotAware packet, which could be an ADS-L !
 { if(!Packet.isADSL()) Packet.Whiten();                             // whiten PAW packets, but not ADS-L
   return Radio_TxLDR(Packet.Byte, Packet.Size); }                   // very dirthy but needs to stay for now
+#endif
 
 static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit an ADS-L packet
 { return Radio_TxLDR(&Packet.Version, Packet.TxBytes-3); }
@@ -531,6 +540,44 @@ static int Radio_TxOBAND(uint8_t *Packet, uint8_t Len)              // transmit 
 
 // =======================================================================================================
 
+// setup Radio for FANET or MESHT
+static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
+{                                                                  // first swith to LoRa mode
+#ifdef WITH_SX1262
+  if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
+    Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+  //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
+  Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
+  //          Preamble length, CRC-type,      Payload (max) size, Header-Type,                    Invert-IQ
+  Radio.setPacketParams(5, RADIOLIB_SX126X_LORA_CRC_ON, 40, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
+#endif
+#ifdef WITH_SX1276
+  if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
+    Radio.setActiveModem(RADIOLIB_SX127X_LORA);
+#endif
+  Radio.explicitHeader();
+  Radio.setBandwidth(250.0);
+  Radio.setSpreadingFactor(7);
+  Radio.setCodingRate(4+CRa);
+  Radio.invertIQ(false);
+#ifdef WITH_SX1262
+  Radio.setSyncWord(Sync, 0x44);
+#endif
+#ifdef WITH_SX1276
+  Radio.setSyncWord(Sync);
+#endif
+  Radio.setPreambleLength(PreambleLen);
+  Radio.setCRC(true); }
+
+#ifdef WITH_MESHT
+static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(8, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
+
+static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT packet
+{ Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
+  uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);       // [usec]
+  Radio_TxCredit-=usTxTime/1000; }
+#endif
+
 #ifdef WITH_FANET
 
 static int Radio_FANETrxPacket(TimeSync &TimeRef)                  // attemp to receive FANET packet
@@ -584,6 +631,9 @@ static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a
   Radio_TxCredit-=usTxTime/1000;
   Radio_TxCount[Radio_SysID_FNT]++; }
 
+static void Radio_ConfigFANET(uint8_t CRa=4) { Radio_ConfigLoRa(5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
+
+/*
 static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radio for FANET
 {                                                                  // first swith to LoRa mode
 #ifdef WITH_SX1262
@@ -611,6 +661,7 @@ static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radi
 #endif
   Radio.setPreambleLength(5);
   Radio.setCRC(true); }
+*/
 
 // reception slot with a possible transmission if TxPacket != NULL
 static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_Packet *TxPacket, TimeSync &TimeRef)

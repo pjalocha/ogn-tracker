@@ -27,7 +27,9 @@
 #include "ogn1.h"    // OGN v1
 #include "ogn2.h"    // OGN v2
 #include "adsl.h"    // ADS-L
+#ifdef WITH_FANET
 #include "fanet.h"
+#endif
 #include "gdl90.h"
 
 #include "atmosphere.h"
@@ -1511,7 +1513,7 @@ class GPS_Position: public GPS_Time
      Acc = (VDOP*16+4)/(IntSqrt(Satellites)*8);
      if(Acc<1) Acc=1;
      return Acc; }
-
+#ifdef WITH_FANET
    void EncodeAirPos(FANET_Packet &Packet, uint8_t AcftType=1, bool Track=1) const
    { int32_t Alt = Altitude; if(Alt<0) Alt=0; else Alt=(Alt+5)/10;
      int32_t Lat = getFANETcordic(Latitude);                                     // Latitude:  [0.0001/60deg] => [cordic]
@@ -1521,7 +1523,7 @@ class GPS_Position: public GPS_Time
      Packet.setAirPos(FNTtype[AcftType&0x0F], Track, Lat, Lon, Alt, (((uint16_t)Heading<<4)+112)/225, Speed, ClimbRate, TurnRate);
      if(hasBaro) { Packet.setQNE((StdAltitude+5)/10); }
    }
-
+#endif
    void Encode(GDL90_REPORT &Report, bool FakeAlt=0) const
    { Report.setAccuracy(9, 9);
      int32_t Lat = getCordicLatitude();                                     // Latitude:  [0.0001/60deg] => [cordic]

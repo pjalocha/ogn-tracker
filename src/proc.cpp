@@ -29,8 +29,14 @@
 
 #ifdef WITH_GDL90
 #include "gdl90.h"
-GDL90_HEARTBEAT GDL_HEARTBEAT;
-GDL90_REPORT GDL_REPORT;
+static GDL90_HEARTBEAT GDL_HEARTBEAT;
+static GDL90_REPORT GDL_REPORT;
+#endif
+
+#ifdef WITH_MESHT
+#include "mesht-proto.h"
+static MeshtProto_GPS Mesht_GPS;
+static AES128 AES;
 #endif
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
@@ -878,10 +884,30 @@ void vTaskPROC(void* pvParameters)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
-        XorShift32(Random.RX);
         FNT_TxFIFO.Write();
+        XorShift32(Random.RX);
         FNTbackOff = 8+(Random.RX&0x1); }                                   // every 9 or 10sec
 #endif // WITH_FANET
+#ifdef WITH_MESHT
+      static uint8_t MSHbackOff=0;
+      if(MSHbackOff) MSHbackOff--;
+      else if(Parameters.TxMSH && Position->isValid() && Radio_FreqPlan.Plan<=1)
+      { MESHT_Packet *Packet = MSH_TxFIFO.getWrite();
+        int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
+        Mesht_GPS.Clear();
+        Mesht_GPS.Time = Position->getUnixTime();
+        Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
+        Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
+        Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
+        Mesht_GPS.Prec_bits=32;
+        int Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
+        Packet->Len=Packet->HeaderSize+Len;
+        Packet->Header.PktID^=Mesht_GPS.Time;
+        OK=Packet->encryptMeshtMsg(AES);
+        MSH_TxFIFO.Write();
+        XorShift32(Random.RX);
+        MSHbackOff = 50+(Random.RX%19); }                                   // every minute or so
+#endif // WITH_MESHT
 #ifdef WITH_PAW
       XorShift32(Random.RX);
       static uint8_t PAW_BackOff=0;
@@ -889,9 +915,6 @@ void vTaskPROC(void* pvParameters)
       else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
       { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
         int Good=TxPacket->Read(PosPacket.Packet);                       // convert OGN position packet to PilotAware
-// #ifdef WITH_ADSL
-//         if(AdslPacket && (RX&10)) { TxPacket->Copy(&(AdslPacket->Version)); Good=1; }
-// #endif
         if(Good)
         { PAW_TxFIFO.Write();                                            // complete the write into the transmitter queue
           PAW_BackOff = 3+Random.RX%3; }                                 // randomly choose time to transmit next PAW packet

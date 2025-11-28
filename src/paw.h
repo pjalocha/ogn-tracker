@@ -77,7 +77,7 @@ class PAW_Packet
      Alt = Altitude;
      return 3; }
 
-   void Write(const uint8_t *Data) { memcpy(Byte, Data, Size); }
+   void Read(const uint8_t *Data) { memcpy(Byte, Data, Size); }
 
    int Write(OGN1_Packet &Packet)                          // convert to an OGN packet
    { Packet.HeaderWord=0;
@@ -233,11 +233,20 @@ class PAW_Packet
 
 class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
 { public:
-   uint8_t  CSNR;           // [0.5dB]  carrier Signal-to-Noise Ratio
-   uint8_t   SNR;           // [0.25dB]
-   int16_t FreqOfs;         // [10Hz]
    uint32_t Time;           // [sec]
    uint32_t nsTime;         // [nsec]
+   uint8_t  CSNR;           // [0.5dB]  carrier Signal-to-Noise Ratio
+   uint8_t   SNR;           // [0.25dB]
+   int16_t  FreqOfs;        // [10Hz]
+   uint16_t RxChan;
+   uint8_t  RxErr;
+   union
+   { uint8_t Flags;
+     struct
+     { bool PAW:1;
+       bool LDR:1;
+     } ;
+   } ;
 
   public:
    void Print(void) const

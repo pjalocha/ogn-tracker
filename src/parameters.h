@@ -180,14 +180,15 @@ uint16_t StratuxPort;
   union
   { uint16_t TxProtMask;
     struct
-    { bool TxFLR:1;          // #0 FLARM
-      bool TxOGN:1;          // #1 OGN
+    { bool TxFLR :1;         // #0 FLARM
+      bool TxOGN :1;         // #1 OGN
       bool TxADSL:1;         // #2 ADS-L
-      bool TxPAW:1;          // #3 PAW
-      bool TxFNT:1;          // #4 FANET
-      bool TxWAN:1;          // #5 LoRaWAN
+      bool TxPAW :1;         // #3 PAW
+      bool TxFNT :1;         // #4 FANET
+      bool TxWAN :1;         // #5 LoRaWAN
       bool TxADSB:1;         // #6 ADS-B
       bool TxODID:1;         // #7 Open-Drone-ID
+      bool TxMSH :1;         // #8 Meshtastic
     } ;
   } ;
 
