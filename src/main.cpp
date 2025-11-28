@@ -87,8 +87,9 @@
 #include "esp_spiffs.h"
 
 #ifdef WITH_EPAPER
-#include <M5EPD.h>
-#include <M5GFX.h>
+#include <GxEPD2_BW.h>
+#include <GxEPD2_3C.h>
+#include <Fonts/FreeMonoBold9pt7b.h>
 #endif
 
 #ifdef WITH_ST7735
@@ -207,8 +208,8 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 // =======================================================================================================
 
 #ifdef WITH_EPAPER
-static M5EPD_Driver EPD(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY);
-static M5Canvas Canvas(&MPD);
+// GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
+GxEPD2_BW<GxEPD2_154_M10, GxEPD2_154_M10::HEIGHT> EPD(GxEPD2_154_M10(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
 #endif
 
 // =======================================================================================================
@@ -598,10 +599,10 @@ void setup()
   Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
 
 #ifdef WITH_EPAPER
-  EPD.begin(EPD_PinSCK, EPD_PinMOSI);
+  EPD.init(115200, EPD_PinSCK, EPD_PinMOSI);
   EPD.setRotation(0);
-  Canvas.createCanvas(200, 200);
-  Canvas.fillScreen(WHITE);
+  EPD.setTextColor(GxEPD_BLACK);
+  EPD.display();
 #endif
 
 #ifdef WITH_ST7735
