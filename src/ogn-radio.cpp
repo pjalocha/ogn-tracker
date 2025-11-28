@@ -774,10 +774,10 @@ void Radio_Task(void *Parms)
 
 #ifdef WITH_LORAWAN
   WANdev.Reset(getUniqueID(), Parameters.AppKey);     // set default LoRaWAN config.
-  if(WANdev.ReadFromNVS()!=ESP_OK)                    // if can't read the LoRaWAN setup from NVS
-  { WANdev.WriteToNVS(); }                            // then store the default
+  if(WANdev.ReadFromNVS()!=ESP_OK)                    // try to read setup from NVS and if fails:
+  { WANdev.WriteToNVS(); }                            // then store the default in NVS
   if(Parameters.hasAppKey())                          // if there is an AppKey in the Parameters
-  { if(!Parameters.sameAppKey(WANdev.AppKey))         // if LoRaWAN key different from the one in Parameters
+  { if(!Parameters.sameAppKey(WANdev.AppKey))         // if LoRaWAN key is different from the one in Parameters
     { WANdev.Reset(getUniqueID(), Parameters.AppKey); // then reset LoRaWAN to this key
       WANdev.Enable=1;
       WANdev.ABP=0;
@@ -792,6 +792,7 @@ void Radio_Task(void *Parms)
       xSemaphoreGive(CONS_Mutex); }
     Parameters.clrAppKey();                           // clear the AppKey in the Parameters and save it to Flash
     Parameters.WriteToNVS(); }
+/*
   else if(Parameters.hasAppSesKey() && Parameters.hasNetSesKey() && Parameters.DevAddr)
   { if(!Parameters.sameAppSesKey(WANdev.AppSesKey) || !Parameters.sameNetSesKey(WANdev.NetSesKey))
     { WANdev.Reset(getUniqueID());
@@ -811,6 +812,7 @@ void Radio_Task(void *Parms)
       xSemaphoreGive(CONS_Mutex); }
     Parameters.clrAppSesKey(); Parameters.clrNetSesKey();
     Parameters.WriteToNVS(); }
+*/
 #endif
 
   SPI.begin(Radio_PinSCK, Radio_PinMISO, Radio_PinMOSI);  // CLK, MISO, MOSI, CS given by the Radio contructor
