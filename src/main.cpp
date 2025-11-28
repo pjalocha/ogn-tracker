@@ -86,6 +86,11 @@
 #include "esp_vfs_fat.h"
 #include "esp_spiffs.h"
 
+#ifdef WITH_EPAPER
+#include <M5EPD.h>
+#include <M5GFX.h>
+#endif
+
 #ifdef WITH_ST7735
 #include "tft.h"
 #endif
@@ -197,6 +202,13 @@ uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprim
 #ifdef Vext_PinEna
 static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
 static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
+#endif
+
+// =======================================================================================================
+
+#ifdef WITH_EPAPER
+static M5EPD_Driver EPD(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY);
+static M5Canvas Canvas(&MPD);
 #endif
 
 // =======================================================================================================
@@ -585,6 +597,13 @@ void setup()
 #endif
   Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
 
+#ifdef WITH_EPAPER
+  EPD.begin(EPD_PinSCK, EPD_PinMOSI);
+  EPD.setRotation(0);
+  Canvas.createCanvas(200, 200);
+  Canvas.fillScreen(WHITE);
+#endif
+
 #ifdef WITH_ST7735
   TFT_Init();
   TFT.setRotation(1);
@@ -836,6 +855,12 @@ void setup()
 #endif
 #ifdef WITH_UPLOAD
   xTaskCreate(vTaskUPLOAD,"UPLOAD",4000, NULL, 0, NULL);
+#endif
+
+#ifdef WITH_BEEPER
+  Play(Play_Vol_1 | Play_Oct_1 | 0x05, 250);
+  Play(Play_Vol_1 | Play_Oct_1 | 0x08, 250);
+  Play(Play_Vol_0 | Play_Oct_1 | 0x00, 100);
 #endif
 
 }
