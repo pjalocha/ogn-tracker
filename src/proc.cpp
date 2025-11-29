@@ -37,6 +37,13 @@ static GDL90_REPORT GDL_REPORT;
 #include "mesht-proto.h"
 static MeshtProto_GPS Mesht_GPS;
 static AES128 AES;
+static uint32_t MeshtHash(uint32_t X)
+{ X ^= X>>16;
+  X *= 0x85ebca6b;
+  X ^= X>>13;
+  X *= 0xc2b2ae35;
+  X ^= X>>16;
+  return X; }
 #endif
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
@@ -899,10 +906,12 @@ void vTaskPROC(void* pvParameters)
         Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
         Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
         Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
+        Mesht_GPS.Speed  = (Position->Speed+5)/10; Mesht_GPS.hasSpeed=1;
+        Mesht_GPS.Track  =  Position->Heading*10; Mesht_GPS.hasTrack=1;
         Mesht_GPS.Prec_bits=32;
         int Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
         Packet->Len=Packet->HeaderSize+Len;
-        Packet->Header.PktID^=Mesht_GPS.Time;
+        Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);
         OK=Packet->encryptMeshtMsg(AES);
         MSH_TxFIFO.Write();
         XorShift32(Random.RX);

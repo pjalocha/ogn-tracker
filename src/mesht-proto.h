@@ -395,6 +395,12 @@ class MeshtProto
     if(GPS.hasAltHAE && GPS.AltHAE>0)
     { Len+=WriteKey(Packet+Len, GPS_AltHAE, Wire_VarInt);
       Len+=WriteVarInt(Packet+Len, GPS.AltHAE); }
+    if(GPS.hasSpeed && GPS.Speed>0)
+    { Len+=WriteKey(Packet+Len, GPS_Speed, Wire_VarInt);
+      Len+=WriteVarInt(Packet+Len, GPS.Speed); }
+    if(GPS.hasTrack && GPS.Speed>0)
+    { Len+=WriteKey(Packet+Len, GPS_Track, Wire_VarInt);
+      Len+=WriteVarInt(Packet+Len, GPS.Track); }
     if(GPS.Prec_bits>0)
     { Len+=WriteKey(Packet+Len, GPS_PrecBits, Wire_VarInt);
       Len+=WriteVarInt(Packet+Len, GPS.Prec_bits); }

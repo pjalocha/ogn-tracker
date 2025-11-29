@@ -549,7 +549,7 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
   Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,      Payload (max) size, Header-Type,                    Invert-IQ
-  Radio.setPacketParams(5, RADIOLIB_SX126X_LORA_CRC_ON, 40, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
+  Radio.setPacketParams(5, RADIOLIB_SX126X_LORA_CRC_ON, 48, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
 #endif
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
@@ -873,7 +873,7 @@ void Radio_Task(void *Parms)
       Radio_setFrequency(1e-6*FreqMSH);
       MESHT_Packet *MSHpacket = MSH_TxFIFO.getRead();
       if(MSHpacket)
-      { // Serial.printf("MESHT_Packet [%d]\n", MSHpacket.Len);
+      { // Serial.printf("MESHT_Packet [%d] %5.1fMHz\n", MSHpacket->Len, 1e-6*FreqMSH);
         Radio_TxMESHT(*MSHpacket);
         MSH_TxFIFO.Read(); }
     }

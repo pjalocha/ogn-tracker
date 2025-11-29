@@ -285,8 +285,8 @@ uint16_t StratuxPort;
     TxPower        =        14; // [dBm] for RFM69HW
     RFchipTypeHW   =         1;
 #endif
-    TxProtMask       =    0xFF;
-    RxProtMask       =    0xFF;
+    TxProtMask     =    0xFFFF;
+    RxProtMask     =    0xFFFF;
 
     Flags          =         0;
 #ifdef WITH_GPS_UBX
@@ -1003,8 +1003,8 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "TxHW"      ,(uint32_t)RFchipTypeHW     ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "TxProtMask" ,    (uint32_t)TxProtMask,2); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "RxProtMask" ,    (uint32_t)RxProtMask,2); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "TxProtMask" ,  (uint32_t)TxProtMask,  4); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "RxProtMask" ,  (uint32_t)RxProtMask,  4); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "FreqPlan"  ,(uint32_t)FreqPlan         ); strcat(Line, " #  [ 0..5]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Float1 (Line, "FreqCorr"  , (int32_t)RFchipFreqCorr   ); strcat(Line, " #  [  ppm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TempCorr"  , (int32_t)RFchipTempCorr   ); strcat(Line, " #  [ degC]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -1077,8 +1077,8 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "TxHW"      ,(uint32_t)RFchipTypeHW     ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "TxProtMask" ,    (uint32_t)TxProtMask,2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "RxProtMask" ,    (uint32_t)RxProtMask,2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "TxProtMask" ,  (uint32_t)TxProtMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "RxProtMask" ,  (uint32_t)RxProtMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "FreqPlan"  ,(uint32_t)FreqPlan         ); strcat(Line, " #  [ 0..5]\n"); Format_String(Output, Line);
     Write_Float1 (Line, "FreqCorr"  , (int32_t)RFchipFreqCorr   ); strcat(Line, " #  [  ppm]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TempCorr"  , (int32_t)RFchipTempCorr   ); strcat(Line, " #  [ degC]\n"); Format_String(Output, Line);

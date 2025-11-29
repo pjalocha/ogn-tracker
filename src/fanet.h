@@ -22,7 +22,7 @@ class FANET_Packet
      } ;
    } ;
    uint8_t Len;       // [bytes] packet length
-   static const int MaxBytes = 40;
+   static const int MaxBytes = 48;
    uint8_t Byte[MaxBytes+2];
 
   public:
