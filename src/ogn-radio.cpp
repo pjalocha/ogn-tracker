@@ -857,11 +857,15 @@ void Radio_Task(void *Parms)
 
     // uint32_t msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     uint32_t msTime = TimeRef.getFracTime(millis());
+    // Serial.printf("Radio: pre-slot:%dms\n", msTime);
     uint32_t Wait=0;
-    if(msTime<300)
+    if(msTime>800)
+    { Wait=1400-msTime; }
+    else if(msTime<300)
     { Wait=400-msTime;
       // Serial.printf("Pre-slot: %d [sec]  %d Wait:%d [ms]\n", TimeRef.UTC, msTime, Wait);
-      if(Wait>300) Wait=300; }
+      // if(Wait>400) Wait=400;
+    }
 
     // msTime = millis()-TimeRef.sysTime;
     // msTime = TimeRef.getFracTime(millis());

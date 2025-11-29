@@ -3,6 +3,9 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+// #define millis() (xTaskGetTickCount())
+#define xTaskGetTickCount() (millis())
+
 uint64_t getUniqueMAC(void);
 uint64_t getUniqueID(void);
 uint32_t getUniqueAddress(void);

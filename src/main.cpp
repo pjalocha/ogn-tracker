@@ -90,6 +90,7 @@
 #include <GxEPD2_BW.h>
 #include <GxEPD2_3C.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
+// #include <PCA9557.h>
 #endif
 
 #ifdef WITH_ST7735
@@ -169,7 +170,7 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
 // =======================================================================================================
 
 uint8_t I2C_Restart(uint8_t Bus)
-{ Wire.end(); Wire.begin(); return 0; }
+{ Wire.end(); Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); return 0; }
 
 uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
 { Wire.beginTransmission(Addr);
@@ -208,8 +209,12 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 // =======================================================================================================
 
 #ifdef WITH_EPAPER
-// GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
-GxEPD2_BW<GxEPD2_154_M10, GxEPD2_154_M10::HEIGHT> EPD(GxEPD2_154_M10(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
+SPIClass hSPI(HSPI);
+GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
+// GxEPD2_BW<GxEPD2_154_M10, GxEPD2_154_M10::HEIGHT> EPD(GxEPD2_154_M10(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
+const uint8_t PCA9557_Addr = 0x18;
+const uint8_t PCA9557_Bus  =    0;
+uint8_t IOexpandWrite(uint8_t Reg, uint8_t Byte) { return I2C_Write(PCA9557_Bus, PCA9557_Addr, Reg, &Byte, 1, 5); }
 #endif
 
 // =======================================================================================================
@@ -480,7 +485,7 @@ void GPS_DISABLE(void) { gpio_set_level((gpio_num_t)GPS_PinEna, 0); }
 void GPS_ENABLE (void) { gpio_set_level((gpio_num_t)GPS_PinEna, 1); }
 #endif
 
-static void GPS_UART_Init(int BaudRate=9600)
+static void GPS_UART_Init(int BaudRate=115200)
 {
 #ifdef GPS_PinPPS
   // gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
@@ -599,10 +604,18 @@ void setup()
   Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
 
 #ifdef WITH_EPAPER
-  EPD.init(115200, EPD_PinSCK, EPD_PinMOSI);
+  IOexpandWrite(3, 0x00);  // all OUTPUT
+  IOexpandWrite(1, 0xFF);  // all HIGH
+  delay(100);
+  hSPI.begin(EPD_PinSCK, EPD_PinMISO, EPD_PinMOSI, EPD_PinCS);
+  EPD.epd2.selectSPI(hSPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+  EPD.init(115200, true, 10, true);
   EPD.setRotation(0);
-  EPD.setTextColor(GxEPD_BLACK);
-  EPD.display();
+  EPD.setFullWindow();
+  EPD.firstPage();
+  EPD.fillScreen(GxEPD_WHITE);
+  // EPD.setTextColor(GxEPD_BLACK);
+  EPD.nextPage();
 #endif
 
 #ifdef WITH_ST7735

@@ -229,6 +229,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
 { GPS_Burst.Active=1;
   Burst_Tick=xTaskGetTickCount();
   if(CharDelay) Burst_Tick -= (CharDelay*10000)/GPS_BaudRate;           // correct for the data already received on the GPS port
+  // Serial.printf("GPS_BurstStart(%d) Burst_Tick:%u\n", CharDelay, Burst_Tick);
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time(Burst_Tick)%60, 2);
@@ -381,8 +382,24 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
 #endif
 */
+#ifdef WITH_GPS_PCAS
+        { uint8_t Rate=5;
+       if(GPS_TargetBaudRate==115200) Rate=5;
+  else if(GPS_TargetBaudRate==57600) Rate=4;
+  else if(GPS_TargetBaudRate==38400) Rate=3;
+  else if(GPS_TargetBaudRate==19200) Rate=2;
+  else if(GPS_TargetBaudRate== 9600) Rate=1;
+  else if(GPS_TargetBaudRate== 4800) Rate=0;
+          strcpy(GPS_Cmd, "$PCAS01,");
+          uint8_t Len = strlen(GPS_Cmd);
+          GPS_Cmd[Len++]='0'+Rate;
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          GPS_Cmd[Len]=0;
+          Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
+#endif
 #ifdef WITH_GPS_MTK
-        { strcpy(GPS_Cmd, "$PMTK251,");                                        // MTK command to change the baud rate
+        Format_String(GPS_UART_Write, "\r\n\r\n");            // apparently this is needed, otherwise the next command is missed
+        { strcpy(GPS_Cmd, "$PMTK251,");                       // MTK command to change the baud rate
           uint8_t Len = strlen(GPS_Cmd);
           Len += Format_UnsDec(GPS_Cmd+Len, GPS_TargetBaudRate);
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
@@ -469,9 +486,11 @@ static void GPS_BurstComplete(void)                                   // when GP
       { uint32_t UnixTime=GPS_Pos[GPS_PosIdx].getUnixTime();
         // GPS_FatTime=GPS_Pos[GPS_PosIdx].getFatTime();
 #ifndef WITH_MAVLINK                                                       // with MAVlink we sync. with the SYSTEM_TIME message
-        int32_t msDiff = GPS_Pos[GPS_PosIdx].mSec;
+        int32_t msDiff = GPS_Pos[GPS_PosIdx].mSec;                         // [ms] fractional second time by the GPS
         if(msDiff>=500) { msDiff-=1000; UnixTime++; }                      // [ms]
+        // Serial.printf("TimeSync_SoftPPS(%u, %u, %d+%d)\n", Burst_Tick, UnixTime, msDiff, Parameters.PPSdelay);
         TimeSync_SoftPPS(Burst_Tick, UnixTime, msDiff+Parameters.PPSdelay);
+        // Serial.printf("GPS_TimeSync: %ums <=> %us\n", GPS_TimeSync.sysTime, GPS_TimeSync.UTC);
         // if(abs(msDiff)<=200)                                               // if (almost) full-second burst
         // { // TickType_t PPS_Age = Burst_Tick-PPS_Tick;
           // if(PPS_Age>10000) TimeSync_SoftPPS(Burst_Tick, UnixTime, Parameters.PPSdelay);
