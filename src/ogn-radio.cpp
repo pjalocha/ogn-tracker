@@ -857,12 +857,27 @@ void Radio_Task(void *Parms)
 
     // uint32_t msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     uint32_t msTime = TimeRef.getFracTime(millis());
-    uint32_t Wait = 400-msTime;
-    // Serial.printf("Pre-slot: %d [sec]  %d Wait:%d [ms]\n", TimeRef.UTC, msTime, Wait);
-    if(Wait>300) Wait=300;
+    uint32_t Wait=0;
+    if(msTime<300)
+    { Wait=400-msTime;
+      // Serial.printf("Pre-slot: %d [sec]  %d Wait:%d [ms]\n", TimeRef.UTC, msTime, Wait);
+      if(Wait>300) Wait=300; }
 
     // msTime = millis()-TimeRef.sysTime;
     // msTime = TimeRef.getFracTime(millis());
+
+#ifdef WITH_MESHT
+    uint32_t FreqMSH = Radio_FreqPlan.getFreqMESHT();           // frequency to transmit Meshtastic
+    if(FreqMSH && MSH_TxFIFO.Full())
+    { Radio_ConfigMESHT();
+      Radio_setFrequency(1e-6*FreqMSH);
+      MESHT_Packet *MSHpacket = MSH_TxFIFO.getRead();
+      if(MSHpacket)
+      { // Serial.printf("MESHT_Packet [%d]\n", MSHpacket.Len);
+        Radio_TxMESHT(*MSHpacket);
+        MSH_TxFIFO.Read(); }
+    }
+#endif
 
 #ifdef WITH_FANET
     uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();           // frequency to transmit FANET
