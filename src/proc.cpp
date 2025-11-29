@@ -901,21 +901,23 @@ void vTaskPROC(void* pvParameters)
       else if(Parameters.TxMSH && Position->isValid() && Radio_FreqPlan.Plan<=1)
       { MESHT_Packet *Packet = MSH_TxFIFO.getWrite();
         int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
-        Mesht_GPS.Clear();
-        Mesht_GPS.Time = Position->getUnixTime();
-        Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
-        Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
-        Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
-        Mesht_GPS.Speed  = (Position->Speed+5)/10; Mesht_GPS.hasSpeed=1;
-        Mesht_GPS.Track  =  Position->Heading*10; Mesht_GPS.hasTrack=1;
-        Mesht_GPS.Prec_bits=32;
-        int Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
-        Packet->Len=Packet->HeaderSize+Len;
-        Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);
-        OK=Packet->encryptMeshtMsg(AES);
-        MSH_TxFIFO.Write();
-        XorShift32(Random.RX);
-        MSHbackOff = 50+(Random.RX%19); }                                   // every minute or so
+        if(OK)
+        { Mesht_GPS.Clear();
+          Mesht_GPS.Time = Position->getUnixTime();
+          Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
+          Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
+          Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
+          Mesht_GPS.Speed  = (Position->Speed+5)/10; Mesht_GPS.hasSpeed=1;
+          Mesht_GPS.Track  =  Position->Heading*10; Mesht_GPS.hasTrack=1;
+          Mesht_GPS.Prec_bits=32;
+          int Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
+          Packet->Len=Packet->HeaderSize+Len;
+          Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time
+          OK=Packet->encryptMeshtMsg(AES);
+          MSH_TxFIFO.Write();
+          XorShift32(Random.RX);                                              // random for next packet time
+          MSHbackOff = 50+(Random.RX%19); }                                   // every minute or so
+      }
 #endif // WITH_MESHT
 #ifdef WITH_PAW
       XorShift32(Random.RX);
