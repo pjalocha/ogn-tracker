@@ -129,6 +129,11 @@ static int NVS_Init(void)
 
 // =======================================================================================================
 
+SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
+SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
+
+// =======================================================================================================
+
 #ifdef WITH_SPIFFS
 
 #ifdef WITH_SPIFFS_FAT // FAT replaces SPIFFS, hopefully no performace and reliability issues
@@ -217,7 +222,39 @@ GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, 
 #endif
 
 #ifdef WITH_THINKNODE_M5
-PCA9557 IOexpand(0x18, &Wire);
+static PCA9557 IOexpand(0x18, &Wire);
+
+static void PCA_Init(void)
+{ IOexpand.pinMode(PCA_PinEPD, OUTPUT);
+  IOexpand.pinMode(PCA_PinIO, OUTPUT);
+  IOexpand.digitalWrite(PCA_PinEPD, HIGH);
+  IOexpand.digitalWrite(PCA_PinIO, HIGH);
+
+  IOexpand.pinMode(PCA_PinRED, OUTPUT);      // red LED, when LOW then it flashes when connected to USB
+  IOexpand.pinMode(PCA_PinPWR, OUTPUT);      // when this is high then red LED is either dim or flashing when connected to USB ?
+  IOexpand.pinMode(PCA_PinBLUE, OUTPUT);     // blue LED, HIGH active
+  IOexpand.digitalWrite(PCA_PinRED, LOW);
+  IOexpand.digitalWrite(PCA_PinPWR, LOW);
+  IOexpand.digitalWrite(PCA_PinBLUE, LOW); }
+
+static void PCA_LED_Blue(bool ON=1, int Wait=25)
+{ if(!xSemaphoreTake(I2C_Mutex, 25)) return;
+  IOexpand.digitalWrite(PCA_PinBLUE, ON);
+  xSemaphoreGive(I2C_Mutex); }
+
+static void PCA_LED_Red(bool ON=1, int Wait=25)
+{ if(!xSemaphoreTake(I2C_Mutex, 25)) return;
+  IOexpand.digitalWrite(PCA_PinRED, ON);
+  xSemaphoreGive(I2C_Mutex); }
+
+#endif
+
+#ifdef WITH_THINKNODE_M5
+void LED_OGN_RX(bool ON) { PCA_LED_Blue(ON, 1); }
+void LED_OGN_TX(bool ON) { PCA_LED_Red (ON, 1); }
+#else
+void LED_OGN_RX(bool ON) { }
+void LED_OGN_TX(bool ON) { }
 #endif
 
 // =======================================================================================================
@@ -537,9 +574,6 @@ static void LED_PCB_Init (void)    { }
 
 // =======================================================================================================
 
-SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
-SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
-
 static char Line[128];
 static void PrintPOGNS(void);
 
@@ -651,17 +685,7 @@ void setup()
 #endif
 
 #ifdef WITH_THINKNODE_M5
-  IOexpand.pinMode(PCA_PinEPD, OUTPUT);
-  IOexpand.pinMode(PCA_PinIO, OUTPUT);
-  IOexpand.digitalWrite(PCA_PinEPD, HIGH);
-  IOexpand.digitalWrite(PCA_PinIO, HIGH);
-
-  IOexpand.pinMode(PCA_PinRED, OUTPUT);      // red LED, when LOW then it flashes when connected to USB
-  IOexpand.pinMode(PCA_PinPWR, OUTPUT);      // when this is high then red LED is either dim or flashing when conencted to USB ?
-  IOexpand.pinMode(PCA_PinBLUE, OUTPUT);     // blue LED, HIGH active
-  IOexpand.digitalWrite(PCA_PinRED, LOW);
-  IOexpand.digitalWrite(PCA_PinPWR, LOW);
-  IOexpand.digitalWrite(PCA_PinBLUE, LOW);
+  PCA_Init();
 #endif
 
 #ifdef WITH_EPAPER
@@ -861,6 +885,13 @@ void setup()
   TFT_DrawID(StartAP);
 #endif
 
+#ifdef WITH_BEEPER
+  Beep_Init();
+  Play(Play_Vol_1 | Play_Oct_1 | 0x05, 250);
+  Play(Play_Vol_1 | Play_Oct_1 | 0x08, 250);
+  Play(Play_Vol_0 | Play_Oct_1 | 0x00, 100);
+#endif
+
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
   Len+=NMEA_AppendCheckCRNL(Line, Len);
   Line[Len]=0;
@@ -884,12 +915,6 @@ void setup()
 #endif
 #ifdef WITH_UPLOAD
   xTaskCreate(vTaskUPLOAD,"UPLOAD",4000, NULL, 0, NULL);
-#endif
-
-#ifdef WITH_BEEPER
-  Play(Play_Vol_1 | Play_Oct_1 | 0x05, 250);
-  Play(Play_Vol_1 | Play_Oct_1 | 0x08, 250);
-  Play(Play_Vol_0 | Play_Oct_1 | 0x00, 100);
 #endif
 
 }

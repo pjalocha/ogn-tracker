@@ -191,9 +191,9 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 { uint32_t usTxTime=Radio.getTimeOnAir(Len);                             // [usec]
   Radio_TxCredit-=usTxTime/1000;
   // uint32_t Time=millis();
-  // LED_OGN_Blue();                                                     // 10ms flash for transmission
+  LED_OGN_TX(1);                                                     // 10ms flash for transmission
   int State=Radio.transmit((const uint8_t *)Packet, Len);                                 // transmit
-  // LED_OGN_Off();
+  LED_OGN_TX(0);
   // Time = millis()-Time;
   // Serial.printf("Radio_TxManchFSK(, %d=>%d) (%d) %dms\n", Len, TxLen, State, Time);  // for debug
   return State; }                                                        // this call takes 15-16 ms although the actuall packet transmission only 5-6 ms
@@ -201,7 +201,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 
 #ifdef WITH_SX1276
 static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
-{ // LED_OGN_Blue();
+{ LED_OGN_TX(1);
   // Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_PAYLOAD_LENGTH_FSK, Len);
   int State=Radio.startTransmit((const uint8_t *)Packet, Len);
   uint32_t usStart = micros();                                         // [usec] when transmission started
@@ -224,7 +224,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
   // uint8_t RegFixed = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PACKET_CONFIG_1);
   // uint8_t RegDIO1 = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_DIO_MAPPING_1);
   // Serial.printf("Radio_TxFSK(, %d) usTxTime:%d, usLeft:%d [%d:%02X:%02X]\n", Len, usTxTime, usLeft, RegPktLen, RegFixed, RegDIO1);
-  // LED_OGN_Off();
+  LED_OGN_TX(0);
   return State; }
 #endif
 
@@ -319,6 +319,8 @@ static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit 
 // check if there is a new packet received:
 static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef)
 { if(!Radio_IRQ()) return 0;                                             // use the IRQ line: not raised, then no received packet
+  uint32_t msTime = millis();                                            // [ms] current system time
+  LED_OGN_RX(1);
   FSK_RxPacket *RxPkt = FSK_RxFIFO.getWrite();                           // get place for a new packet in the queue
   int RxLen=Radio.getPacketLength();
 #ifdef WITH_SX1262
@@ -336,8 +338,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   // RxPkt->SNR  = 0;
 #endif
   XorShift64(Random.Word);
-  uint32_t msTime = millis();                                            // [ms] current system time
-  // RxPkt->PosTime = TimeRef.sysTime;                                      // [ms] 
+  // RxPkt->PosTime = TimeRef.sysTime;                                      // [ms]
   RxPkt->msTime = msTime-TimeRef.sysTime;                                // [ms] time since the reference PPS
   RxPkt->Time = TimeRef.UTC;                                             // [sec] UTC PPS
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
@@ -375,6 +376,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
   SysID = RxPkt->DecodeSysID();
   uint8_t ManchErr=RxPkt->ErrCount();
+  LED_OGN_RX(0);
   if(SysID>=8 || ManchErr>=16) return 0;
 #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 20))
@@ -411,6 +413,7 @@ static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, bool Manch, uint8_t
     uint32_t msTime = millis()-msStart;                            // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
   Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI); // [dBm] measure the noise level at the end of the slot and average
+  LED_OGN_RX(0);
   return PktCount; }                                               // return number of received packets
 
 // =======================================================================================================
@@ -487,6 +490,8 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   uint32_t msTime = millis()-msStart;                                  // keep receiving till the end of slot
   if(msTime<msTimeLen) PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, RxManch, RxSysID, RxChannel, TimeRef);
   Radio.standby();
+  LED_OGN_TX(0);
+  LED_OGN_RX(0);
   return PktCount; }
 
 // =======================================================================================================
@@ -573,9 +578,11 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
 static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(8, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
 
 static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT packet
-{ Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
+{ LED_OGN_TX(1);
+  Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);       // [usec]
-  Radio_TxCredit-=usTxTime/1000; }
+  Radio_TxCredit-=usTxTime/1000;
+  LED_OGN_TX(0); }
 #endif
 
 #ifdef WITH_FANET
@@ -583,8 +590,7 @@ static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT pa
 static int Radio_FANETrxPacket(TimeSync &TimeRef)                  // attemp to receive FANET packet
 { if(!Radio_IRQ()) return 0;
   uint32_t msTime = millis();                                      // [ms] current system time
-  // LED_Flash(10);
-  // LED_OGN_Flash(10);
+  LED_OGN_RX(1);
   FANET_RxPacket *RxPkt = FNT_RxFIFO.getWrite();                   // get space in the queue for the new packet
   int PktLen    = Radio.getPacketLength();   // [bytes]            // packet size
   float RSSI    = Radio.getRSSI();           // [dBm]              // RSSI
@@ -606,6 +612,7 @@ static int Radio_FANETrxPacket(TimeSync &TimeRef)                  // attemp to 
   RxPkt->RSSI    = floorf(RSSI+0.5);
   FNT_RxFIFO.Write();
   Radio_RxCount[Radio_SysID_FNT]++;
+  LED_OGN_RX(0);
   return 1; }
 
 static int Radio_RxFANET(uint32_t msTimeLen, TimeSync &TimeRef)    // FANET reception slot
@@ -622,14 +629,17 @@ static int Radio_RxFANET(uint32_t msTimeLen, TimeSync &TimeRef)    // FANET rece
 #ifdef WITH_SX1276
   Radio_BkgRSSI += Radio_BkgUpdate*(Radio.getRSSI(false, true)-Radio_BkgRSSI); // [dBm] measure the noise level at the end of the slot and average
 #endif
+  LED_OGN_RX(0);
   return PktCount; }                                               // return nuber of packets received
 
 static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a FANET packet
 { // Serial.printf("FNT Tx[%d] %06X\n", Packet.Len, Packet.getAddr());
+  LED_OGN_TX(1);
   Radio.transmit(Packet.Byte, Packet.Len); Packet.Done=1;          // not clear, if we should wait here for the transmission to complete ?
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);                // [usec]
   Radio_TxCredit-=usTxTime/1000;
-  Radio_TxCount[Radio_SysID_FNT]++; }
+  Radio_TxCount[Radio_SysID_FNT]++;
+  LED_OGN_TX(0); }
 
 static void Radio_ConfigFANET(uint8_t CRa=4) { Radio_ConfigLoRa(5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
 
@@ -689,6 +699,8 @@ static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_
   { uint32_t msTime = millis()-msStart;
     if(msTime<msTimeLen) PktCount+=Radio_RxFANET(msTimeLen-msTime, TimeRef); }
   Radio.standby();
+  LED_OGN_RX(0);
+  LED_OGN_TX(0);
   return PktCount; }                                 // return number of received packets
 
 #endif // WITH_FANET
