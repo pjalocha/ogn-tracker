@@ -220,6 +220,11 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 SPIClass hSPI(HSPI);                         // SPI port for the e-paper (not to conflict with Radio SPI
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
 #include "OGN_Logo_200x200.xbm"              // OGN logo
+static uint8_t ReverseBits(uint8_t X)
+{ X = ( X      >>4) | ( X      <<4);
+  X = ((X&0xCC)>>2) | ((X&0x33)<<2);
+  X = ((X&0xAA)>>1) | ((X&0x55)<<1);
+  return X; }
 #endif
 
 #ifdef WITH_THINKNODE_M5
@@ -729,7 +734,13 @@ void setup()
   EPD.setFullWindow();
   EPD.firstPage();
   EPD.fillScreen(GxEPD_WHITE);
-  EPD.drawBitmap(0, 0, OGN_Logo_200x200, OGN_Logo_200x200_width, OGN_Logo_200x200_height, GxEPD_BLACK);
+  { int Size=OGN_Logo_200x200_width*OGN_Logo_200x200_height/8;
+    uint8_t *BitMap = (uint8_t *)malloc(Size);
+    for(int Idx=0; Idx<Size; Idx++)
+    { BitMap[Idx]=ReverseBits(OGN_Logo_200x200[Idx]); }
+    EPD.drawBitmap(0, 0, BitMap, OGN_Logo_200x200_width, OGN_Logo_200x200_height, GxEPD_BLACK);
+    free(BitMap); }
+  // EPD.drawImage(OGN_Logo_200x200, 0, 0, OGN_Logo_200x200_width, OGN_Logo_200x200_height);
   // EPD.setTextColor(GxEPD_BLACK);
   EPD.nextPage();
 #endif
