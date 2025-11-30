@@ -244,12 +244,12 @@ static void PCA_Init(void)
   IOexpand.digitalWrite(PCA_PinBLUE, LOW); }
 
 static void PCA_LED_Blue(bool ON=1, int Wait=10)
-{ if(!xSemaphoreTake(I2C_Mutex, 25)) return;
+{ if(!xSemaphoreTake(I2C_Mutex, Wait)) return;
   IOexpand.digitalWrite(PCA_PinBLUE, ON);
   xSemaphoreGive(I2C_Mutex); }
 
 static void PCA_LED_Red(bool ON=1, int Wait=10)
-{ if(!xSemaphoreTake(I2C_Mutex, 25)) return;
+{ if(!xSemaphoreTake(I2C_Mutex, Wait)) return;
   IOexpand.digitalWrite(PCA_PinPWR, ON);
   xSemaphoreGive(I2C_Mutex); }
 
@@ -607,7 +607,11 @@ static void LED_PCB_Init(void)  { pinMode(LED_PCB_Pin, OUTPUT); }
 static void LED_PCB_Init (void)    { }
        void LED_PCB_On   (bool ON) { }
        void LED_PCB_Off  (void)    { }
+#ifdef WITH_THINKNODE_M5
+       void LED_PCB_Flash(uint8_t Time) { LED_OGN_TX(Time); }
+#else
        void LED_PCB_Flash(uint8_t Time) { }
+#endif
 #endif
 
 // =======================================================================================================

@@ -192,7 +192,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
   Radio_TxCredit-=usTxTime/1000;
   // uint32_t Time=millis();
   int State=Radio.transmit((const uint8_t *)Packet, Len);                                 // transmit
-  LED_OGN_TX(10);
+  LED_OGN_TX(20);
   // Time = millis()-Time;
   // Serial.printf("Radio_TxManchFSK(, %d=>%d) (%d) %dms\n", Len, TxLen, State, Time);  // for debug
   return State; }                                                        // this call takes 15-16 ms although the actuall packet transmission only 5-6 ms
@@ -222,7 +222,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
   // uint8_t RegFixed = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PACKET_CONFIG_1);
   // uint8_t RegDIO1 = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_DIO_MAPPING_1);
   // Serial.printf("Radio_TxFSK(, %d) usTxTime:%d, usLeft:%d [%d:%02X:%02X]\n", Len, usTxTime, usLeft, RegPktLen, RegFixed, RegDIO1);
-  LED_OGN_TX(10);
+  LED_OGN_TX(20);
   return State; }
 #endif
 
@@ -629,7 +629,7 @@ static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);                // [usec]
   Radio_TxCredit-=usTxTime/1000;
   Radio_TxCount[Radio_SysID_FNT]++;
-  LED_OGN_TX(10); }
+  LED_OGN_TX(20); }
 
 static void Radio_ConfigFANET(uint8_t CRa=4) { Radio_ConfigLoRa(5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
 

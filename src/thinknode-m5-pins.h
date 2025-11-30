@@ -1,8 +1,6 @@
 #pragma once
 
-#define Vext_PinEna    4 // put high to enable power to ?
-
-#define Button_Pin     0 // user button: LOW when pushed
+// #define Button_Pin     0 // user button: LOW when pushed
 #define Button1_Pin   14
 #define Button2_Pin   21
 
