@@ -237,25 +237,57 @@ static void PCA_Init(void)
   IOexpand.digitalWrite(PCA_PinPWR, LOW);
   IOexpand.digitalWrite(PCA_PinBLUE, LOW); }
 
-static void PCA_LED_Blue(bool ON=1, int Wait=25)
+static void PCA_LED_Blue(bool ON=1, int Wait=10)
 { if(!xSemaphoreTake(I2C_Mutex, 25)) return;
   IOexpand.digitalWrite(PCA_PinBLUE, ON);
   xSemaphoreGive(I2C_Mutex); }
 
-static void PCA_LED_Red(bool ON=1, int Wait=25)
+static void PCA_LED_Red(bool ON=1, int Wait=10)
 { if(!xSemaphoreTake(I2C_Mutex, 25)) return;
-  IOexpand.digitalWrite(PCA_PinRED, ON);
+  IOexpand.digitalWrite(PCA_PinPWR, ON);
   xSemaphoreGive(I2C_Mutex); }
 
 #endif
 
+static uint8_t  LED_OGN_RX_FlashON    = 0;
+static uint8_t  LED_OGN_RX_FlashLen   = 0;
+static uint32_t LED_OGN_RX_FlashStart = 0;
+
+static uint8_t  LED_OGN_TX_FlashON    = 0;
+static uint8_t  LED_OGN_TX_FlashLen   = 0;
+static uint32_t LED_OGN_TX_FlashStart = 0;
+
+void LED_OGN_RX(uint8_t msLong) { LED_OGN_RX_FlashLen = msLong; }
+void LED_OGN_TX(uint8_t msLong) { LED_OGN_TX_FlashLen = msLong; }
+
+void OGN_LED_Flash(void)
+{ uint32_t Now = millis();
 #ifdef WITH_THINKNODE_M5
-void LED_OGN_RX(bool ON) { PCA_LED_Blue(ON, 1); }
-void LED_OGN_TX(bool ON) { PCA_LED_Red (ON, 1); }
-#else
-void LED_OGN_RX(bool ON) { }
-void LED_OGN_TX(bool ON) { }
+  if(LED_OGN_RX_FlashON)
+  { uint32_t Time = Now-LED_OGN_RX_FlashStart;
+    if(Time>=LED_OGN_RX_FlashLen)
+    { PCA_LED_Blue(0);
+      LED_OGN_RX_FlashLen=0;
+      LED_OGN_RX_FlashON=0; }
+  }
+  else if(LED_OGN_RX_FlashLen)
+  { PCA_LED_Blue(1);
+    LED_OGN_RX_FlashStart=Now;
+    LED_OGN_RX_FlashON=1; }
+
+  if(LED_OGN_TX_FlashON)
+  { uint32_t Time = Now-LED_OGN_TX_FlashStart;
+    if(Time>=LED_OGN_TX_FlashLen)
+    { PCA_LED_Red(0);
+      LED_OGN_TX_FlashLen=0;
+      LED_OGN_TX_FlashON=0; }
+  }
+  else if(LED_OGN_TX_FlashLen)
+  { PCA_LED_Red(1);
+    LED_OGN_TX_FlashStart=Now;
+    LED_OGN_TX_FlashON=1; }
 #endif
+}
 
 // =======================================================================================================
 
@@ -1180,6 +1212,7 @@ static int ProcessInput(void)
 
 void loop()
 { vTaskDelay(1);
+  OGN_LED_Flash();
 #ifdef Button_Pin
   Button.loop();
 #endif

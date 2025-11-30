@@ -96,8 +96,8 @@ template <class Type>
  uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, Type &Object, uint8_t Wait=10)
 { return I2C_Read (Bus, Addr, Reg, (uint8_t *)&Object, sizeof(Type), Wait); }
 
-void LED_OGN_RX(bool ON);
-void LED_OGN_TX(bool ON);
+void LED_OGN_RX(uint8_t ms);
+void LED_OGN_TX(uint8_t ms);
 
 void LED_PCB_On   (bool ON=1);           // LED on the PCB for vizual indications
 void LED_PCB_Off  (void);
