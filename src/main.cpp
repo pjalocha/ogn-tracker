@@ -90,6 +90,9 @@
 #include <GxEPD2_BW.h>
 #include <GxEPD2_3C.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
+#endif
+
+#ifdef WITH_THINKNODE_M5
 #include <PCA9557.h>
 #endif
 
@@ -211,10 +214,9 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 #ifdef WITH_EPAPER
 SPIClass hSPI(HSPI);
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
-// GxEPD2_BW<GxEPD2_154_M10, GxEPD2_154_M10::HEIGHT> EPD(GxEPD2_154_M10(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
-// const uint8_t PCA9557_Addr = 0x18;
-// const uint8_t PCA9557_Bus  =    0;
-// uint8_t IOexpandWrite(uint8_t Reg, uint8_t Byte) { return I2C_Write(PCA9557_Bus, PCA9557_Addr, Reg, &Byte, 1, 5); }
+#endif
+
+#ifdef WITH_THINKNODE_M5
 PCA9557 IOexpand(0x18, &Wire);
 #endif
 
@@ -604,27 +606,6 @@ void setup()
 #endif
   Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
 
-#ifdef WITH_EPAPER
-  // IOexpandWrite(3, 0x00);  // all OUTPUT
-  // IOexpandWrite(1, 0xFF);  // all HIGH
-  // delay(100);
-
-  IOexpand.pinMode(PCA_PinEPD, OUTPUT);
-  IOexpand.pinMode(PCA_PinIO, OUTPUT);
-  IOexpand.digitalWrite(PCA_PinEPD, HIGH);
-  IOexpand.digitalWrite(PCA_PinIO, HIGH);
-
-  hSPI.begin(EPD_PinSCK, EPD_PinMISO, EPD_PinMOSI, EPD_PinCS);
-  EPD.epd2.selectSPI(hSPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
-  EPD.init(115200, true, 10, true);
-  EPD.setRotation(0);
-  EPD.setFullWindow();
-  EPD.firstPage();
-  EPD.fillScreen(GxEPD_WHITE);
-  // EPD.setTextColor(GxEPD_BLACK);
-  EPD.nextPage();
-#endif
-
 #ifdef WITH_ST7735
   TFT_Init();
   TFT.setRotation(1);
@@ -668,6 +649,33 @@ void setup()
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                                  // [ms]
 #endif
+
+#ifdef WITH_THINKNODE_M5
+  IOexpand.pinMode(PCA_PinEPD, OUTPUT);
+  IOexpand.pinMode(PCA_PinIO, OUTPUT);
+  IOexpand.digitalWrite(PCA_PinEPD, HIGH);
+  IOexpand.digitalWrite(PCA_PinIO, HIGH);
+
+  IOexpand.pinMode(PCA_PinRED, OUTPUT);      // red LED, when LOW then it flashes when connected to USB
+  IOexpand.pinMode(PCA_PinPWR, OUTPUT);      // when this is high then red LED is either dim or flashing when conencted to USB ?
+  IOexpand.pinMode(PCA_PinBLUE, OUTPUT);     // blue LED, HIGH active
+  IOexpand.digitalWrite(PCA_PinRED, LOW);
+  IOexpand.digitalWrite(PCA_PinPWR, LOW);
+  IOexpand.digitalWrite(PCA_PinBLUE, LOW);
+#endif
+
+#ifdef WITH_EPAPER
+  hSPI.begin(EPD_PinSCK, EPD_PinMISO, EPD_PinMOSI, EPD_PinCS);
+  EPD.epd2.selectSPI(hSPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+  EPD.init(115200, true, 10, true);
+  EPD.setRotation(0);
+  EPD.setFullWindow();
+  EPD.firstPage();
+  EPD.fillScreen(GxEPD_WHITE);
+  // EPD.setTextColor(GxEPD_BLACK);
+  EPD.nextPage();
+#endif
+
 #ifdef PMU_I2C_PinSCL
   static TwoWire PMU_I2C = TwoWire(1);
   PMU_I2C.begin(PMU_I2C_PinSDA, PMU_I2C_PinSCL, (uint32_t)400000);
