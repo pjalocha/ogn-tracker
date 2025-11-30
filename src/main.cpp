@@ -217,8 +217,9 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 // =======================================================================================================
 
 #ifdef WITH_EPAPER
-SPIClass hSPI(HSPI);
+SPIClass hSPI(HSPI);                         // SPI port for the e-paper (not to conflict with Radio SPI
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
+#include "OGN_Logo_200x200.xbm"              // OGN logo
 #endif
 
 #ifdef WITH_THINKNODE_M5
@@ -728,6 +729,7 @@ void setup()
   EPD.setFullWindow();
   EPD.firstPage();
   EPD.fillScreen(GxEPD_WHITE);
+  EPD.drawBitmap(0, 0, OGN_Logo_200x200, OGN_Logo_200x200_width, OGN_Logo_200x200_height, GxEPD_BLACK);
   // EPD.setTextColor(GxEPD_BLACK);
   EPD.nextPage();
 #endif
