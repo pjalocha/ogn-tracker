@@ -90,7 +90,7 @@
 #include <GxEPD2_BW.h>
 #include <GxEPD2_3C.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
-// #include <PCA9557.h>
+#include <PCA9557.h>
 #endif
 
 #ifdef WITH_ST7735
@@ -212,9 +212,10 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 SPIClass hSPI(HSPI);
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
 // GxEPD2_BW<GxEPD2_154_M10, GxEPD2_154_M10::HEIGHT> EPD(GxEPD2_154_M10(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
-const uint8_t PCA9557_Addr = 0x18;
-const uint8_t PCA9557_Bus  =    0;
-uint8_t IOexpandWrite(uint8_t Reg, uint8_t Byte) { return I2C_Write(PCA9557_Bus, PCA9557_Addr, Reg, &Byte, 1, 5); }
+// const uint8_t PCA9557_Addr = 0x18;
+// const uint8_t PCA9557_Bus  =    0;
+// uint8_t IOexpandWrite(uint8_t Reg, uint8_t Byte) { return I2C_Write(PCA9557_Bus, PCA9557_Addr, Reg, &Byte, 1, 5); }
+PCA9557 IOexpand(0x18, &Wire);
 #endif
 
 // =======================================================================================================
@@ -604,9 +605,15 @@ void setup()
   Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
 
 #ifdef WITH_EPAPER
-  IOexpandWrite(3, 0x00);  // all OUTPUT
-  IOexpandWrite(1, 0xFF);  // all HIGH
-  delay(100);
+  // IOexpandWrite(3, 0x00);  // all OUTPUT
+  // IOexpandWrite(1, 0xFF);  // all HIGH
+  // delay(100);
+
+  IOexpand.pinMode(PCA_PinEPD, OUTPUT);
+  IOexpand.pinMode(PCA_PinIO, OUTPUT);
+  IOexpand.digitalWrite(PCA_PinEPD, HIGH);
+  IOexpand.digitalWrite(PCA_PinIO, HIGH);
+
   hSPI.begin(EPD_PinSCK, EPD_PinMISO, EPD_PinMOSI, EPD_PinCS);
   EPD.epd2.selectSPI(hSPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
   EPD.init(115200, true, 10, true);
