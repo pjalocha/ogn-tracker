@@ -87,9 +87,7 @@
 #include "esp_spiffs.h"
 
 #ifdef WITH_EPAPER
-#include <GxEPD2_BW.h>
-#include <GxEPD2_3C.h>
-#include <Fonts/FreeMonoBold9pt7b.h>
+#include "epd.h"
 #endif
 
 #ifdef WITH_THINKNODE_M5
@@ -216,17 +214,6 @@ static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 
 // =======================================================================================================
 
-#ifdef WITH_EPAPER
-SPIClass hSPI(HSPI);                         // SPI port for the e-paper (not to conflict with Radio SPI
-GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
-#include "OGN_Logo_200x200.xbm"              // OGN logo
-static uint8_t ReverseBits(uint8_t X)
-{ X = ( X      >>4) | ( X      <<4);
-  X = ((X&0xCC)>>2) | ((X&0x33)<<2);
-  X = ((X&0xAA)>>1) | ((X&0x55)<<1);
-  return X; }
-#endif
-
 #ifdef WITH_THINKNODE_M5
 static PCA9557 IOexpand(0x18, &Wire);
 
@@ -263,8 +250,8 @@ static uint8_t  LED_OGN_TX_FlashON    = 0;
 static uint8_t  LED_OGN_TX_FlashLen   = 0;
 static uint32_t LED_OGN_TX_FlashStart = 0;
 
-void LED_OGN_RX(uint8_t msLong) { LED_OGN_RX_FlashLen = msLong; }
-void LED_OGN_TX(uint8_t msLong) { LED_OGN_TX_FlashLen = msLong; }
+void LED_OGN_RX(uint8_t msLong) { LED_OGN_RX_FlashLen += msLong; }
+void LED_OGN_TX(uint8_t msLong) { LED_OGN_TX_FlashLen += msLong; }
 
 void OGN_LED_Flash(void)
 { uint32_t Now = millis();
@@ -680,7 +667,8 @@ void setup()
 #ifdef BOARD_HAS_PSRAM
   if(psramFound()) Serial.printf("PSRAM:%d/%dkB ", ESP.getFreePsram()>>10, ESP.getPsramSize()>>10);
 #endif
-  Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
+  Serial.printf("Heap:%d/%dkB CPU:%dMHz Flash:%dMB\n",
+     ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz(), ESP.getFlashChipSize()/1024/1024);
 
 #ifdef WITH_ST7735
   TFT_Init();
@@ -731,22 +719,8 @@ void setup()
 #endif
 
 #ifdef WITH_EPAPER
-  hSPI.begin(EPD_PinSCK, EPD_PinMISO, EPD_PinMOSI, EPD_PinCS);
-  EPD.epd2.selectSPI(hSPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
-  EPD.init(115200, true, 10, true);
-  EPD.setRotation(0);
-  EPD.setFullWindow();
-  EPD.firstPage();
-  EPD.fillScreen(GxEPD_WHITE);
-  { int Size=OGN_Logo_200x200_width*OGN_Logo_200x200_height/8;
-    uint8_t *BitMap = (uint8_t *)malloc(Size);
-    for(int Idx=0; Idx<Size; Idx++)
-    { BitMap[Idx]=ReverseBits(OGN_Logo_200x200[Idx]); }
-    EPD.drawBitmap(0, 0, BitMap, OGN_Logo_200x200_width, OGN_Logo_200x200_height, GxEPD_BLACK);
-    free(BitMap); }
-  // EPD.drawImage(OGN_Logo_200x200, 0, 0, OGN_Logo_200x200_width, OGN_Logo_200x200_height);
-  // EPD.setTextColor(GxEPD_BLACK);
-  EPD.nextPage();
+  EPD_Init();
+  EPD_DrawID();
 #endif
 
 #ifdef PMU_I2C_PinSCL
@@ -1238,6 +1212,9 @@ void loop()
 #endif
   // if(ProcessInput()==0) vTaskDelay(1);
   while(ProcessInput()>0);
+#ifdef WITH_EPAPER
+  EPD_UpdateID();
+#endif
 #ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();
