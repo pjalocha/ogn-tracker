@@ -5,6 +5,8 @@
 
 #ifdef WITH_EPAPER
 
+// ========================================================================================================================
+
 SPIClass hSPI(HSPI);                         // SPI port for the e-paper (not to conflict with Radio SPI
 
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> EPD(GxEPD2_154_D67(EPD_PinCS, EPD_PinDC, EPD_PinRST, EPD_PinBUSY));
@@ -23,8 +25,22 @@ void EPD_Init(void)                         // start the e-paper display
   EPD.init(115200, true, 10, true);                                         // 10 ms reset
   EPD.setRotation(0); }
 
+// ========================================================================================================================
+
+// ========================================================================================================================
+
+static void greyRect(int16_t X, int16_t Y, int16_t W, int16_t H)  // 50% grey rectangle by setting every 2nd pixel
+{ int16_t Odd=0;
+  for(int16_t y=Y; y<=Y+H; y++)
+  { for(int16_t x=X+Odd; x<=X+W; x+=2)
+      EPD.drawPixel(x, y, GxEPD_BLACK);
+    Odd^=1; }
+}
+
+// ========================================================================================================================
+
 static uint8_t  PrevBattLev = 0;
-static uint32_t UpdTime = 0;
+static uint32_t UpdateTime = 0;
 static uint32_t RedrawTime = 0;
 
 void EPD_DrawID(void)
@@ -45,15 +61,20 @@ void EPD_DrawID(void)
   EPD.print(Line);
   EPD.drawRect(149, 0, 50, 21, GxEPD_BLACK);                     // draw empty battery symbol
   EPD.fillRect(145, 5,  5, 10, GxEPD_BLACK);
+  // drawGPSicon(0, 0, 9, 1);
+  // EPD.drawBitmap(0, 0, Icon_GPSnoLock_16x16, 16, 16, GxEPD_BLACK);
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
-  UpdTime = millis(); RedrawTime=UpdTime; PrevBattLev=0; }
+  UpdateTime = millis(); RedrawTime=UpdateTime; PrevBattLev=0; }
 
 void EPD_UpdateID(void)
 { char Line[16];
 
   uint32_t msTime=millis();
-  uint32_t msAge = msTime-UpdTime;
-  if(msAge<2000) return;                                         // do not update more frequent than once per 2 seconds
+  uint32_t msAge = msTime-RedrawTime;
+  if(msAge>=600000) EPD_DrawID();                                // redraw every 10 minutes
+  else
+  { msAge = msTime-UpdateTime;
+    if(msAge<2000) return; }                                     // do not update more frequent than once per 2 seconds
 
   int16_t BattVolt=(BatteryVoltage+128)>>8;                      // [mV] measured and averaged  battery voltage
   int16_t BattLev=(BattVolt-3300)/8;
@@ -62,7 +83,8 @@ void EPD_UpdateID(void)
   if(BattLev==PrevBattLev) return;
 
   EPD.setPartialWindow(145, 0, 55, 21);                          // partial update: the inside of the battery box
-  EPD.fillRect(149, 0, 50, 21, GxEPD_WHITE);
+  EPD.fillRect(140, 0, 55, 21, GxEPD_WHITE);                     // clear the area to be redrawn
+  if(BattLev>2) greyRect(199-BattLev/2, 1, BattLev/2, 19);
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold9pt7b);                               // use bold font: more readable
   EPD.setCursor(154, 15);
@@ -72,6 +94,8 @@ void EPD_UpdateID(void)
   EPD.print(Line);
   EPD.nextPage();
 
-  UpdTime=msTime; PrevBattLev=BattLev; }
+  UpdateTime=msTime; PrevBattLev=BattLev; }
+
+// ========================================================================================================================
 
 #endif

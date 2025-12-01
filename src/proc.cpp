@@ -263,9 +263,9 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
         else { SNR=0; }
   Packet.Telemetry.GPS.SNR=SNR;
-  uint16_t BattVolt = BatterySense();                               // [mV] measure battery voltage
+  uint16_t BattVolt = (BatteryVoltage+128)>>8; // BatterySense();   // [mV] measure battery voltage
   Packet.Telemetry.Battery.Voltage  = EncodeUR2V8(BattVolt/4);
-  int BattCap = ((int)BattVolt-3300)/16;                            // approx. formula
+  int BattCap = ((int)BattVolt-3300)/13;                            // approx. formula
   Packet.Telemetry.Battery.Capacity = Limit(BattCap, 0, 63);
   Packet.Telemetry.Radio.RxNoise = Limit(120+(int)floorf(Radio_BkgRSSI+0.5), 0, 63);
   Packet.Telemetry.Radio.RxRate  = EncodeUR2V4(floorf(Radio_PktRate*4+0.5f));
@@ -736,11 +736,15 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_GPS_UBX
     if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
+#ifdef WITH_GPS_PCAS
+    if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+#endif
 #ifdef WITH_GPS_MTK
     if(msTime<300) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
 
     if(SlotTime==PrevSlotTime) continue;                                // stil same time slot, go back to RX processing
+    // Serial.printf("PROC: %u(%u)\n", SlotTime, PrevSlotTime);
 
     PrevSlotTime=SlotTime;                                              // new slot started
                                                                         // this part of the loop is executed only once per slot-time

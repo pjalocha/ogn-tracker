@@ -301,7 +301,7 @@ class GPS_Sat
      { int8_t PRN =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(PRN <0) break;      // PRN number
        int8_t Elev=Read_Dec2((const char *)GSV.ParmPtr(Parm++)); // if(Elev<0) break;      // [deg] eleveation
       int16_t Azim=Read_Dec3((const char *)GSV.ParmPtr(Parm++)); // if(Azim<0) break;      // [deg] azimuth
-       int8_t SNR =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); // if(SNR<0) SNR=0;       // [dB] SNR or absent when not tracked
+       int8_t SNR =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(SNR<0) SNR=0;       // [dB] SNR or absent when not tracked
        if( Elev<0 || Azim<0 ) { Elev=0; Azim=378; }                                     // invalid sky position
        if(SNR<0) SNR=0; else if(SNR>63) SNR=63;
        Add(SatSys, PRN, Elev, Azim, SNR, qSec);

@@ -228,6 +228,7 @@ static void GPS_LockEnd(void)                       // called when GPS looses a 
 static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data on the serial port
 { GPS_Burst.Active=1;
   Burst_Tick=xTaskGetTickCount();
+  GPS_TimeSync.Norm(Burst_Tick);
   if(CharDelay) Burst_Tick -= (CharDelay*10000)/GPS_BaudRate;           // correct for the data already received on the GPS port
   // Serial.printf("GPS_BurstStart(%d) Burst_Tick:%u\n", CharDelay, Burst_Tick);
 #ifdef DEBUG_PRINT
@@ -295,6 +296,13 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         { strcpy(GPS_Cmd, "$CFGGEOID,1");                               // CFG command to output AMSL altitude
           uint8_t Len = strlen(GPS_Cmd);
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
+#endif
+#ifdef WITH_GPS_PCAS
+        { uint8_t Len = Format_String(GPS_Cmd, "$PCAS03,1,0,5,5,1,0,0,0");
+          // $PCAS03,nGGA,nGLL,nGSA,nGSV,nRMC,nVTG,nZDA,nTXT // rate to send each NMEA type
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          GPS_Cmd[Len]=0;
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
 #endif
 #ifdef WITH_GPS_MTK
@@ -596,6 +604,7 @@ static void GPS_BurstEnd(void)                                             // wh
 {
   GPS_SatMon.Sort();
   GPS_SatCnt=GPS_SatMon.CalcStats(GPS_SatSNR);
+  // GPS_TimeSync.Norm();
   if(GPS_TimeSync.UTC%10==7)
   { GPS_SatMon.PrintStats(Line);
     if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 10))
@@ -1176,3 +1185,10 @@ void vTaskGPS(void* pvParameters)
 }
 
 
+// =================================================================================================================
+
+// GPS_PCAS
+// $PCAS01,BaudCode  // 0=4800, 1=9600, ... 5=115200
+// $PCAS02,fixInt    // [ms] fix interval
+// $PCAS03,nGGA,nGLL,nGSA,nGSV,nRMC,nVTG,nZDA,nTXT // rate to send each NMEA type
+// $PCAS04,Mode      // 1=GPS, 2=BDS, 3=GPS+BDS, 4=GLONASS, 5=GPS+GLONASS, 6=BDS+GLONASS, 7=GPS+BDS+GLONASS
