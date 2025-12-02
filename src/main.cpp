@@ -910,9 +910,22 @@ void setup()
 
 #ifdef WITH_BEEPER
   Beep_Init();
-  Play(Play_Vol_1 | Play_Oct_1 | 0x05, 250);
-  Play(Play_Vol_1 | Play_Oct_1 | 0x08, 250);
-  Play(Play_Vol_0 | Play_Oct_1 | 0x00, 100);
+  // Beep(800, 32);
+  // delay(200);
+  // Beep(1000, 32);
+  // delay(200);
+  // Beep(0);
+  // delay(200);
+  // Beep_Note(Play_Vol_1 | Play_Oct_0 | 0x05);
+  // delay(200);
+  // Beep_Note(Play_Vol_1 | Play_Oct_0 | 0x08);
+  // delay(200);
+  // Beep_Note(Play_Vol_0 | Play_Oct_0 | 0x00);
+  // delay(200);
+
+  Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
+  Play(Play_Vol_1 | Play_Oct_0 | 0x08, 250);
+  Play(Play_Vol_0 | Play_Oct_0 | 0x00, 100);
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
@@ -1201,8 +1214,15 @@ static int ProcessInput(void)
   }
   return Count; }
 
+// static uint32_t PrevMillis=0;
+
 void loop()
-{ vTaskDelay(1);
+{ // uint32_t Now=millis();
+  // uint32_t Diff=Now-PrevMillis;
+  // if(Diff==0) { vTaskDelay(1); Diff++; }
+  // if(Diff>10) Diff=10;
+  vTaskDelay(1);
+  Play_TimerCheck(1);
   OGN_LED_Flash();
 #ifdef Button_Pin
   Button.loop();
@@ -1213,7 +1233,7 @@ void loop()
   // if(ProcessInput()==0) vTaskDelay(1);
   while(ProcessInput()>0);
 #ifdef WITH_EPAPER
-  EPD_UpdateID();
+  EPD_UpdateID();         // this can take seconds (occasionally)
 #endif
 #ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;

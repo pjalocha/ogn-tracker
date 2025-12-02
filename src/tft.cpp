@@ -17,6 +17,21 @@ void TFT_Init(void)
 #endif
   TFT.initR(TFT_MODEL); }
 
+const uint8_t ST7735_DispOFF  = 0x28;
+const uint8_t ST7735_DispON   = 0x29;
+const uint8_t ST7735_SleepIn  = 0x10;
+const uint8_t ST7735_SleepOut = 0x11;
+
+void TFT_OFF(void)
+{ TFT.writeCommand(ST7735_DispOFF);
+  TFT.writeCommand(ST7735_SleepIn);
+  delay(5); }
+
+void TFT_ON(void)
+{ TFT.writeCommand(ST7735_SleepOut);
+  delay(120);
+  TFT.writeCommand(ST7735_DispON); }
+
 static const int TFT_BL_Chan = 0;
 static const int TFT_BL_Freq = 5000;
 

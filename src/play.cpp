@@ -10,8 +10,8 @@ void Beep_Init(void)
   ledcAttachPin(Buzzer_Pin, Buzzer_Channel); }
 
 void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl) // [Hz, 1/256] play sound with given frequency and duty (=volume)
-{ ledcWrite(Buzzer_Channel, Duty);
-  ledcWriteTone(Buzzer_Channel, Freq); }
+{ ledcWriteTone(Buzzer_Channel, Freq);
+  ledcWrite(Buzzer_Channel, Duty); }
 
 // Frequencies for notes of the highest octave: C,     C#,    D,     D#,    E,     F,     F#,    G,     G#,    A,     A#,    B
 // Freq[i] = 32*523.25*2**(i/12)            i = 0,     1,     2,     3,     4,     5,     6,     7,     8,     9,     A,     B
@@ -25,7 +25,8 @@ void Beep_Note(uint8_t Note) // Note = VVOONNNN: VV = Volume, OO=Octave, NNNN=No
   if(Volume) { Duty=0x10; Duty<<=Volume; }               // Volume => Duty = 0x00, 0x20, 0x40, 0x80
   if(Volume>2) { DoubleAmpl=1; }                         // DoubleAmpl = 0, 0, 1, 1
   uint16_t Freq = NoteFreq[Note];
-  if(Octave) { Freq += 1<<(Octave-1); Freq >>= (4-Octave); }
+  // if(Octave) { /* Freq += 1<<(Octave-1); */ Freq >>= (5-Octave); }
+  Freq >>= (5-Octave);
   if(Duty==0) Freq=0;
   Beep(Freq, Duty, DoubleAmpl); }
 
@@ -45,14 +46,14 @@ void Play(uint8_t Note, uint8_t Len)             // [Note] [ms] put a new note t
 
 uint8_t Play_isBusy(void) { return Play_Counter; } // is a note being played right now ?
 
-void Play_TimerCheck(uint8_t Ticks)     // every ms serve the note playing
+void Play_TimerCheck(uint8_t Ticks)              // every ms serve the note playing
 { uint8_t Counter=Play_Counter;
   if(Counter)                                    // if counter non-zero
   { if(Counter>Ticks) Counter-=Ticks;            // decrement it
                  else Counter=0;
-    if(!Counter) Beep_Note(Play_Note=0x00);      // if reached zero, stop playing the note
+    if(Counter==0) Beep_Note(Play_Note=0x00);    // if reached zero, stop playing the note
   }
-  if(!Counter)                                   // if counter reached zero
+  if(Counter==0)                                 // if counter reached zero
   { if(!Play_FIFO.isEmpty())                     // check for notes in the queue
     { uint16_t Word=0; Play_FIFO.Read(Word);     // get the next note
       Beep_Note(Play_Note=Word>>8); Counter=Word&0xFF; }   // start playing it, load counter with the note duration

@@ -27,6 +27,7 @@ void EPD_Init(void)                         // start the e-paper display
 
 // ========================================================================================================================
 
+
 // ========================================================================================================================
 
 static void greyRect(int16_t X, int16_t Y, int16_t W, int16_t H)  // 50% grey rectangle by setting every 2nd pixel
@@ -61,26 +62,19 @@ void EPD_DrawID(void)
   EPD.print(Line);
   EPD.drawRect(149, 0, 50, 21, GxEPD_BLACK);                     // draw empty battery symbol
   EPD.fillRect(145, 5,  5, 10, GxEPD_BLACK);
-  // drawGPSicon(0, 0, 9, 1);
-  // EPD.drawBitmap(0, 0, Icon_GPSnoLock_16x16, 16, 16, GxEPD_BLACK);
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
-  UpdateTime = millis(); RedrawTime=UpdateTime; PrevBattLev=0; }
+  PrevBattLev=0;
+  UpdateTime = millis();
+  RedrawTime=UpdateTime; }
 
-void EPD_UpdateID(void)
+static bool EPD_UpdateBatt(void)
 { char Line[16];
-
-  uint32_t msTime=millis();
-  uint32_t msAge = msTime-RedrawTime;
-  if(msAge>=600000) EPD_DrawID();                                // redraw every 10 minutes
-  else
-  { msAge = msTime-UpdateTime;
-    if(msAge<2000) return; }                                     // do not update more frequent than once per 2 seconds
 
   int16_t BattVolt=(BatteryVoltage+128)>>8;                      // [mV] measured and averaged  battery voltage
   int16_t BattLev=(BattVolt-3300)/8;
   if(BattLev<0) BattLev=0;
   else if(BattLev>100) BattLev=100;
-  if(BattLev==PrevBattLev) return;
+  if(BattLev==PrevBattLev) return 0;
 
   EPD.setPartialWindow(145, 0, 55, 21);                          // partial update: the inside of the battery box
   EPD.fillRect(140, 0, 55, 21, GxEPD_WHITE);                     // clear the area to be redrawn
@@ -93,8 +87,18 @@ void EPD_UpdateID(void)
   EPD.fillRect(145, 5,  5, 10, GxEPD_BLACK);
   EPD.print(Line);
   EPD.nextPage();
+  PrevBattLev=BattLev;
+  return 1; }
 
-  UpdateTime=msTime; PrevBattLev=BattLev; }
+void EPD_UpdateID(void)
+{ uint32_t msTime=millis();
+  uint32_t msAge = msTime-RedrawTime;
+  if(msAge>=600000) EPD_DrawID();                                // redraw every 10 minutes
+  else
+  { msAge = msTime-UpdateTime;
+    if(msAge<2000) return; }                                     // do not update more frequent than once per 2 seconds
+  EPD_UpdateBatt();
+  UpdateTime=msTime; }
 
 // ========================================================================================================================
 
