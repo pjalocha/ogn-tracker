@@ -208,6 +208,8 @@ class GPS_Sat
      return Idx; }
 
    static bool Less(GPS_Sat &Sat1, GPS_Sat &Sat2) { return Sat1.Word<Sat2.Word; }
+   static bool LowerSNR(GPS_Sat &Sat1, GPS_Sat &Sat2) { return Sat1.SNR<Sat2.SNR; }
+   static bool HigherSNR(GPS_Sat &Sat1, GPS_Sat &Sat2) { return Sat1.SNR>Sat2.SNR; }
 
    void Sort(void)
    { if(Size<=1) return;

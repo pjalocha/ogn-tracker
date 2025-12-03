@@ -2,6 +2,7 @@
 #include "epd.h"
 
 #include "proc.h"
+#include "gps.h"
 
 #ifdef WITH_EPAPER
 
@@ -18,6 +19,40 @@ void EPD_Init(void)                         // start the e-paper display
   EPD.setRotation(0); }
 
 // ========================================================================================================================
+
+static const uint8_t MaxSats=32;
+static const uint8_t MaxDrawSats=16;
+
+static GPS_Sat SatList[MaxSats];
+
+static uint8_t SatMon_qSec=15;
+
+static void DrawSatMon(void)
+{ uint8_t Size=0;
+  for(uint8_t Idx=0; Idx<GPS_SatMon.Size; Idx++)
+  { if(Size>=MaxSats) break;
+    GPS_Sat &Sat = GPS_SatMon.Sat[Idx]; if(Sat.SNR==0) continue;
+    SatList[Size++]=Sat; }
+  if(Size>1) std::sort(SatList, SatList+Size, GPS_SatList::HigherSNR);
+  if(Size>MaxDrawSats) Size=MaxDrawSats;
+  uint8_t Pos=0;
+  for(uint8_t Idx=0; Idx<Size; Idx++)
+  { GPS_Sat &Sat = SatList[Size-Idx-1];
+    uint8_t H = Sat.SNR; if(H>40) H=40;
+    if(Sat.Fix) EPD.fillRect(Pos, 40-H, 4, H, GxEPD_BLACK);
+           else EPD.drawRect(Pos, 40-H, 4, H, GxEPD_BLACK);
+    Pos+=4; }
+}
+
+static bool UpdateSatMon(void)
+{ if(SatMon_qSec==GPS_SatMon.qSec) return 0;
+  SatMon_qSec=GPS_SatMon.qSec;
+  EPD.setPartialWindow(0, 0, MaxDrawSats*4+1, 40);                       // partial update
+  EPD.fillRect(0, 0, MaxDrawSats*4+1, 40, GxEPD_WHITE);                  // clear the area to be redrawn
+  EPD.firstPage();
+  DrawSatMon();
+  EPD.nextPage();
+  return 1; }
 
 // ========================================================================================================================
 
@@ -147,6 +182,7 @@ void EPD_UpdateID(void)
     if(msAge<2000) return; }                                     // do not update more frequent than once per 2 seconds
   UpdateAlarmLevel();
   EPD_UpdateBatt();
+  UpdateSatMon();
   UpdateTime=msTime; }
 
 // ========================================================================================================================
