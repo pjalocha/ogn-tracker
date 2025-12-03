@@ -32,12 +32,12 @@ class GPS_Sat
   static const uint8_t Sys_GB = 4; // BeiDou
 
   union
-  { uint32_t Word;      // Fit satellite data into one word
+  { uint32_t Word;      // Pack all satellite data into one 32-bit word
     struct
-    { uint16_t Azim :6; // [6deg]
-      uint8_t  Elev :4; // [6deg]  >60 means invalid sky position
+    { uint16_t Azim :6; // [6deg] 0..60, >60 means invalid sky position
+      uint8_t  Elev :4; // [6deg] 0..15
       uint8_t   SNR :6; // [dB/Hz]   0 means invalid
-      uint8_t  Time :4; // [sec]    15 means invalid
+      uint8_t  Time :4; // [sec] 0..14, 15 means invalid
       bool      Fix :1; // Included for fix (listed by GSA)
       uint16_t  PRN :8; // [number] GPS converts to range 1..99 thus we might save one bit
       uint16_t  Sys :3; // [sys-id] sat system/constallation
@@ -46,9 +46,9 @@ class GPS_Sat
 
   void Clear(void) { Word=0; }
 
-  bool hasSkyPos(void) const { return Azim<=60; }
-  bool hasSNR(void)    const { return SNR>0; }
-  bool hasTime(void)   const { return Time<15; }
+  bool hasSkyPos(void) const { return Azim<=60; } // is Elev:Azim in the sky valid ?
+  bool hasSNR(void)    const { return SNR>0; }    // is SNR valid ?
+  bool hasTime(void)   const { return Time<15; }  // is Time valid ?
 
   static const char *SysName(uint8_t Sys)
   { const char *SysTable[8] = { "QZ", "GP", "GL", "GA", "BD", "--", "--", "--" } ;
@@ -185,7 +185,7 @@ class GPS_Sat
      { if(Sat[Idx].Time!=Time) Sat[Idx].Fix=0; }
    }
 
-   void Clean(uint8_t Time)
+   void Clean(uint8_t Time)                       //
    { for(uint8_t Idx=0; Idx<Size; )
      { if(Sat[Idx].Time==Time) Delete(Idx);
        else Idx++; }

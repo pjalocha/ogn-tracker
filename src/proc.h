@@ -1,4 +1,6 @@
-// #include "flight.h"
+#pragma once
+
+extern uint8_t AlarmLevel;
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"

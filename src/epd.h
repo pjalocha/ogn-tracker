@@ -9,6 +9,8 @@
 #include <GxEPD2_3C.h>
 #include <Fonts/FreeMono9pt7b.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
+#include <Fonts/FreeMono12pt7b.h>
+#include <Fonts/FreeMonoBold12pt7b.h>
 
 void EPD_Init(void);
 void EPD_DrawID(void);

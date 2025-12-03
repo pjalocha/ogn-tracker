@@ -46,6 +46,8 @@ static uint32_t MeshtHash(uint32_t X)
   return X; }
 #endif
 
+uint8_t AlarmLevel = 4;
+
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
 LookOut<32> Look;
@@ -494,11 +496,11 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
      bool Signif = PrevRxPacket==0;
@@ -576,11 +578,11 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
 /*
@@ -972,16 +974,16 @@ void vTaskPROC(void* pvParameters)
         // int8_t Bearing = (12*(int32_t)RelBearing+0x8000)>>16;              // [-12..+12]
 #ifdef WITH_BEEPER                                                         // make the sound according to the level
         if(Warn<=1)
-        { if(KNOB_Tick>8)
+        { if(AlarmLevel>2)
           { Play(Play_Vol_1 | Play_Oct_1 | 4, 200); }
         }
         else if(Warn<=2)
-        { if(KNOB_Tick>4)
+        { if(AlarmLevel>1)
           { Play(Play_Vol_3 | Play_Oct_1 | 8, 150); Play(Play_Oct_1 | 8, 150);
             Play(Play_Vol_3 | Play_Oct_1 | 8, 150); }
         }
         else if(Warn<=3)
-        { if(KNOB_Tick>2)
+        { if(AlarmLevel>0)
           { Play(Play_Vol_3 | Play_Oct_1 |11, 100); Play(Play_Oct_1 |11, 100);
             Play(Play_Vol_3 | Play_Oct_1 |11, 100); Play(Play_Oct_1 |11, 100);
             Play(Play_Vol_3 | Play_Oct_1 |11, 100); }

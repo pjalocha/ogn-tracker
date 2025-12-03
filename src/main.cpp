@@ -57,7 +57,7 @@
 #include <esp_sleep.h>
 #endif
 
-#ifdef Button_Pin
+#if defined(Button_Pin) || defined(Button1_Pin) || defined(Button2_Pin)
 #include "Button2.h"
 #endif
 
@@ -382,11 +382,28 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 
 // =======================================================================================================
 
+#ifdef Button2_Pin
+static Button2 OptButton(Button2_Pin);
+static bool OptButton_isPressed(void) { return digitalRead(Button2_Pin)==0; }
+
+static void OptButton_Single(Button2 Butt) // callback when a single press on the button
+{ if(AlarmLevel>0) AlarmLevel--;
+  else AlarmLevel=4; }
+
+static void OptButton_Init(void)
+{ pinMode(Button2_Pin, INPUT);
+  OptButton.setLongClickTime(2000);
+  OptButton.setClickHandler(OptButton_Single);
+  // OptButton.setDoubleClickHandler(OptButton_Double);
+  // OptButton.setLongClickDetectedHandler(OptButton_Long);
+}
+#endif
+
 #ifdef Button_Pin
 static Button2 Button(Button_Pin);
 static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
-static void Button_Single(Button2 Butt)
+static void Button_Single(Button2 Butt) // callback when a single press on the button
 {
 #ifdef WITH_ST7735
   if(TFT_PageOFF)
@@ -623,6 +640,9 @@ void setup()
 
 #ifdef Button_Pin
   Button_Init();
+#endif
+#ifdef Button2_Pin
+  OptButton_Init();
 #endif
   LED_PCB_Init();
 #ifdef WITH_HTIT_TRACKER
@@ -1222,18 +1242,22 @@ void loop()
   // if(Diff==0) { vTaskDelay(1); Diff++; }
   // if(Diff>10) Diff=10;
   vTaskDelay(1);
-  Play_TimerCheck(1);
-  OGN_LED_Flash();
+#ifdef WITH_BEEPER
+  Play_TimerCheck(1);              // handle playing notes on the buzzer
+#endif
+  OGN_LED_Flash();                 // flash LEDs as requested by Radio Tx/Rx
 #ifdef Button_Pin
-  Button.loop();
+  Button.loop();                   // handle button presses
+#endif
+#ifdef Button2_Pin
+  OptButton.loop();                // handle button presses
 #endif
 #ifdef WITH_BLE_SPP
-  BLE_SPP_Check();
+  BLE_SPP_Check();                 // handle Bluetooth
 #endif
-  // if(ProcessInput()==0) vTaskDelay(1);
-  while(ProcessInput()>0);
+  while(ProcessInput()>0);         // handle console input
 #ifdef WITH_EPAPER
-  EPD_UpdateID();         // this can take seconds (occasionally)
+  EPD_UpdateID();                  // this can take seconds (occasionally)
 #endif
 #ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
