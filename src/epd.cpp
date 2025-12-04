@@ -20,8 +20,18 @@ void EPD_Init(void)                         // start the e-paper display
 
 // ========================================================================================================================
 
+static void greyRect(int16_t X, int16_t Y, int16_t W, int16_t H, int16_t Step=3)  // 50% grey rectangle by setting every 2nd pixel
+{ int16_t Odd=0;
+  for(int16_t y=Y; y<=Y+H; y++)
+  { for(int16_t x=X+Odd; x<=X+W; x+=Step)                                         // or maybe every 3rd pixel ?
+      EPD.drawPixel(x, y, GxEPD_BLACK);
+    Odd++; if(Odd>=Step) Odd=0; }
+}
+
+// ========================================================================================================================
+
 static const uint8_t MaxSats=32;
-static const uint8_t MaxDrawSats=16;
+static const uint8_t MaxDrawSats=16; // max. number of SNR bars to display
 
 static GPS_Sat SatList[MaxSats];
 
@@ -39,7 +49,7 @@ static void DrawSatMon(void)
   for(uint8_t Idx=0; Idx<Size; Idx++)
   { GPS_Sat &Sat = SatList[Size-Idx-1];
     uint8_t H = Sat.SNR; if(H>40) H=40;
-    if(Sat.Fix) EPD.fillRect(Pos, 40-H, 4, H, GxEPD_BLACK);
+    if(Sat.Fix)     greyRect(Pos, 40-H, 4, H, 2);
            else EPD.drawRect(Pos, 40-H, 4, H, GxEPD_BLACK);
     Pos+=4; }
 }
@@ -47,8 +57,8 @@ static void DrawSatMon(void)
 static bool UpdateSatMon(void)
 { if(SatMon_qSec==GPS_SatMon.qSec) return 0;
   SatMon_qSec=GPS_SatMon.qSec;
-  EPD.setPartialWindow(0, 0, MaxDrawSats*4+1, 40);                       // partial update
-  EPD.fillRect(0, 0, MaxDrawSats*4+1, 40, GxEPD_WHITE);                  // clear the area to be redrawn
+  EPD.setPartialWindow(0, 0, MaxDrawSats*4, 40);                       // partial update
+  EPD.fillRect(0, 0, MaxDrawSats*4, 40, GxEPD_WHITE);                  // clear the area to be redrawn
   EPD.firstPage();
   DrawSatMon();
   EPD.nextPage();
@@ -94,14 +104,6 @@ static void drawSpeaker(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_BLA
 
 // ========================================================================================================================
 
-static void greyRect(int16_t X, int16_t Y, int16_t W, int16_t H, int16_t Step=3)  // 50% grey rectangle by setting every 2nd pixel
-{ int16_t Odd=0;
-  for(int16_t y=Y; y<=Y+H; y++)
-  { for(int16_t x=X+Odd; x<=X+W; x+=Step)                                         // or maybe every 3rd pixel ?
-      EPD.drawPixel(x, y, GxEPD_BLACK);
-    Odd++; if(Odd>=Step) Odd=0; }
-}
-
 static uint8_t  PrevBattLev = 0;
 
 static void DrawBattFrame(void)
@@ -121,7 +123,7 @@ static bool EPD_UpdateBatt(void)
   EPD.setPartialWindow(145, 0, 55, 21);                          // partial update: the inside of the battery box
   EPD.firstPage();
   EPD.fillRect(140, 0, 55, 21, GxEPD_WHITE);                     // clear the area to be redrawn
-  if(BattLev>2) greyRect(199-BattLev/2, 1, BattLev/2, 19);
+  if(BattLev>2) greyRect(199-BattLev/2, 1, BattLev/2, 19, 3);
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold9pt7b);                               // use bold font: more readable
   EPD.setCursor(154, 15);
@@ -184,6 +186,19 @@ void EPD_UpdateID(void)
   EPD_UpdateBatt();
   UpdateSatMon();
   UpdateTime=msTime; }
+
+// ========================================================================================================================
+
+void EPD_Task(void *Parms)
+{
+  EPD_Init();
+  EPD_DrawID();
+
+  for( ; ; )
+  { vTaskDelay(1);
+    EPD_UpdateID();                  // this can take seconds (occasionally)
+  }
+}
 
 // ========================================================================================================================
 

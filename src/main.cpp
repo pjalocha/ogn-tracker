@@ -738,10 +738,10 @@ void setup()
   PCA_Init();
 #endif
 
-#ifdef WITH_EPAPER
-  EPD_Init();
-  EPD_DrawID();
-#endif
+// #ifdef WITH_EPAPER
+//   EPD_Init();
+//   EPD_DrawID();
+// #endif
 
 #ifdef PMU_I2C_PinSCL
   static TwoWire PMU_I2C = TwoWire(1);
@@ -970,7 +970,10 @@ void setup()
     xTaskCreate(vTaskAP,  "AP",  4000, NULL, 0, NULL);
 #endif
 #ifdef WITH_UPLOAD
-  xTaskCreate(vTaskUPLOAD,"UPLOAD",4000, NULL, 0, NULL);
+  xTaskCreate(vTaskUPLOAD, "UPLOAD",  4000, NULL, 0, NULL);
+#endif
+#ifdef WITH_EPAPER
+  xTaskCreate(EPD_Task    ,  "EPD" ,  4000, NULL, 0, NULL);  //
 #endif
 
 }
@@ -1256,9 +1259,9 @@ void loop()
   BLE_SPP_Check();                 // handle Bluetooth
 #endif
   while(ProcessInput()>0);         // handle console input
-#ifdef WITH_EPAPER
-  EPD_UpdateID();                  // this can take seconds (occasionally)
-#endif
+// #ifdef WITH_EPAPER
+//   EPD_UpdateID();                  // this can take seconds (occasionally)
+// #endif
 #ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();

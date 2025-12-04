@@ -16,4 +16,6 @@ void EPD_Init(void);
 void EPD_DrawID(void);
 void EPD_UpdateID(void);
 
+void EPD_Task(void *Parms);
+
 #endif
