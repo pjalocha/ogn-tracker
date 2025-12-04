@@ -49,8 +49,8 @@ static void DrawSatMon(void)
   for(uint8_t Idx=0; Idx<Size; Idx++)
   { GPS_Sat &Sat = SatList[Size-Idx-1];
     uint8_t H = Sat.SNR; if(H>40) H=40;
-    if(Sat.Fix)     greyRect(Pos, 40-H, 4, H, 2);
-           else EPD.drawRect(Pos, 40-H, 4, H, GxEPD_BLACK);
+    if(Sat.Fix) greyRect(Pos, 40-H, 4, H, 2);
+    EPD.drawRect(Pos, 40-H, 4, H, GxEPD_BLACK);
     Pos+=4; }
 }
 

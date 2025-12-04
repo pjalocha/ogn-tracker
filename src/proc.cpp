@@ -46,7 +46,7 @@ static uint32_t MeshtHash(uint32_t X)
   return X; }
 #endif
 
-uint8_t AlarmLevel = 4;
+uint8_t AlarmLevel = 0;
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
