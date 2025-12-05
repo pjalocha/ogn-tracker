@@ -174,6 +174,7 @@ static void DrawLogo(void)
 
 static uint32_t UpdateTime = 0;
 static uint32_t RedrawTime = 0;
+static uint8_t PartUpd = 0;
 
 void EPD_DrawID(void)
 { char Line[32];
@@ -191,18 +192,19 @@ void EPD_DrawID(void)
   DrawBattFrame();
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
   UpdateTime = millis();
-  RedrawTime=UpdateTime; }
+  RedrawTime=UpdateTime;
+  PartUpd=0; }
 
 void EPD_UpdateID(void)
 { uint32_t msTime=millis();
   uint32_t msAge = msTime-RedrawTime;
-  if(msAge>=120000) EPD_DrawID();                                // redraw every 10 minutes
+  if(PartUpd>25 && msAge>=300000) EPD_DrawID();                                // redraw every 10 minutes
   else
   { msAge = msTime-UpdateTime;
     if(msAge<1000) return; }                                     // do not update more frequent than once per 2 seconds
-  UpdateAlarmLevel();
-  UpdateBatt();
-  UpdateSatMon();
+  PartUpd+=UpdateAlarmLevel();
+  PartUpd+=UpdateBatt();
+  PartUpd+=UpdateSatMon();
   UpdateTime=msTime; }
 
 // ========================================================================================================================

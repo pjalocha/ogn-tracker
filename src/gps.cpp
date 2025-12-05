@@ -304,6 +304,11 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
           GPS_Cmd[Len]=0;
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
+        { uint8_t Len = Format_String(GPS_Cmd, "$PCAS04,7");
+          // $PCAS04,Mode      // 1=GPS, 2=BDS, 3=GPS+BDS, 4=GLONASS, 5=GPS+GLONASS, 6=BDS+GLONASS, 7=GPS+BDS+GLONASS
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          GPS_Cmd[Len]=0;
+          Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
 #endif
 #ifdef WITH_GPS_MTK
         Format_String(GPS_UART_Write, "\r\n\r\n");                       // apparently this is needed, otherwise the next command is missed
