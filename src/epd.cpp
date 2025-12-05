@@ -28,6 +28,12 @@ static void greyRect(int16_t X, int16_t Y, int16_t W, int16_t H, int16_t Step=3)
     Odd++; if(Odd>=Step) Odd=0; }
 }
 
+static uint32_t Hash(const uint32_t *Data, int Size)
+{ uint32_t Sum=0;
+  for(int Idx=0; Idx<Size; Idx++)
+    Sum+=Data[Idx];
+  return Sum; }
+
 // ========================================================================================================================
 
 static const uint8_t MaxSats=32;
@@ -35,9 +41,11 @@ static const uint8_t MaxDrawSats=16; // max. number of SNR bars to display
 
 static GPS_Sat SatList[MaxSats];
 
-static uint8_t SatMon_qSec=15;
+static uint8_t qSec=15;
+static uint8_t DrawSats=0;
+static uint32_t SatHash=0;
 
-static void DrawSatMon(void)
+static uint8_t SortSatMon(void)
 { uint8_t Size=0;
   for(uint8_t Idx=0; Idx<GPS_SatMon.Size; Idx++)
   { if(Size>=MaxSats) break;
@@ -45,7 +53,10 @@ static void DrawSatMon(void)
     SatList[Size++]=Sat; }
   if(Size>1) std::sort(SatList, SatList+Size, GPS_SatList::HigherSNR);
   if(Size>MaxDrawSats) Size=MaxDrawSats;
-  uint8_t Pos=0;
+  return Size; }
+
+static void DrawSatMon(uint8_t Size)
+{ uint8_t Pos=0;
   for(uint8_t Idx=0; Idx<Size; Idx++)
   { GPS_Sat &Sat = SatList[Size-Idx-1];
     uint8_t H = Sat.SNR; if(H>40) H=40;
@@ -55,12 +66,19 @@ static void DrawSatMon(void)
 }
 
 static bool UpdateSatMon(void)
-{ if(SatMon_qSec==GPS_SatMon.qSec) return 0;
-  SatMon_qSec=GPS_SatMon.qSec;
-  EPD.setPartialWindow(0, 0, MaxDrawSats*4, 40);                       // partial update
-  EPD.fillRect(0, 0, MaxDrawSats*4, 40, GxEPD_WHITE);                  // clear the area to be redrawn
+{ if(qSec==GPS_SatMon.qSec) return 0;
+  qSec=GPS_SatMon.qSec;
+  uint8_t Size=SortSatMon();
+  uint32_t NewHash=Hash((const uint32_t *)SatList, Size);
+  if(NewHash==SatHash) return 0;
+  SatHash=NewHash;
+  uint8_t ClearSize=Size; if(DrawSats>ClearSize) ClearSize=DrawSats;
+  DrawSats=Size;
+  if(ClearSize==0) return 0;
+  EPD.setPartialWindow(0, 0, ClearSize*4, 40);                       // partial update
+  EPD.fillRect(0, 0, ClearSize*4, 40, GxEPD_WHITE);                  // clear the area to be redrawn
   EPD.firstPage();
-  DrawSatMon();
+  DrawSatMon(Size);
   EPD.nextPage();
   return 1; }
 
@@ -79,12 +97,12 @@ static void DrawAlarmLevel(void)
 { DrawAlarmFrame(110, 0, 34);
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold12pt7b);
-  // EPD.setFont(&FreeMono9pt7b);
   EPD.drawChar(110-6, 28, '0'+AlarmLevel, GxEPD_BLACK, GxEPD_WHITE, 1);
   PrevAlarmLevel=AlarmLevel; }
 
 static bool UpdateAlarmLevel(void)
-{ if(AlarmLevel==PrevAlarmLevel) return 0;
+{ if(PrevAlarmLevel==AlarmLevel) return 0;
+  // PrevAlarmLevel=AlarmLevel;
   EPD.setPartialWindow(110-17, 0, 35, 35);                       // partial update
   EPD.fillRect(110-17, 0, 35, 35, GxEPD_WHITE);                  // clear the area to be redrawn
   EPD.firstPage();
@@ -111,7 +129,7 @@ static void DrawBattFrame(void)
   EPD.fillRect(145, 5,  5, 10, GxEPD_BLACK);
   PrevBattLev=0; }
 
-static bool EPD_UpdateBatt(void)
+static bool UpdateBatt(void)
 { char Line[16];
 
   int16_t BattVolt=(BatteryVoltage+128)>>8;                      // [mV] measured and averaged  battery voltage
@@ -178,12 +196,12 @@ void EPD_DrawID(void)
 void EPD_UpdateID(void)
 { uint32_t msTime=millis();
   uint32_t msAge = msTime-RedrawTime;
-  if(msAge>=600000) EPD_DrawID();                                // redraw every 10 minutes
+  if(msAge>=120000) EPD_DrawID();                                // redraw every 10 minutes
   else
   { msAge = msTime-UpdateTime;
-    if(msAge<2000) return; }                                     // do not update more frequent than once per 2 seconds
+    if(msAge<1000) return; }                                     // do not update more frequent than once per 2 seconds
   UpdateAlarmLevel();
-  EPD_UpdateBatt();
+  UpdateBatt();
   UpdateSatMon();
   UpdateTime=msTime; }
 
@@ -195,7 +213,7 @@ void EPD_Task(void *Parms)
   EPD_DrawID();
 
   for( ; ; )
-  { vTaskDelay(1);
+  { vTaskDelay(100);
     EPD_UpdateID();                  // this can take seconds (occasionally)
   }
 }
