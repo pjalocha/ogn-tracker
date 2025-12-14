@@ -9,14 +9,15 @@
 
 class MeshtProto_NodeInfo
 { public:
-   char Name [64];
-   char Short[8];
-   uint8_t Hardware; // src/mesh/generated/meshtastic/mesh.pb.h
-   uint8_t Role;     // 5:tracker
+   uint64_t MAC;       // 48-bit MAC address
+   char     Name [64]; // long name
+   char     Short[6];  // short-name: 4 characters
+   uint8_t  Hardware;  // src/mesh/generated/meshtastic/mesh.pb.h
+   uint8_t  Role;      // 5:tracker
 
   public:
    MeshtProto_NodeInfo() { Clear(); }
-   void Clear(void) { Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
+   void Clear(void) { MAC=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
 
    const char *RoleNameShort(void) const
    { static const char *Table[13] = { "Cnt", "C/m", "Rtr", "R+C", "Rpt", "Tkr", "Ssr", "TAK",
@@ -491,6 +492,32 @@ class MeshtProto
   static const uint8_t Node_Licenced  = 6; // has license for higher limits on the band
   static const uint8_t Node_Role      = 7; // 0:client, 1:client-mute, 2:router, 3:router+client, 4:repeater, 5:tracker, 7:sensor
   static const uint8_t Node_PubKey    = 8;
+
+  static int EncodeNodeInfo(uint8_t *Packet, const MeshtProto_NodeInfo &NodeInfo)
+  { int Len=0;
+    Len+=WriteKey(Packet+Len, (uint8_t)1, Wire_VarInt);
+    Len+=WriteVarInt(Packet+Len, Port_NodeInfo);
+    Len+=WriteKey(Packet+Len, (uint8_t)2, Wire_Bytes);
+    Len+=WriteVarInt(Packet+Len, (uint8_t)0);
+    int Start=Len;
+    if(NodeInfo.Name[0])
+    { uint8_t chLen=strlen(NodeInfo.Name); if(chLen>64) chLen=64;
+      Len+=WriteKey(Packet+Len, Node_LongName, Wire_Bytes);
+      Len+=WriteVarInt(Packet+Len, chLen);
+      memcpy(Packet+Len, NodeInfo.Name, chLen); Len+=chLen; }
+    if(NodeInfo.Short[0])
+    { uint8_t chLen=strlen(NodeInfo.Short); if(chLen>6) chLen=6;
+      Len+=WriteKey(Packet+Len, Node_ShortName, Wire_Bytes);
+      Len+=WriteVarInt(Packet+Len, chLen);
+      memcpy(Packet+Len, NodeInfo.Short, chLen); Len+=chLen; }
+    if(NodeInfo.Role>0)
+    { Len+=WriteKey(Packet+Len, Node_Role, Wire_VarInt);
+      Len+=WriteVarInt(Packet+Len, NodeInfo.Role); }
+    if(NodeInfo.Hardware>0)
+    { Len+=WriteKey(Packet+Len, Node_Hardware, Wire_VarInt);
+      Len+=WriteVarInt(Packet+Len, NodeInfo.Hardware); }
+    Packet[Start-1]=Len-Start;
+    return 0; }
 
   static int DecodeNodeInfo(MeshtProto_NodeInfo &Node, const uint8_t *Inp, int InpLen)
   { Node.Clear();
