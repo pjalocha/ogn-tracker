@@ -517,7 +517,7 @@ class MeshtProto
     { Len+=WriteKey(Packet+Len, Node_Hardware, Wire_VarInt);
       Len+=WriteVarInt(Packet+Len, NodeInfo.Hardware); }
     Packet[Start-1]=Len-Start;
-    return 0; }
+    return Len; }
 
   static int DecodeNodeInfo(MeshtProto_NodeInfo &Node, const uint8_t *Inp, int InpLen)
   { Node.Clear();

@@ -35,15 +35,6 @@ static GDL90_REPORT GDL_REPORT;
 
 #ifdef WITH_MESHT
 #include "mesht-proto.h"
-static MeshtProto_GPS Mesht_GPS;
-static AES128 AES;
-static uint32_t MeshtHash(uint32_t X)
-{ X ^= X>>16;
-  X *= 0x85ebca6b;
-  X ^= X>>13;
-  X *= 0xc2b2ae35;
-  X ^= X>>16;
-  return X; }
 #endif
 
 uint8_t AlarmLevel = 0;
@@ -275,30 +266,6 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
 
 static void ReadStatus(OGN_Packet &Packet)
 {
-// #ifdef WITH_JACEK
-/*
-  xSemaphoreTake(ADC1_Mutex, portMAX_DELAY);
-  uint16_t MCU_Vtemp  = ADC_Read_MCU_Vtemp();                                // T = 25+(V25-Vtemp)/Avg_Slope; V25=1.43+/-0.1V, Avg_Slope=4.3+/-0.3mV/degC
-  uint16_t MCU_Vref   = ADC_Read_MCU_Vref();                                 // VDD = 1.2*4096/Vref
-           MCU_Vtemp += ADC_Read_MCU_Vtemp();                                // measure again and average
-           MCU_Vref  += ADC_Read_MCU_Vref();
-#ifdef WITH_BATT_SENSE
-  uint16_t Vbatt       = ADC_Read_Vbatt();                                   // measure voltage on PB1
-           Vbatt      += ADC_Read_Vbatt();
-#endif
-  xSemaphoreGive(ADC1_Mutex);
-   int16_t MCU_Temp = -999;                                                  // [0.1degC]
-  uint16_t MCU_VCC = 0;                                                      // [0.01V]
-  if(MCU_Vref)
-  { MCU_Temp = 250 + ( ( ( (int32_t)1430 - ((int32_t)1200*(int32_t)MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref )*(int32_t)37 +8 )>>4); // [0.1degC]
-    MCU_VCC  = ( ((uint32_t)240<<12)+(MCU_Vref>>1))/MCU_Vref; }              // [0.01V]
-  Packet.EncodeVoltage(((MCU_VCC<<4)+12)/25);                     // [1/64V]  write supply voltage to the status packet
-#ifdef WITH_BATT_SENSE
-  if(MCU_Vref)
-    Packet.EncodeVoltage(((int32_t)154*(int32_t)Vbatt+(MCU_Vref>>1))/MCU_Vref); // [1/64V] battery voltage assuming 1:1 divider form battery to PB1
-#endif
-*/
-
   // Packet.clrHumidity();
 #ifdef WITH_STM32
 #ifdef WITH_JACEK
@@ -435,6 +402,63 @@ static uint8_t WritePFLAU(char *NMEA, uint8_t GPS=1)    // produce the (mostly d
   Len+=NMEA_AppendCheckCRNL(NMEA, Len);
   NMEA[Len]=0;
   return Len; }
+#endif
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+
+#ifdef WITH_MESHT
+static MeshtProto_NodeInfo Mesht_NodeInfo;
+static MeshtProto_GPS Mesht_GPS;
+static AES128 AES;
+
+static uint32_t MeshtHash(uint32_t X)
+{ X ^= X>>16;
+  X *= 0x85ebca6b;
+  X ^= X>>13;
+  X *= 0xc2b2ae35;
+  X ^= X>>16;
+  return X; }
+
+static int getMeshNodeInfo(void)
+{ Mesht_NodeInfo.Clear();
+  Mesht_NodeInfo.MAC = getUniqueID();
+  Mesht_NodeInfo.Role=5;                 // tracker
+#if defined(WITH_TBEAM07) || defined(WITH_TBEAM10) || defined(WITH_TBEAM12)
+  Mesht_NodeInfo.Hardware=4;             // T-Beam
+#endif
+  sprintf(Mesht_NodeInfo.Name, "OGN:%X:%s:%s", Parameters.AcftType, Parameters.Reg, Parameters.Pilot);
+  return 1; }
+
+static int getMeshtGPS(GPS_Position *Position)
+{ Mesht_GPS.Clear(); if(!Position->isValid()) return 0;
+  Mesht_GPS.Time = Position->getUnixTime();
+  Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
+  Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
+  Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
+  Mesht_GPS.Speed  = (Position->Speed+5)/10; Mesht_GPS.hasSpeed=1;
+  Mesht_GPS.Track  =  Position->Heading*10; Mesht_GPS.hasTrack=1;
+  Mesht_GPS.Prec_bits=32;
+  return 1; }
+
+static int getMeshtPacket(MESHT_Packet *Packet, GPS_Position *Position)
+{ int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
+  if(!OK) return 0;
+  static uint8_t InfoBackOff=0;
+  int Len=0;
+  if(InfoBackOff)
+  { InfoBackOff--;
+    OK=getMeshtGPS(Position);
+    if(OK) Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS); }
+  if(!OK || InfoBackOff==0)
+  { OK=getMeshNodeInfo();
+    if(OK) Len=MeshtProto::EncodeNodeInfo(Packet->getMeshtMsg(), Mesht_NodeInfo);
+    InfoBackOff = 10+Random.RX%5; }
+  // Serial.printf("MESHT[%d] OK:%d\n", Len, OK);
+  if(!OK || Len==0) return 0;
+  Packet->Len=Packet->HeaderSize+Len;
+  Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time
+  OK=Packet->encryptMeshtMsg(AES);
+  return OK; }
 #endif
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
@@ -906,21 +930,9 @@ void vTaskPROC(void* pvParameters)
       if(MSHbackOff) MSHbackOff--;
       else if(Parameters.TxMSH && Position->isValid() && Radio_FreqPlan.Plan<=1)
       { MESHT_Packet *Packet = MSH_TxFIFO.getWrite();
-        int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
+        int OK=getMeshtPacket(Packet, Position);
         if(OK)
-        { Mesht_GPS.Clear();
-          Mesht_GPS.Time = Position->getUnixTime();
-          Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
-          Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
-          Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
-          Mesht_GPS.Speed  = (Position->Speed+5)/10; Mesht_GPS.hasSpeed=1;
-          Mesht_GPS.Track  =  Position->Heading*10; Mesht_GPS.hasTrack=1;
-          Mesht_GPS.Prec_bits=32;
-          int Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
-          Packet->Len=Packet->HeaderSize+Len;
-          Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time
-          OK=Packet->encryptMeshtMsg(AES);
-          MSH_TxFIFO.Write();
+        { MSH_TxFIFO.Write();
           XorShift32(Random.RX);                                              // random for next packet time
           MSHbackOff = 50+(Random.RX%19); }                                   // every minute or so
       }
