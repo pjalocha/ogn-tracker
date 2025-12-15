@@ -421,10 +421,15 @@ static uint32_t MeshtHash(uint32_t X)
 
 static int getMeshNodeInfo(void)
 { Mesht_NodeInfo.Clear();
-  // sprintf(Mesht_NodeInfo.MAC, "%012lX", getUniqueID());
-  Mesht_NodeInfo.Role=5;                 // tracker
+  Mesht_NodeInfo.MAC=getUniqueID();
+  sprintf(Mesht_NodeInfo.ID,    "!%08x",   (uint32_t)Mesht_NodeInfo.MAC);
+  sprintf(Mesht_NodeInfo.Short, "%04x",    (uint16_t)Mesht_NodeInfo.MAC);
+  Mesht_NodeInfo.Role=5;                 // 5:tracker
 #if defined(WITH_TBEAM07) || defined(WITH_TBEAM10) || defined(WITH_TBEAM12)
-  Mesht_NodeInfo.Hardware=4;             // T-Beam
+  Mesht_NodeInfo.Hardware=4;             // 4:T-Beam
+#endif
+#ifdef WITH_HTIT_TRACKER
+  Mesht_NodeInfo.Hardware=48;            // ?
 #endif
   sprintf(Mesht_NodeInfo.Name, "OGN:%X:%s:%s", Parameters.AcftType, Parameters.Reg, Parameters.Pilot);
   return 1; }
@@ -446,14 +451,14 @@ static int getMeshtPacket(MESHT_Packet *Packet, GPS_Position *Position)
   if(!OK) return 0;
   static uint8_t InfoBackOff=0;
   int Len=0;
-  if(InfoBackOff)
-  { InfoBackOff--;
-    OK=getMeshtGPS(Position);
-    if(OK) Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS); }
+  OK=getMeshtGPS(Position);
+  if(OK) Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
+  if(InfoBackOff) InfoBackOff--;
   if(!OK || InfoBackOff==0)
   { OK=getMeshNodeInfo();
     if(OK) Len=MeshtProto::EncodeNodeInfo(Packet->getMeshtMsg(), Mesht_NodeInfo);
     InfoBackOff = 10+Random.RX%5; }
+  // Serial.printf("MESHT[%d] OK:%d\n", Len, OK);
   if(!OK || Len==0) return 0;
   Packet->Len=Packet->HeaderSize+Len;
   Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time

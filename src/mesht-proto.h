@@ -9,8 +9,8 @@
 
 class MeshtProto_NodeInfo
 { public:
+   uint64_t MAC;       // MAC address
    char     ID   [16]; // ID like !xxxxxxxx
-   char     MAC  [16]; // MAC address
    char     Name [64]; // long name
    char     Short[6];  // short-name: 4 characters
    uint8_t  Hardware;  // src/mesh/generated/meshtastic/mesh.pb.h
@@ -18,7 +18,7 @@ class MeshtProto_NodeInfo
 
   public:
    MeshtProto_NodeInfo() { Clear(); }
-   void Clear(void) { ID[0]=0; MAC[0]=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
+   void Clear(void) { MAC=0; ID[0]=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
 
    const char *RoleNameShort(void) const
    { static const char *Table[13] = { "Cnt", "C/m", "Rtr", "R+C", "Rpt", "Tkr", "Ssr", "TAK",
@@ -507,11 +507,11 @@ class MeshtProto
       Len+=WriteKey(Packet+Len, Node_ID, Wire_Bytes);
       Len+=WriteVarInt(Packet+Len, chLen);
       memcpy(Packet+Len, NodeInfo.ID, chLen); Len+=chLen; }
-    if(NodeInfo.MAC[0])
-    { uint8_t chLen=strlen(NodeInfo.MAC); if(chLen>16) chLen=16;
+    if(NodeInfo.MAC)
+    { uint8_t chLen=6;
       Len+=WriteKey(Packet+Len, Node_MAC, Wire_Bytes);
       Len+=WriteVarInt(Packet+Len, chLen);
-      memcpy(Packet+Len, NodeInfo.MAC, chLen); Len+=chLen; }
+      WriteMAC(Packet+Len, chLen, NodeInfo.MAC); Len+=chLen; }
     if(NodeInfo.Name[0])
     { uint8_t chLen=strlen(NodeInfo.Name); if(chLen>64) chLen=64;
       Len+=WriteKey(Packet+Len, Node_LongName, Wire_Bytes);
@@ -553,7 +553,7 @@ class MeshtProto
       if(chVal)
       { Inp+=chLen; InpLen-=chLen;
         if(ID==Node_ID)        { if(chLen>15) chLen=15; memcpy(Node.ID   , chVal, chLen); Node.ID   [chLen]=0; }
-        if(ID==Node_MAC)       { if(chLen>15) chLen=15; memcpy(Node.MAC  , chVal, chLen); Node.MAC  [chLen]=0; }
+        if(ID==Node_MAC)       { if(chLen> 6) chLen= 6; Node.MAC = ReadMAC(chVal, chLen); }
         if(ID==Node_LongName)  { if(chLen>63) chLen=63; memcpy(Node.Name , chVal, chLen); Node.Name [chLen]=0; }
         if(ID==Node_ShortName) { if(chLen> 7) chLen= 7; memcpy(Node.Short, chVal, chLen); Node.Short[chLen]=0; }
       }
@@ -563,6 +563,19 @@ class MeshtProto
       }
     }
     return 0; }
+
+  static void WriteMAC(uint8_t *Data, uint8_t Len, uint64_t MAC)
+  { for(uint8_t Idx=Len; Idx>0; )
+    { Idx--;
+      Data[Idx] = (uint8_t)MAC;
+      MAC>>=8; }
+  }
+
+  static uint64_t ReadMAC(const uint8_t *Data, uint8_t Len)
+  { uint64_t MAC=Data[0];
+    for(uint8_t Idx=1; Idx<Len; Idx++)
+    { MAC<<=8; MAC|=Data[Idx]; }
+    return MAC; }
 
   static int DecodeNodeInfo(char *Out, const uint8_t *Inp, int InpLen)
   { int OutLen=0;

@@ -8,7 +8,7 @@
 
 class MESHT_Packet
 { public:
-   static const uint8_t MaxBytes = 64;
+   static const uint8_t MaxBytes = 96;
    static const uint8_t HeaderSize = 16; // first 16 bytes are header and then message
    union
    { uint8_t Byte[MaxBytes+2];
