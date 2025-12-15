@@ -548,7 +548,7 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
   Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,      Payload (max) size, Header-Type,                    Invert-IQ
-  Radio.setPacketParams(5, RADIOLIB_SX126X_LORA_CRC_ON, 48, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
+  Radio.setPacketParams(PreambleLen, RADIOLIB_SX126X_LORA_CRC_ON, 80, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
 #endif
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
@@ -564,12 +564,12 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
 #endif
 #ifdef WITH_SX1276
   Radio.setSyncWord(Sync);
-#endif
   Radio.setPreambleLength(PreambleLen);
+#endif
   Radio.setCRC(true); }
 
 #ifdef WITH_MESHT
-static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(8, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
+static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(16, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
 
 static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT packet
 { Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
@@ -631,7 +631,7 @@ static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a
   Radio_TxCount[Radio_SysID_FNT]++;
   LED_OGN_TX(20); }
 
-static void Radio_ConfigFANET(uint8_t CRa=4) { Radio_ConfigLoRa(5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
+static void Radio_ConfigFANET(uint8_t CRa=1) { Radio_ConfigLoRa(5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
 
 /*
 static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radio for FANET
@@ -724,7 +724,7 @@ static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLe
   Radio.readData(Packet, PktLen);
   return PktLen; }
 
-static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CRa=4)
+static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CRa=1)
 {
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
