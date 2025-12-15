@@ -9,6 +9,7 @@
 
 class MeshtProto_NodeInfo
 { public:
+   char     ID[16];    // ID like !xxxxxxxx
    uint64_t MAC;       // 48-bit MAC address
    char     Name [64]; // long name
    char     Short[6];  // short-name: 4 characters
@@ -17,7 +18,7 @@ class MeshtProto_NodeInfo
 
   public:
    MeshtProto_NodeInfo() { Clear(); }
-   void Clear(void) { MAC=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
+   void Clear(void) { ID[0]=0; MAC=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
 
    const char *RoleNameShort(void) const
    { static const char *Table[13] = { "Cnt", "C/m", "Rtr", "R+C", "Rpt", "Tkr", "Ssr", "TAK",
@@ -500,6 +501,11 @@ class MeshtProto
     Len+=WriteKey(Packet+Len, (uint8_t)2, Wire_Bytes);
     Len+=WriteVarInt(Packet+Len, (uint8_t)0);
     int Start=Len;
+    if(NodeInfo.ID[0])
+    { uint8_t chLen=strlen(NodeInfo.ID); if(chLen>16) chLen=16;
+      Len+=WriteKey(Packet+Len, Node_ID, Wire_Bytes);
+      Len+=WriteVarInt(Packet+Len, chLen);
+      memcpy(Packet+Len, NodeInfo.ID, chLen); Len+=chLen; }
     if(NodeInfo.Name[0])
     { uint8_t chLen=strlen(NodeInfo.Name); if(chLen>64) chLen=64;
       Len+=WriteKey(Packet+Len, Node_LongName, Wire_Bytes);
@@ -510,6 +516,9 @@ class MeshtProto
       Len+=WriteKey(Packet+Len, Node_ShortName, Wire_Bytes);
       Len+=WriteVarInt(Packet+Len, chLen);
       memcpy(Packet+Len, NodeInfo.Short, chLen); Len+=chLen; }
+    if(NodeInfo.MAC>0)
+    { Len+=WriteKey(Packet+Len, Node_MAC, Wire_VarInt);
+      Len+=WriteVarInt(Packet+Len, NodeInfo.MAC); }
     if(NodeInfo.Role>0)
     { Len+=WriteKey(Packet+Len, Node_Role, Wire_VarInt);
       Len+=WriteVarInt(Packet+Len, NodeInfo.Role); }

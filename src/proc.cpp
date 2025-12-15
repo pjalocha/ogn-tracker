@@ -430,8 +430,9 @@ static int getMeshNodeInfo(void)
   return 1; }
 
 static int getMeshtGPS(GPS_Position *Position)
-{ Mesht_GPS.Clear(); if(!Position->isValid()) return 0;
+{ Mesht_GPS.Clear();
   Mesht_GPS.Time = Position->getUnixTime();
+  if(!Position->isValid()) return 0;
   Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
   Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
   Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
@@ -453,7 +454,6 @@ static int getMeshtPacket(MESHT_Packet *Packet, GPS_Position *Position)
   { OK=getMeshNodeInfo();
     if(OK) Len=MeshtProto::EncodeNodeInfo(Packet->getMeshtMsg(), Mesht_NodeInfo);
     InfoBackOff = 10+Random.RX%5; }
-  // Serial.printf("MESHT[%d] OK:%d\n", Len, OK);
   if(!OK || Len==0) return 0;
   Packet->Len=Packet->HeaderSize+Len;
   Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time
