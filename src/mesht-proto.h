@@ -9,8 +9,8 @@
 
 class MeshtProto_NodeInfo
 { public:
-   char     ID[16];    // ID like !xxxxxxxx
-   uint64_t MAC;       // 48-bit MAC address
+   char     ID   [16]; // ID like !xxxxxxxx
+   char     MAC  [16]; // MAC address
    char     Name [64]; // long name
    char     Short[6];  // short-name: 4 characters
    uint8_t  Hardware;  // src/mesh/generated/meshtastic/mesh.pb.h
@@ -18,7 +18,7 @@ class MeshtProto_NodeInfo
 
   public:
    MeshtProto_NodeInfo() { Clear(); }
-   void Clear(void) { ID[0]=0; MAC=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
+   void Clear(void) { ID[0]=0; MAC[0]=0; Name[0]=0; Short[0]=0; Role=0; Hardware=0; }
 
    const char *RoleNameShort(void) const
    { static const char *Table[13] = { "Cnt", "C/m", "Rtr", "R+C", "Rpt", "Tkr", "Ssr", "TAK",
@@ -485,14 +485,14 @@ class MeshtProto
     if(PrecBits>=0) OutLen+=sprintf(Out+OutLen, " %dbits", PrecBits);
     return OutLen; }
 
-  static const uint8_t Node_ID        = 1;
-  static const uint8_t Node_LongName  = 2;
-  static const uint8_t Node_ShortName = 3;
-  static const uint8_t Node_MAC       = 4; //
-  static const uint8_t Node_Hardware  = 5;
+  static const uint8_t Node_ID        = 1; // byte-string
+  static const uint8_t Node_LongName  = 2; // byte-string
+  static const uint8_t Node_ShortName = 3; // byte-string
+  static const uint8_t Node_MAC       = 4; // byte-string
+  static const uint8_t Node_Hardware  = 5; // 4:T-Beam
   static const uint8_t Node_Licenced  = 6; // has license for higher limits on the band
   static const uint8_t Node_Role      = 7; // 0:client, 1:client-mute, 2:router, 3:router+client, 4:repeater, 5:tracker, 7:sensor
-  static const uint8_t Node_PubKey    = 8;
+  static const uint8_t Node_PubKey    = 8; // byte-string
 
   static int EncodeNodeInfo(uint8_t *Packet, const MeshtProto_NodeInfo &NodeInfo)
   { int Len=0;
@@ -506,6 +506,11 @@ class MeshtProto
       Len+=WriteKey(Packet+Len, Node_ID, Wire_Bytes);
       Len+=WriteVarInt(Packet+Len, chLen);
       memcpy(Packet+Len, NodeInfo.ID, chLen); Len+=chLen; }
+    if(NodeInfo.MAC[0])
+    { uint8_t chLen=strlen(NodeInfo.MAC); if(chLen>16) chLen=16;
+      Len+=WriteKey(Packet+Len, Node_MAC, Wire_Bytes);
+      Len+=WriteVarInt(Packet+Len, chLen);
+      memcpy(Packet+Len, NodeInfo.MAC, chLen); Len+=chLen; }
     if(NodeInfo.Name[0])
     { uint8_t chLen=strlen(NodeInfo.Name); if(chLen>64) chLen=64;
       Len+=WriteKey(Packet+Len, Node_LongName, Wire_Bytes);
@@ -516,9 +521,6 @@ class MeshtProto
       Len+=WriteKey(Packet+Len, Node_ShortName, Wire_Bytes);
       Len+=WriteVarInt(Packet+Len, chLen);
       memcpy(Packet+Len, NodeInfo.Short, chLen); Len+=chLen; }
-    if(NodeInfo.MAC>0)
-    { Len+=WriteKey(Packet+Len, Node_MAC, Wire_VarInt);
-      Len+=WriteVarInt(Packet+Len, NodeInfo.MAC); }
     if(NodeInfo.Role>0)
     { Len+=WriteKey(Packet+Len, Node_Role, Wire_VarInt);
       Len+=WriteVarInt(Packet+Len, NodeInfo.Role); }
