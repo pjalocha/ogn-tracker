@@ -493,6 +493,7 @@ class MeshtProto
   static const uint8_t Node_Licenced  = 6; // has license for higher limits on the band
   static const uint8_t Node_Role      = 7; // 0:client, 1:client-mute, 2:router, 3:router+client, 4:repeater, 5:tracker, 7:sensor
   static const uint8_t Node_PubKey    = 8; // byte-string
+  static const uint8_t Node_NoMsg     = 9; // un-message-able flag
 
   static int EncodeNodeInfo(uint8_t *Packet, const MeshtProto_NodeInfo &NodeInfo)
   { int Len=0;
@@ -551,6 +552,8 @@ class MeshtProto
       Inp+=Len; InpLen-=Len; if(chVal) chVal+=Len;
       if(chVal)
       { Inp+=chLen; InpLen-=chLen;
+        if(ID==Node_ID)        { if(chLen>15) chLen=15; memcpy(Node.ID   , chVal, chLen); Node.ID   [chLen]=0; }
+        if(ID==Node_MAC)       { if(chLen>15) chLen=15; memcpy(Node.MAC  , chVal, chLen); Node.MAC  [chLen]=0; }
         if(ID==Node_LongName)  { if(chLen>63) chLen=63; memcpy(Node.Name , chVal, chLen); Node.Name [chLen]=0; }
         if(ID==Node_ShortName) { if(chLen> 7) chLen= 7; memcpy(Node.Short, chVal, chLen); Node.Short[chLen]=0; }
       }
