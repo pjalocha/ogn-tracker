@@ -421,7 +421,7 @@ static uint32_t MeshtHash(uint32_t X)
 
 static int getMeshNodeInfo(void)
 { Mesht_NodeInfo.Clear();
-  Mesht_NodeInfo.MAC = getUniqueID();
+  // sprintf(Mesht_NodeInfo.MAC, "%012lX", getUniqueID());
   Mesht_NodeInfo.Role=5;                 // tracker
 #if defined(WITH_TBEAM07) || defined(WITH_TBEAM10) || defined(WITH_TBEAM12)
   Mesht_NodeInfo.Hardware=4;             // T-Beam
