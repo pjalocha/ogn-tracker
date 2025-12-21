@@ -555,14 +555,14 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
     Radio.setActiveModem(RADIOLIB_SX127X_LORA);
-  Radio.explicitHeader();
-  Radio.setBandwidth(250.0);
+#endif
+  Radio.setBandwidth(250.0);              // it turns out all this setup must be done again for SX1262, otherwise it does not work
   Radio.setSpreadingFactor(7);
   Radio.setCodingRate(4+CRa);
   Radio.invertIQ(false);
   Radio.setPreambleLength(PreambleLen);
+  Radio.explicitHeader();
   Radio.setCRC(true);
-#endif
 #ifdef WITH_SX1262
   Radio.setSyncWord(Sync, 0x44);
 #endif
@@ -682,17 +682,17 @@ static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_
     PktCount+=Radio_RxFANET(TxTime, TimeRef);            // keep receiving till transmission time
     Radio.standby();
     Radio_setTxPower(TxPower);
-    uint32_t msTxTime=millis();
-    Radio_TxFANET(*TxPacket);                        // transmit the packet
-    msTxTime = millis()-msTxTime;
-    Serial.printf("TxFANET: %d [%d] ms (%d)\n", TxTime, msTxTime, PktCount);
+    // uint32_t msTxTime=millis();
+    Radio_TxFANET(*TxPacket);                            // transmit the packet
+    // msTxTime = millis()-msTxTime;
+    // Serial.printf("TxFANET: %dms @%dms [%d]\n", TxTime, msTxTime, TxPacket->Len);
     uint32_t msTime = millis()-msStart;
     if(msTime<msTimeLen) PktCount+=Radio_RxFANET(msTimeLen-msTime, TimeRef); }
   else
   { uint32_t msTime = millis()-msStart;
     if(msTime<msTimeLen) PktCount+=Radio_RxFANET(msTimeLen-msTime, TimeRef); }
   Radio.standby();
-  return PktCount; }                                 // return number of received packets
+  return PktCount; }                                     // return number of received packets
 
 #endif // WITH_FANET
 
@@ -858,18 +858,19 @@ void Radio_Task(void *Parms)
 
     // xQueueReceive(Radio_SlotMsg, &TimeRef, 2000);              // wait for "new time slot" from the GPS
 
-    uint32_t msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
+    // uint32_t msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     uint32_t msTime = TimeRef.getFracTime(millis());
-    Serial.printf("Pre-slot:%dms\n", msTime);
+    // Serial.printf("Pre-slot: %dms\n", msTime);
+/*
     uint32_t Wait=0;
     if(msTime>800)
     { Wait=1400-msTime; }
-    else if(msTime<300)
+    else if(msTime<250)
     { Wait=400-msTime;
       // Serial.printf("Pre-slot: %d [sec]  %d Wait:%d [ms]\n", TimeRef.UTC, msTime, Wait);
       // if(Wait>400) Wait=400;
     }
-
+*/
     // msTime = millis()-TimeRef.sysTime;
     // msTime = TimeRef.getFracTime(millis());
 
@@ -902,7 +903,7 @@ void Radio_Task(void *Parms)
       if(FNTpacket) FNT_TxFIFO.Read();
       XorShift64(Random.Word);
       int32_t msSlot = 400-msTime;                               //
-      Serial.printf("Pre-slot: %d [sec]  %d Slot:%d [ms]\n", TimeRef.UTC, msTime, msSlot);
+      // Serial.printf("Pre-slot: %ds @%dms Left:%dms\n", TimeRef.UTC, msTime, msSlot);
       if(msSlot>40) PktCount+=Radio_FANETslot(FreqFNT, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
     }
 
