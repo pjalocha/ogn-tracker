@@ -96,7 +96,7 @@ int TFT_DrawID(bool WithAP)
   Vert+=14;
   if(Parameters.Reg[0])
   { TFT.setCursor(2, Vert);
-    sprintf(Line, "Reg: %s", Parameters.Reg);
+    sprintf(Line, "Reg:%s", Parameters.Reg);
     TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.print(Line); Vert+=14; }
   if(Parameters.Pilot[0])
@@ -126,8 +126,10 @@ int TFT_DrawID(bool WithAP)
   Line[Len]=0;
   TFT.setFont(0);
   TFT.setTextSize(1);
-  TFT.setCursor(2, 72);
+  TFT.setCursor(2, 63);
   TFT.print(Line);
+  TFT.setCursor(2, 72);
+  TFT.print("(c) Pawel Jalocha");
 
   TFT_DrawBatt(146, 30);
   return 1; }
