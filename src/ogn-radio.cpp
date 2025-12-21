@@ -668,7 +668,7 @@ static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radi
 
 // reception slot with a possible transmission if TxPacket != NULL
 static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_Packet *TxPacket, TimeSync &TimeRef)
-{ Serial.printf("FANETslot: %6.3fMHz %dms %c\n", 1e-6*Freq, msTimeLen, TxPacket?'T':'r');
+{ // Serial.printf("FANETslot: %6.3fMHz %dms %c\n", 1e-6*Freq, msTimeLen, TxPacket?'T':'r');
   uint32_t msStart = millis();                       // [ms]
   Radio.standby();
   Radio_ConfigFANET();                               // setup for FANET, includes switching from FSK to LoRa
