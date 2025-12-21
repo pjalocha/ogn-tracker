@@ -882,8 +882,13 @@ void Radio_Task(void *Parms)
       MESHT_Packet *MSHpacket = MSH_TxFIFO.getRead();
       if(MSHpacket)
       { // Serial.printf("MESHT_Packet [%d] %5.1fMHz\n", MSHpacket->Len, 1e-6*FreqMSH);
-        Radio_TxMESHT(*MSHpacket);
-        MSH_TxFIFO.Read(); }
+        bool Busy = Radio.scanChannel()==RADIOLIB_PREAMBLE_DETECTED;
+        if(!Busy)
+        { Radio_TxMESHT(*MSHpacket);
+          MSH_TxFIFO.Read(); }
+        else
+        { if(MSH_TxFIFO.Full()>1) MSH_TxFIFO.Read(); }
+      }
     }
 #endif
 
