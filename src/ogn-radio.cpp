@@ -547,26 +547,28 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
     Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
   Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
-  //          Preamble length, CRC-type,      Payload (max) size, Header-Type,                    Invert-IQ
-  Radio.setPacketParams(PreambleLen, RADIOLIB_SX126X_LORA_CRC_ON, 80, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT, RADIOLIB_SX126X_LORA_IQ_STANDARD);
+  //              Preamble length, CRC-type,      Payload (max) size, Header-Type,                           Invert-IQ
+  Radio.setPacketParams(PreambleLen, RADIOLIB_SX126X_LORA_CRC_ON, 80, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT,
+                        RADIOLIB_SX126X_LORA_IQ_STANDARD);
 #endif
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
     Radio.setActiveModem(RADIOLIB_SX127X_LORA);
-#endif
   Radio.explicitHeader();
   Radio.setBandwidth(250.0);
   Radio.setSpreadingFactor(7);
   Radio.setCodingRate(4+CRa);
   Radio.invertIQ(false);
+  Radio.setPreambleLength(PreambleLen);
+  Radio.setCRC(true);
+#endif
 #ifdef WITH_SX1262
   Radio.setSyncWord(Sync, 0x44);
 #endif
 #ifdef WITH_SX1276
   Radio.setSyncWord(Sync);
-  Radio.setPreambleLength(PreambleLen);
 #endif
-  Radio.setCRC(true); }
+}
 
 #ifdef WITH_MESHT
 static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(16, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B

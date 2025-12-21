@@ -1202,9 +1202,9 @@ class GPS_Position: public GPS_Time
      NMEA[Len++]=',';
      if(hasBaro) Len+=Format_SignDec(NMEA+Len, (StdAltitude+5)/10, 1, 0, 1);
      NMEA[Len++]=',';
-     if(hasClimb) Len+=Format_SignDec(NMEA+Len, ClimbRate, 2, 1, 1);  // [cm/s] climb/sink rate (by GPS or pressure sensor)
+     if(hasClimb) Len+=Format_SignDec(NMEA+Len, (int32_t)ClimbRate, 2, 1, 1);  // [cm/s] climb/sink rate (by GPS or pressure sensor)
      NMEA[Len++]=',';
-     if(hasBaro) Len+=Format_SignDec(NMEA+Len, Temperature, 2, 1, 1); // [degC] temperature
+     if(hasBaro) Len+=Format_SignDec(NMEA+Len, (int32_t)Temperature, 2, 1, 1); // [degC] temperature
      NMEA[Len++]=',';
      Len+=Format_UnsDec(NMEA+Len, BattVolt, 4, 3);                    // [mV] Battery voltage
      Len+=NMEA_AppendCheckCRNL(NMEA, Len);

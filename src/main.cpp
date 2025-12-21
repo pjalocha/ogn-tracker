@@ -1259,19 +1259,24 @@ void loop()
   BLE_SPP_Check();                 // handle Bluetooth
 #endif
   while(ProcessInput()>0);         // handle console input
-// #ifdef WITH_EPAPER
-//   EPD_UpdateID();                  // this can take seconds (occasionally)
-// #endif
-#ifdef WITH_ST7735
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
+#ifdef WITH_ST7735
   if(TFT_PageChange)
   { TFT_PageChange=0;
     if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
+#endif
   if(GPS!=PrevGPS)
-  { TFT_PageChange=1;
+  {
+#ifdef WITH_OLED
+    OLED.clearBuffer();
+    OLED_DrawGPS(OLED.getU8g2(), GPS);
+    OLED.sendBuffer();
+#endif
+#ifdef WITH_ST7735
+    TFT_PageChange=1;
 #ifdef WITH_TFT_DIM
     uint32_t msTime = millis();
     if(BatteryVoltageRate>0x10) TFT_PageActive = msTime;
@@ -1282,8 +1287,8 @@ void loop()
 #endif
     if(TFT_PageOFF) TFT_BL(0);
               else  TFT_BL(128);
+#endif // WITH_ST7735
     PrevGPS=GPS; }
-#endif
 }
 
 // =======================================================================================================
