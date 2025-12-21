@@ -134,7 +134,7 @@ class GPS_Sat
    uint8_t CalcStats(void)
    { uint8_t SNR; return CalcStats(SNR); }
 
-   uint8_t CalcStats(uint8_t &AverSNR)
+   uint8_t CalcStats(uint8_t &AverSNR)                   // calc. stats for every GNSS system
    { uint32_t VisSum[8];
      uint32_t FixSum[8];
      for(uint8_t Sys=0; Sys<8; Sys++)                    // clear SNR sums for all systems
@@ -156,9 +156,9 @@ class GPS_Sat
        if(FixSats[Sys]) FixSNR[Sys]=FixSum[Sys]*4/FixSats[Sys];
                    else FixSNR[Sys]=0;
      }
-     if(TotSat) AverSNR = TotSum*4/TotSat;
+     if(TotSat) AverSNR = TotSum*4/TotSat;                // return the average sat. SNR
          else   AverSNR = 0;
-     return TotSat; }
+     return TotSat; }                                     // return number of satellites
 
    uint8_t Find(uint8_t Sys, uint8_t PRN) const      // find given satellite by Sys and PRN
    { uint8_t Idx=0;

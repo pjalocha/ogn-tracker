@@ -312,6 +312,10 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
 #endif
 #ifdef WITH_GPS_MTK
         Format_String(GPS_UART_Write, "\r\n\r\n");                       // apparently this is needed, otherwise the next command is missed
+        { uint8_t Len = Format_String(GPS_Cmd, "$PMTK314,0,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0"); // GLL,RMC,VTG,GGA,GSA,GSV,...
+          Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
+          GPS_Cmd[Len]=0;
+          Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
         if(Parameters.NavRate)
         { // uint8_t Len = Format_String(GPS_Cmd, "$PMTK220,");          // report rate
           uint8_t Len = Format_String(GPS_Cmd, "$PMTK300,");             // fix rate
@@ -324,7 +328,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0);
           GPS_Status.ModeConfig=1; }
         if(Parameters.NavMode)
-        { uint8_t Len = Format_String(GPS_Cmd, "$PMTK886,");                                        // MTK command to change the navigation mode
+        { uint8_t Len = Format_String(GPS_Cmd, "$PMTK886,");             // MTK command to change the navigation mode
           GPS_Cmd[Len++]='0'+Parameters.NavMode;
           Len += NMEA_AppendCheckCRNL(GPS_Cmd, Len);
           // GPS_Cmd[Len++]='\r';
@@ -609,6 +613,7 @@ static void GPS_BurstEnd(void)                                             // wh
 {
   GPS_SatMon.Sort();
   GPS_SatCnt=GPS_SatMon.CalcStats(GPS_SatSNR);
+  // Serial.printf("GPS_SatMon.CalcStats(=>%d) => %d\n", GPS_SatSNR, GPS_SatCnt);
   // GPS_TimeSync.Norm();
   if(GPS_TimeSync.UTC%10==7)
   { GPS_SatMon.PrintStats(Line);

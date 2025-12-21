@@ -1224,7 +1224,7 @@ static int ProcessInput(void)
     {
 #ifdef WITH_GPS_NMEA_PASS
       if(NMEA.isChecked())
-        NMEA.Send(GPS_UART_Write);
+      { if(NMEA.isP()) NMEA.Send(GPS_UART_Write); }
 #endif
       ProcessNMEA();                                              // interpret the NMEA
       NMEA.Clear(); }                                             // clear the NMEA processor for the next sentence
