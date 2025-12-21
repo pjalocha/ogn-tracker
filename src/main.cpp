@@ -1273,6 +1273,7 @@ void loop()
 #ifdef WITH_OLED
     OLED.clearBuffer();
     OLED_DrawGPS(OLED.getU8g2(), GPS);
+    OLED_DrawStatusBar(OLED.getU8g2(), GPS);
     OLED.sendBuffer();
 #endif
 #ifdef WITH_ST7735
