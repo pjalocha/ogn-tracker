@@ -103,7 +103,9 @@ class PAW_Packet
      Address  = Packet.Header.Address;                     // [24-bit]
      if(Packet.Header.NonPos) return 0;                    // encode only position packets
      AcftType = Packet.Position.AcftType;                  // [4-bit] aircraft-type
-     Altitude = Packet.DecodeAltitude();                   // [m]
+     int Alt = Packet.DecodeAltitude();                    // [m]
+     if(Alt>4000) return 0;                                // PAW has only 12 bits for altitude
+     Altitude = Alt;
      Heading = Packet.DecodeHeading()/10;                  // [deg]
      Speed = (398*(int32_t)Packet.DecodeSpeed()+1024)>>11; // [0.1m/s] => [kts]
      Latitude  = (0.0001f/60)*Packet.DecodeLatitude();     // [deg]

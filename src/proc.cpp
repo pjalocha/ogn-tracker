@@ -469,16 +469,19 @@ static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
 
 // process received OGN packets
 static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
+{ uint8_t OwnPacket = ( RxPacket->Packet.Header.Address  == Parameters.Address  )
+                     && ( RxPacket->Packet.Header.AddrType == Parameters.AddrType );
   if( RxPacket->Packet.Header.NonPos)                                                 // status or info packet
-  {
+  { if(RxPacket->Packet.isInfo())
+    { char Call[16];
+      if(RxPacket->Packet.getInfo(Call, 5))
+      { }
+    }
 #ifdef WITH_SDLOG
     IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
 #endif
     return ; }
-  uint8_t MyOwnPacket = ( RxPacket->Packet.Header.Address  == Parameters.Address  )
-                     && ( RxPacket->Packet.Header.AddrType == Parameters.AddrType );
-  if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
+  if(OwnPacket) return;                                                             // don't process my own (relayed) packets
   if(RxPacket->Packet.Header.Encrypted && RxPacket->RxErr<10)                         // here we attempt to relay encrypted packets
   { RxPacket->calcRelayRank(GPS_Altitude/10);
     OGN_RxPacket<OGN_Packet> *PrevRxPacket = OGN_RelayQueue.addNew(RxPacketIdx);      // add to the relay queue and get the previous packet of same ID
@@ -486,6 +489,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
     IGClog_FIFO.Write(*RxPacket);                                                     // log encrypted position packets
 #endif
     return; }
+  int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   bool DistOK = RxPacket->Packet.calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
   if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;
@@ -573,19 +577,19 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 
 // process received ADS-L packets
 static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
+{ uint8_t AddrType = RxPacket->Packet.getAddrTable();
+  if(AddrType<4) AddrType=0;
+  else AddrType-=4;
+  uint8_t MyOwnPacket = ( RxPacket->Packet.getAddress()  == Parameters.Address )
+                     && (                       AddrType == Parameters.AddrType);
   if(!RxPacket->Packet.isPos())                                                 // status or info packet
   {
 // #ifdef WITH_SDLOG
 //     IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
 // #endif
     return ; }
-  uint8_t AddrType = RxPacket->Packet.getAddrTable();
-  if(AddrType<4) AddrType=0;
-  else AddrType-=4;
-  uint8_t MyOwnPacket = ( RxPacket->Packet.getAddress()  == Parameters.Address )
-                     && (                       AddrType == Parameters.AddrType);
   if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
+  int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   bool DistOK = RxPacket->calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
   if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;

@@ -336,6 +336,7 @@ class ADSL_Packet
 
    uint8_t  getAddrTable(void) const { return Address[0]&0x3F; }
     void    setAddrTable(uint8_t Table) { Address[0] = (Address[0]&0xC0) | Table; }
+   uint8_t  getAddrType(void) const { return getAddrTable(); }
 
    uint8_t getAddrTypeOGN(void) const
    { uint8_t Table=getAddrTable();

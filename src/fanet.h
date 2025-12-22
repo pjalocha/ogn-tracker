@@ -331,19 +331,88 @@ class FANET_RxPacket: public FANET_Packet
     int8_t RSSI;            // [dBm]
    uint8_t BitErr;          // number of bit errors
    uint8_t CodeErr;         // number of block errors
+   uint8_t Sync;            // sync symbols used: 0xF1 for sx127x but 0x12 for sx1262 ?
 
   public:
    void setTime(double RxTime) { sTime=floor(RxTime); msTime=floor(1000.0*(RxTime-sTime)); }
    double getTime(void) const { return (double)sTime+0.001*msTime; }
-   uint32_t SlotTime(void) const { uint32_t Slot=sTime; if(msTime<=300) Slot--; return Slot; }
+   uint32_t SlotTime(void) const { uint32_t Slot=sTime; if(msTime<150) Slot--; return Slot; }
 
-   void Print(char *Name=0) const
+   int Print(char *Out) const
+   { return FANET_Packet::Print(Out); }
+
+   void Print(const char *Name=0) const
    { char HHMMSS[8];
      Format_HHMMSS(HHMMSS, SlotTime());  HHMMSS[6]='h'; HHMMSS[7]=0;
      printf("%s CR%c%c%c %3.1fdB/%de %+3.1fkHz ", HHMMSS, '0'+CR, hasCRC?'c':'_', badCRC?'-':'+', 0.25*SNR, BitErr, 1e-2*FreqOfs);
      FANET_Packet::Print(Name); }
 
-   int WriteJSON(char *JSON) const
+   int PrintJSON(char *JSON, uint8_t AddrType=0) const
+   { const uint8_t *Msg = this->Msg();
+     uint8_t MsgLen = this->MsgLen();
+     uint8_t Type = this->Type();
+     if(Type!=1 && Type!=7) { JSON[0]=0; return 0; }
+     int Len=0;
+     JSON[Len++]='{';
+     uint32_t Address = getAddr();
+     if(AddrType==0) AddrType = getAddrType();
+     Len+=Format_String(JSON+Len, "\"Address\":\"0x");
+     Len+=Format_Hex(JSON+Len, Byte[1]);
+     Len+=Format_Hex(JSON+Len, Byte[3]);
+     Len+=Format_Hex(JSON+Len, Byte[2]);
+     Len+=Format_String(JSON+Len, "\", \"AddrType\":");
+     JSON[Len++] = '0'+AddrType;
+     Len+=Format_String(JSON+Len, "\", \"ID\":\"");
+     Len+=Format_Hex(JSON+Len, Address | ((uint32_t)AddrType<<24));
+     uint32_t Time = SlotTime(); // sTime; if(msTime<100) Time--;
+     Len+=Format_String(JSON+Len, "\", \"Time\":");
+     Len+=Format_UnsDec(JSON+Len, Time);
+     if(Type==1)
+     { const uint8_t OGNtype[8] = {   0,    7,    6,  0xB,    1,     8,    3,  0xD } ; // OGN aircraft types
+       uint8_t AcftType=Msg[7]>>4;                             // get the aircraft-type and online-track flag
+       Len+=Format_String(JSON+Len, ", \"AcftType\":");
+       Len+=Format_UnsDec(JSON+Len, (uint32_t)OGNtype[AcftType&0x7]);
+       uint32_t Alt=getAltitude(Msg+6);                        // [m] decode the altitude
+       uint32_t Speed=getSpeed(Msg[8]);                        // [0.5km/h] ground speed
+       Speed = (Speed*355+0x80)>>8;                            // [0.5km/h] => [0.1m/s] convert
+       int32_t Climb=getClimb(Msg[9]);                         // [0.1m/s] climb rate
+       uint16_t Dir=getDir(Msg[10]);                           // [deg]
+       Len+=Format_String(JSON+Len, ", \"Alt\":");
+       Len+=Format_UnsDec(JSON+Len, (uint32_t)Alt);
+       Len+=Format_String(JSON+Len, ", \"Track\":");
+       Len+=Format_UnsDec(JSON+Len, (uint32_t)Dir);
+       Len+=Format_String(JSON+Len, ", \"Speed\":");
+       Len+=Format_UnsDec(JSON+Len, (uint32_t)Speed, 2, 1);
+       Len+=Format_String(JSON+Len, ", \"Climb\":");
+       Len+=Format_SignDec(JSON+Len, (int32_t)Climb, 2, 1, 1);
+       if(MsgLen>11)
+       { int16_t Turn=getTurnRate(Msg[11]);
+         Len+=Format_String(JSON+Len, ", \"Turn\":");
+         Len+=Format_SignDec(JSON+Len, (int32_t)Turn*10/4, 2, 1, 1); }
+       if(MsgLen>12)
+       { int32_t AltStd=Alt; Alt+=getQNE(Msg[12]);
+         Len+=Format_String(JSON+Len, ", \"StdAlt\":");
+         Len+=Format_SignDec(JSON+Len, (int32_t)AltStd, 1, 0, 1); }
+     }
+     if(Type==1 || Type==7)
+     { int32_t Lat = getLat(Msg);                              // [cordic] decode the latitude
+       int32_t Lon = getLon(Msg+3);                            // [cordic] decode the longitude
+       Len+=Format_String(JSON+Len, ", \"Lat\":");
+       Len+=Format_SignDec(JSON+Len, CoordUBX(Lat), 8, 7, 1);
+       Len+=Format_String(JSON+Len, ", \"Lon\":");
+       Len+=Format_SignDec(JSON+Len, CoordUBX(Lon), 8, 7, 1); }
+     Len+=Format_String(JSON+Len, ", \"RxProt\":\"FNT\"");
+     if(SNR>0)
+     { Len+=Format_String(JSON+Len, ", \"RxSNR\":");
+       Len+=Format_SignDec(JSON+Len, ((int32_t)SNR*10+2-843)>>2, 2, 1, 1); }
+     Len+=Format_String(JSON+Len, ", \"RxErr\":");
+     Len+=Format_UnsDec(JSON+Len, (uint32_t)BitErr);
+     Len+=Format_String(JSON+Len, ", \"RxFreqOfs\":");
+     Len+=Format_SignDec(JSON+Len, (int32_t)FreqOfs/10, 2, 1);
+     JSON[Len++]=' '; JSON[Len++]='}';
+     JSON[Len]=0; return Len; }
+
+   int WriteStxJSON(char *JSON, uint8_t AddrType=0) const
    { int Len=0;
      Len+=Format_String(JSON+Len, "\"addr\":\"");
      Len+=Format_Hex(JSON+Len, Byte[1]);
@@ -352,11 +421,12 @@ class FANET_RxPacket: public FANET_Packet
      JSON[Len++]='\"';
      JSON[Len++]=',';
      Len+=Format_String(JSON+Len, "\"addr_type\":");
-     JSON[Len++] = HexDigit(getAddrType());
+     if(AddrType==0) AddrType = getAddrType();
+     JSON[Len++] = '0'+AddrType;
      const uint8_t *Msg = this->Msg();
      uint8_t  MsgLen = this->MsgLen();
      uint8_t Type = this->Type();
-     uint32_t Time=sTime; if(msTime<300) Time--;
+     uint32_t Time = SlotTime(); // sTime; if(msTime<100) Time--;
      Len+=Format_String(JSON+Len, ",\"time\":");
      Len+=Format_UnsDec(JSON+Len, Time);
      int64_t RxTime=(int64_t)sTime-Time; RxTime*=1000; RxTime+=msTime;
@@ -396,7 +466,29 @@ class FANET_RxPacket: public FANET_Packet
        Len+=Format_String(JSON+Len, ",\"lat_deg\":");
        Len+=Format_SignDec(JSON+Len, CoordUBX(Lat), 8, 7, 1);
        Len+=Format_String(JSON+Len, ",\"lon_deg\":");
-       Len+=Format_SignDec(JSON+Len, CoordUBX(Lon), 8, 7, 1); }
+       Len+=Format_SignDec(JSON+Len, CoordUBX(Lon), 8, 7, 1);
+       int Idx=7;
+       if(Service&0x40)
+       { Len+=Format_String(JSON+Len, ",\"temp_deg\":");
+         Len+=Format_SignDec(JSON+Len, (int32_t)5*((int8_t)Msg[Idx++]), 2, 1, 1); }
+       if(Service&0x20)
+       { uint16_t Dir  = Msg[Idx++];                                 // [cordic]
+         Len+=Format_String(JSON+Len, ",\"wind_deg\":");
+         Len+=Format_UnsDec(JSON+Len, ((uint32_t)Dir*45+16)>>5, 2, 1);
+         uint16_t Wind = getSpeed(Msg[Idx++]);                       // [0.2km/h]
+         Len+=Format_String(JSON+Len, ",\"wind_kmh\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Wind*2, 2, 1);
+         uint16_t Gust = getSpeed(Msg[Idx++]);
+         Len+=Format_String(JSON+Len, ",\"gust_kmh\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Gust*2, 2, 1); }
+       if(Service&0x10)
+       { Len+=Format_String(JSON+Len, ",\"hum_perc\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Msg[Idx++]*4, 2, 1); }
+       if(Service&0x08)
+       { Len+=Format_String(JSON+Len, ",\"press_hpa\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)getPressure(Msg+Idx), 2, 1);
+         Idx+=2; }
+     }
      if(Type==1 || Type==7)                                    // airborne or ground position
      { int32_t Lat = getLat(Msg);                              // [cordic] decode the latitude
        int32_t Lon = getLon(Msg+3);                            // [cordic] decode the longitude
@@ -421,7 +513,7 @@ class FANET_RxPacket: public FANET_Packet
        if(MsgLen>11)
        { int16_t Turn=getTurnRate(Msg[11]);
          Len+=Format_String(JSON+Len, ",\"turn_dps\":");
-         Len+=Format_SignDec(JSON+Len, Turn*10/4, 2, 1, 1); }
+         Len+=Format_SignDec(JSON+Len, (int32_t)Turn*10/4, 2, 1, 1); }
        if(MsgLen>12)
        { int32_t AltStd=Alt; Alt+=getQNE(Msg[12]);
          Len+=Format_String(JSON+Len, ",\"alt_std_m\":");
@@ -434,8 +526,9 @@ class FANET_RxPacket: public FANET_Packet
        Len+=Format_String(JSON+Len, ",\"on_ground\":1"); }
      return Len; }
 
-   int WriteAPRS(char *Out)
+   int WriteAPRS(char *Out, uint8_t AddrType=0)
    { bool Report=0;
+     if(AddrType==0) AddrType = getAddrType();                 // 2 (FLARM) or 3 (OGN)
      int Len=0;
      bool isPosition = Type()==1 || Type()==4 || Type()==7;
      Len+=Format_String(Out+Len, "FNT");
@@ -505,7 +598,6 @@ class FANET_RxPacket: public FANET_Packet
          const uint8_t OGNtype[8] = {   0,    7,    6,  0xB,    1,     8,    3,  0xD } ; // OGN aircraft types
          uint8_t AcftType=Msg[7]>>4;                               // aircraft-type and online-tracking flag
          const char *Icon = AcftIcon[AcftType&7];                  // APRS icon
-         uint8_t AddrType = getAddrType();                         // 2 (FLARM) or 3 (OGN)
          uint32_t ID = (OGNtype[AcftType&7]<<2) | AddrType;        // acft-type and addr-type
          bool Track = AcftType&0x08;                               // online tracking flag
          if(!Track) ID|=0x80;                                      // if no online tracking the set as stealth flag
@@ -540,11 +632,11 @@ class FANET_RxPacket: public FANET_Packet
          Len+=Format_String(Out+Len, " id");
          Len+=Format_Hex(Out+Len, ID);
          Out[Len++]=' ';
-         Len+=Format_SignDec(Out+Len, ClimbFeet);
+         Len+=Format_SignDec(Out+Len, (int32_t)ClimbFeet);
          Len+=Format_String(Out+Len, "fpm");
          if(MsgLen>11)
          { Out[Len++]=' ';
-           Len+=Format_SignDec(Out+Len, Turn*5/6, 2, 1);
+           Len+=Format_SignDec(Out+Len, (int32_t)Turn*5/6, 2, 1);
            Len+=Format_String(Out+Len, "rot"); }
          if(MsgLen>12)
          { Len+=Format_String(Out+Len, " FL");
@@ -561,7 +653,6 @@ class FANET_RxPacket: public FANET_Packet
          const char *Icon = "\\n";                                 // static object
          if(Status>=13) Icon = "\\!";                              // Emergency
          // const char *StatMsg = StatusMsg[Status];
-         uint8_t AddrType = getAddrType();                         // 
          uint8_t AcftType = 15;                                    //
          uint32_t ID = (AcftType<<2) | AddrType;                   // acft-type and addr-type
          if(!Track) ID|=0x80;                                      // stealth flag
@@ -584,9 +675,12 @@ class FANET_RxPacket: public FANET_Packet
          Len+=Format_String(Out+Len, " FNT7"); Out[Len++]=HexDigit(Status);
          Report=1; break; }
      }
+     Out[Len++]=' '; Out[Len++]='s';
+     Len+=Format_Hex(Out+Len, Sync);
+     Out[Len++]=' '; Out[Len++]='c'; Out[Len++]='r'; Out[Len++]='0'+CR;
      if(SNR>0)
      { Out[Len++]=' ';
-       Len+=Format_UnsDec(Out+Len, ((uint32_t)SNR*10+2)/4, 2, 1);
+       Len+=Format_SignDec(Out+Len, ((int32_t)SNR*10+2-843)>>2, 2, 1, 1);
        Out[Len++]='d'; Out[Len++]='B'; }
      Out[Len++]=' ';
      Len+=Format_SignDec(Out+Len, (int32_t)FreqOfs/10, 2, 1);
