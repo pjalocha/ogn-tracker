@@ -546,10 +546,10 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
     Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
-  int Ret1=Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
+  // int Ret1=Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //              Preamble length, CRC-type,      Payload (max) size, Header-Type,                           Invert-IQ
-  int Ret2=Radio.setPacketParams(PreambleLen, RADIOLIB_SX126X_LORA_CRC_ON, 80, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT,
-                        RADIOLIB_SX126X_LORA_IQ_STANDARD);
+  // int Ret2=Radio.setPacketParams(PreambleLen, RADIOLIB_SX126X_LORA_CRC_ON, 80, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT,
+  //                       RADIOLIB_SX126X_LORA_IQ_STANDARD);
   // Serial.printf("Radio_ConfigLoRa(%d, 0x%02X, %d) Ret:%d:%d\n", PreambleLen, Sync, CRa, Ret1, Ret2);
 #endif
 #ifdef WITH_SX1276
