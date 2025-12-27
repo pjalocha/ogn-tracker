@@ -778,21 +778,25 @@ void Radio_Task(void *Parms)
 #ifdef WITH_LORAWAN
   WANdev.Reset(getUniqueID(), Parameters.AppKey);     // set default LoRaWAN config.
   if(WANdev.ReadFromNVS()!=ESP_OK)                    // try to read setup from NVS and if fails:
-  { WANdev.WriteToNVS(); }                            // then store the default in NVS
+  { if(xSemaphoreTake(CONS_Mutex, 100))
+    { Serial.printf("LoRaWAN: no config in flash\n");
+      xSemaphoreGive(CONS_Mutex); }
+    WANdev.WriteToNVS(); }                            // then store the default in NVS
   if(Parameters.hasAppKey())                          // if there is an AppKey in the Parameters
   { if(!Parameters.sameAppKey(WANdev.AppKey))         // if LoRaWAN key is different from the one in Parameters
     { WANdev.Reset(getUniqueID(), Parameters.AppKey); // then reset LoRaWAN to this key
       WANdev.Enable=1;
       WANdev.ABP=0;
       WANdev.WriteToNVS();                            // and save LoRaWAN config. to NVS
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Serial.printf("LoRaWAN OTAA (re)set\n");
-      // Format_String(CONS_UART_Write, "LoRaWAN: AppKey <- ");
-      // Format_HexBytes(CONS_UART_Write, Parameters.AppKey, 16);
-      // Format_String(CONS_UART_Write, " => ");
-      // Format_SignDec(CONS_UART_Write, Err);
-      // Format_String(CONS_UART_Write, "\n");
-      xSemaphoreGive(CONS_Mutex); }
+      if(xSemaphoreTake(CONS_Mutex, 100))
+      { Serial.printf("LoRaWAN: OTAA reset & enable\n");
+        // Format_String(CONS_UART_Write, "LoRaWAN: AppKey <- ");
+        // Format_HexBytes(CONS_UART_Write, Parameters.AppKey, 16);
+        // Format_String(CONS_UART_Write, " => ");
+        // Format_SignDec(CONS_UART_Write, Err);
+        // Format_String(CONS_UART_Write, "\n");
+        xSemaphoreGive(CONS_Mutex); }
+    }
     Parameters.clrAppKey();                           // clear the AppKey in the Parameters and save it to Flash
     Parameters.WriteToNVS(); }
 /*
