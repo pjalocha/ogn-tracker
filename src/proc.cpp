@@ -473,15 +473,15 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
   uint8_t  AddrType = RxPacket->Packet.Header.AddrType;
   uint8_t OwnPacket = ( Address  == Parameters.Address  )
                    && ( AddrType == Parameters.AddrType );
-  if( RxPacket->Packet.Header.NonPos)                                                 // status or info packet
-  { if(RxPacket->Packet.isInfo())
+  if(RxPacket->Packet.Header.NonPos)                                                 // status or info packet
+  { if(RxPacket->Packet.isInfo())                                                    // info packet
     { char Call[16]= { 0 };
       if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
       { Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
       }
     }
 #ifdef WITH_SDLOG
-    IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
+    IGClog_FIFO.Write(*RxPacket);                                                     // log all non-position packets ?
 #endif
     return ; }
   if(OwnPacket) return;                                                             // don't process my own (relayed) packets
@@ -586,13 +586,14 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
   else AddrType-=4;
   uint8_t MyOwnPacket = ( Address  == Parameters.Address )
                      && ( AddrType == Parameters.AddrType);
-  if(RxPacket->Packet.isTelemetry()) return;
-  { char Call[16] = { 0 };
+  if(RxPacket->Packet.isTelemetry())
+  { // Serial.printf("ProcessRxADSL() %02X:%06X Telem:%d\n", AddrType, Address, RxPacket->Packet.Telemetry.Header.TelemType);
+    char Call[16] = { 0 };
     if(RxPacket->RxErr<=4 && RxPacket->Packet.getInfo(Call, 5)>0)
     { Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
     }
 #ifdef WITH_SDLOG
-    // IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets$
+    // IGClog_FIFO.Write(*RxPacket);                                                     // log all telemetry packets$
 #endif
     return ; }
   if(!RxPacket->Packet.isPosition()) return;
