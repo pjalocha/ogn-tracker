@@ -33,7 +33,7 @@ class FlashParameters
        uint8_t  AcftType:4;  // 1=glider, 2=towplane, 3=helicopter, etc.
        bool      NoTrack:1;  // unused
        bool      Stealth:1;  // used for OGN packets
-     } ;
+     } __attribute__((packed));
    } ;
 
    union
@@ -45,7 +45,8 @@ class FlashParameters
        bool      RFchipTypeHW:  1; // is this RFM69HW (Tx power up to +20dBm) ?
       uint8_t        FreqPlan:  3; // 0=default or force given frequency hopping plan
        bool         RelayMode:  1; // Static relay-mode: rarely transmit own position, priority to relays or other aircrafts
-     } ;
+       // 5 bits spare
+     } __attribute__((packed));
    } ;
 
     // int16_t  RFchipFreqCorr; // [0.1ppm] frequency correction for crystal frequency offset
@@ -57,10 +58,8 @@ class FlashParameters
      struct
      { uint32_t  CONbaud:24; // [bps] Console baud rate
        uint8_t   CONprot: 8; // [bit-mask] Console protocol mask: 0=minGPS, 1=allGPS, 2=Baro, 3=UBX, 4=OGN, 5=FLARM, 6=GDL90, 7=$PGAV5
-     } ;
+     } __attribute__((packed));
    } ;
-
-    int16_t  PressCorr;      // [0.25Pa] pressure correction for the baro
 
    union
    { uint16_t Flags;
@@ -74,12 +73,14 @@ class FlashParameters
        uint8_t  Verbose:2;   //
        uint8_t  NavRate:3;   // [Hz] GPS position report rate
         int8_t TimeCorr:3;   // [sec] it appears for ArduPilot you need to correct time by 3 seconds which is likely the leap-second issue
-     } ;
+     } __attribute__((packed));
    } ;                       //
+
+   int16_t  PressCorr;       // [0.25Pa] pressure correction for the baro
 
    int16_t  GeoidSepar;      // [0.1m] Geoid-Separation, apparently ArduPilot MAVlink does not give this value (although present in the format)
                              //  or it could be a problem of some GPSes
-  uint8_t  PPSdelay;         // [ms] delay between the PPS and the data burst starts on the GPS UART (used when PPS failed or is not there)
+   uint8_t  PPSdelay;        // [ms] delay between the PPS and the data burst starts on the GPS UART (used when PPS failed or is not there)
 
   union
   { uint8_t  GNSS;
@@ -91,8 +92,8 @@ class FlashParameters
       bool EnableIMES:1;     // 0
       bool EnableQZSS:1;     // 1
       bool EnableGLO :1;     // 1
-      //
-    } ;
+      // one bit spare
+    } __attribute__((packed));
   } ;
 
    static const uint8_t InfoParmLen = 16; // [char] max. size of an infp-parameter
@@ -127,7 +128,7 @@ class FlashParameters
      struct
      { uint32_t PageMask:27;                          // enable/disable individual pages on the LCD or OLED screen
        uint8_t InitialPage:5;                         // the first page to show after boot
-     } ;
+     } __attribute__((packed));
    } ;
 
 // #if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
@@ -189,7 +190,8 @@ uint16_t StratuxPort;
       bool TxADSB:1;         // #6 ADS-B
       bool TxODID:1;         // #7 Open-Drone-ID
       bool TxMSH :1;         // #8 Meshtastic
-    } ;
+      // 7 bits spare
+    } __attribute__((packed));
   } ;
 
   union
@@ -203,7 +205,8 @@ uint16_t StratuxPort;
       bool RxWAN:1;
       bool RxADSB:1;
       bool RxODID:1;
-    } ;
+      // 8 bits spare
+    } __attribute__((packed));
   } ;
 
   uint32_t CheckSum;
@@ -1136,6 +1139,6 @@ uint16_t StratuxPort;
 #endif
   }
 
-} ;
+} /* __attribute__((packed)) */ ;
 
 #endif // __PARAMETERS_H__

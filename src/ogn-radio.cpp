@@ -776,7 +776,7 @@ void Radio_Task(void *Parms)
   Radio_FreqPlan.setPlan(Parameters.FreqPlan);
 
 #ifdef WITH_LORAWAN
-  WANdev.Reset(getUniqueID(), Parameters.AppKey);     // set default LoRaWAN config.
+  WANdev.Reset(getUniqueID());                        // set default LoRaWAN config.
   if(WANdev.ReadFromNVS()!=ESP_OK)                    // try to read setup from NVS and if fails:
   { if(xSemaphoreTake(CONS_Mutex, 100))
     { Serial.printf("LoRaWAN: no config in flash\n");

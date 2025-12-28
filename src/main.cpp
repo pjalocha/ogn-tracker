@@ -118,11 +118,11 @@ HardItems HardwareStatus = { 0 };
 // VS to store parameters and other data
 
 static int NVS_Init(void)
-{ // nvs_flash_erase();                     // for debug
+{ // nvs_flash_erase();                     // for debug only
   esp_err_t Err = nvs_flash_init();
-  if (Err == ESP_ERR_NVS_NO_FREE_PAGES)
+  if(Err==ESP_ERR_NVS_NO_FREE_PAGES)
   { nvs_flash_erase();
-    Err = nvs_flash_init(); }
+    Err=nvs_flash_init(); }
   return Err; }
 
 // =======================================================================================================
@@ -651,9 +651,11 @@ void setup()
 #endif
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
-  { Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
+  { Serial.printf("Parameters could not be read from NVS: resetting to defaults\n");
+    Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
   if(Parameters.CONbaud<2400 || Parameters.CONbaud>921600 || Parameters.CONbaud%2400)
-  { Parameters.CONbaud=115200; Parameters.WriteToNVS(); }
+  { Parameters.CONbaud=115200;
+    Parameters.WriteToNVS(); }
 
 #ifdef HARD_NAME
   strcpy(Parameters.Hard, HARD_NAME);
