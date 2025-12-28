@@ -469,13 +469,16 @@ static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
 
 // process received OGN packets
 static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ uint8_t OwnPacket = ( RxPacket->Packet.Header.Address  == Parameters.Address  )
-                     && ( RxPacket->Packet.Header.AddrType == Parameters.AddrType );
+{ uint32_t Address  = RxPacket->Packet.Header.Address;
+  uint8_t  AddrType = RxPacket->Packet.Header.AddrType;
+  uint8_t OwnPacket = ( Address  == Parameters.Address  )
+                   && ( AddrType == Parameters.AddrType );
   if( RxPacket->Packet.Header.NonPos)                                                 // status or info packet
   { if(RxPacket->Packet.isInfo())
-    { char Call[16];
-      if(RxPacket->Packet.getInfo(Call, 5))
-      { }
+    { char Call[16]= { 0 };
+      if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
+      { Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+      }
     }
 #ifdef WITH_SDLOG
     IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
