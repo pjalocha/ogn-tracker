@@ -89,7 +89,7 @@ class ADSL_Packet
      { uint8_t Type;             // 0x02=iConspicuity, bit #7 = Unicast, 0x42 = telemetry
        uint8_t Address  [4];     // Address[30]/Reserved[1]/RelayForward[1] (not aligned to 32-bit !)
        struct                    //
-       { uint8_t  InfoType :6;   //
+       { uint8_t  InfoType :6;   // 5 = Registration
          uint8_t  TelemType:2;   // 1 = Info
        } __attribute__((packed)) Header;  // 1 byte
        char Msg[14];
@@ -231,6 +231,12 @@ class ADSL_Packet
        Len+=Format_HHMMSS(Out+Len, Time);
        Out[Len]=0; }
      return Len; }
+
+   uint8_t getInfo(char *Value, uint8_t Type=5)
+   { if(Telemetry.Header.TelemType!=1) return 0;    // if not info packet then give up
+     if(Info.Header.InfoType!=Type) return 0;       // if not desired info-type then give up
+     strncpy(Value, Info.Msg, 14);                  // copy up to 14 characters
+     Value[14]=0; return strlen(Value); }           // return string length
 
    int PrintInfo(char *Out) const // type #1 = Info
    { int Len=0;

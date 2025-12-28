@@ -577,17 +577,22 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 
 // process received ADS-L packets
 static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ uint8_t AddrType = RxPacket->Packet.getAddrTable();
+{ uint32_t Address = RxPacket->Packet.getAddress();
+  uint8_t AddrType = RxPacket->Packet.getAddrTable();
   if(AddrType<4) AddrType=0;
   else AddrType-=4;
-  uint8_t MyOwnPacket = ( RxPacket->Packet.getAddress()  == Parameters.Address )
-                     && (                       AddrType == Parameters.AddrType);
-  if(!RxPacket->Packet.isPos())                                                 // status or info packet
-  {
-// #ifdef WITH_SDLOG
-//     IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
-// #endif
+  uint8_t MyOwnPacket = ( Address  == Parameters.Address )
+                     && ( AddrType == Parameters.AddrType);
+  if(RxPacket->Packet.isTelemetry()) return;
+  { char Call[16] = { 0 };
+    if(RxPacket->RxErr<=4 && RxPacket->Packet.getInfo(Call, 5)>0)
+    { Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+    }
+#ifdef WITH_SDLOG
+    // IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets$
+#endif
     return ; }
+  if(!RxPacket->Packet.isPosition()) return;
   if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
   int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   bool DistOK = RxPacket->calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
