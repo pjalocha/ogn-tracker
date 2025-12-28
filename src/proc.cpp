@@ -242,6 +242,28 @@ static void getTelemSatSNR(ADSL_Packet &Packet)
   Packet.SatSNR.Data.HDOP = GPS_SatMon.HDOP;
   Packet.SatSNR.Data.VDOP = GPS_SatMon.VDOP; }
 
+static bool getTelemInfo(ADSL_Packet &Packet)
+{ Packet.Init(0x42);
+  Packet.setAddress    (Parameters.Address);
+  Packet.setAddrTypeOGN(Parameters.AddrType);
+  Packet.setRelay(0);
+  static uint8_t InfoIdx=0;
+  char *Value=0;
+  for( ; ; )
+  { InfoIdx++; if(InfoIdx>=Parameters.InfoParmNum) { InfoIdx=0; break; }
+    Value=Parameters.InfoParmValue(InfoIdx);
+    if(Value[0]) break; }
+  if(Value[0]==0) return 0;
+  Packet.Info.Header.TelemType=0x01;
+  Packet.Info.Header.InfoType=InfoIdx;
+  uint8_t Idx=0;
+  for( ; Idx<14; Idx++)
+  { char Ch=Value[Idx]; if(Ch==0) break;
+    Packet.Info.Msg[Idx]=Ch; }
+  for( ; Idx<14; Idx++)
+  { Packet.Info.Msg[Idx]=0; }
+  return 1; }
+
 static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
@@ -477,7 +499,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
   { if(RxPacket->Packet.isInfo())                                                    // info packet
     { char Call[16]= { 0 };
       if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
-      { Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+      { // Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
       }
     }
 #ifdef WITH_SDLOG
@@ -590,7 +612,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
   { // Serial.printf("ProcessRxADSL() %02X:%06X Telem:%d\n", AddrType, Address, RxPacket->Packet.Telemetry.Header.TelemType);
     char Call[16] = { 0 };
     if(RxPacket->RxErr<=4 && RxPacket->Packet.getInfo(Call, 5)>0)
-    { Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+    { // Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
     }
 #ifdef WITH_SDLOG
     // IGClog_FIFO.Write(*RxPacket);                                                     // log all telemetry packets$
@@ -1139,8 +1161,9 @@ void vTaskPROC(void* pvParameters)
       if(StatTxBackOff) StatTxBackOff--;
       else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
-        if(StatTxPkt==0) getTelemStatus(*Packet, Position);
+             if(StatTxPkt==0) getTelemStatus(*Packet, Position);
         else if(StatTxPkt==1) getTelemSatSNR(*Packet);
+        else if(StatTxPkt==2 && getTelemInfo(*Packet)) { }
         else if(!getTelemSatPPS(*Packet)) getTelemSatSNR(*Packet);
         StatTxPkt++; if(StatTxPkt>=3) StatTxPkt=0;
         Packet->Scramble();
