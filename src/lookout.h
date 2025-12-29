@@ -23,7 +23,7 @@ class LookOut_Target           // describes a flying aircrafts
      struct
      { uint32_t  Address:24;  // 24-bit address
        uint8_t  AddrType: 8;  // ADS-L address-type
-     } ;
+     }  __attribute__((packed));
    } ;
    Acft_RelPos     Pos;        // Position relative to the reference Lat/Lon/Alt
     int8_t        Pred;        // [0.5sec] amount of time by which own position has been predicted/extrapolated
@@ -43,7 +43,7 @@ class LookOut_Target           // describes a flying aircrafts
        // bool   hasStdAlt  :1;   // has pressure StdAlt
        bool   Reported   :1;   // this target has already been reported with $PFLAA or GDL90
        bool   Alloc      :1;   // is allocated or not (a free slot, where a new target can go into)
-     } ;
+     }  __attribute__((packed));
    } ;
 
    union
@@ -52,7 +52,7 @@ class LookOut_Target           // describes a flying aircrafts
      { uint16_t DistMargin;     // [0.5m] remaining safety margin: if positive, then considered not a thread at all
        uint8_t  TimeMargin;     // [0.5s] time to target (if no distance margin left)
        uint8_t  WarnLevel;      // assigned warning level: 0, 1, 2 or 3
-     } ;
+     }  __attribute__((packed));
    } ;
 
    int16_t        dX;        // [0.5m]   relative position of target
@@ -127,6 +127,7 @@ class LookOut_Target           // describes a flying aircrafts
      uint32_t Addr = ID&0xFFFFFF;                                  // [24-bit] address
      Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));               // 24-bit address: RND, ICAO, FLARM, OGN
      Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
+     if(Call[0]) { NMEA[Len++]='|'; Len+=Format_String(NMEA+Len, Call); }
      NMEA[Len++]=',';
      // Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*225+0x800)>>12, 4, 1); // [deg] heading (by GPS)
      Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*45+0x1000)>>13);  // [deg] heading - without decimal part
