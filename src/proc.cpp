@@ -500,6 +500,9 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
     { char Call[16]= { 0 };
       if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
       { // Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+#ifdef WITH_LOOKOUT
+        Look.setTargetCall(Address, AddrType+4, Call);
+#endif
       }
     }
 #ifdef WITH_SDLOG
@@ -613,6 +616,9 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     char Call[16] = { 0 };
     if(RxPacket->RxErr<=4 && RxPacket->Packet.getInfo(Call, 5)>0)
     { // Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+#ifdef WITH_LOOKOUT
+      Look.setTargetCall(Address, AddrType+4, Call);
+#endif
     }
 #ifdef WITH_SDLOG
     // IGClog_FIFO.Write(*RxPacket);                                                     // log all telemetry packets$

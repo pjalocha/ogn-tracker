@@ -452,7 +452,7 @@ template <const uint8_t MaxTgts=32>
      return ProcessTarget(New); }
 
    template <class OGNx_Packet>
-    const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime /* , const char *Call=0 */ )  // process a position of another aircraft in OGN format
+    const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
    { // printf("ProcessTarget(%d) ... entry\n", WeakestIdx);
      LookOut_Target *New = Target+WeakestIdx;                                          // get a free or lowest rank slot
      New->Clear();                                                                     // put the new position there
@@ -466,6 +466,16 @@ template <const uint8_t MaxTgts=32>
      //     else   New->Call[0]=0;
      New->Call[0]=0;
      return ProcessTarget(New); }
+
+   void setTargetCall(uint32_t Address, uint8_t AddrType, const char *Call)
+   { uint32_t ID=AddrType; ID = (ID<<=24)|Address;
+     uint8_t Idx=0;
+     for( ; Idx<MaxTargets; Idx++)
+     { if(Target[Idx].Alloc==0) continue;
+       if(Target[Idx].ID==ID) break; }
+     if(Idx>=MaxTargets) return;
+     strncpy(Target[Idx].Call, Call, 10);
+     Target[Idx].Call[10]=0; }
 
    const LookOut_Target *ProcessTarget(LookOut_Target *New)
    {  // printf("ProcessTarget() ... %08X\n", ID);
@@ -526,7 +536,7 @@ template <const uint8_t MaxTgts=32>
 
      return New; }
 
-   uint8_t calcTarget(LookOut_Target *Tgt)                                              // calculate the savety margin for the (new) target
+   uint8_t calcTarget(LookOut_Target *Tgt)                                              // calculate the safety margin for the (new) target
    {
      Tgt->TimeMargin=0xFF;                                                              // initially set inf. time margin
      Tgt->WarnLevel=0;                                                                  // warning level=0
