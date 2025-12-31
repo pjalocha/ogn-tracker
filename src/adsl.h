@@ -795,6 +795,11 @@ class ADSL_RxPacket
    ADSL_RxPacket() { Clear(); }
    void Clear(void) { Packet.Init(); State=0; Rank=0; }
 
+   int Print(char *Out) const
+   { int Len=Packet.Print(Out);
+     Len+=sprintf(Out+Len, " #%d %1.0fdBm %de", RxChan, -0.5*RxRSSI, RxErr);
+     return Len; }
+
    uint8_t PosTime(void) const { return Packet.TimeStamp; }    // [1/4sec] short timestamp 0.00..14.75 sec
 
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]

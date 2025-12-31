@@ -975,6 +975,7 @@ class GPS_Position: public GPS_Time
 
    int32_t Altitude;            // [0.1 meter] height above Geoid (sea level)
 
+   static const int32_t LatDeg = 600000;
    int32_t Latitude;            // [0.0001/60 deg] about 0.18m accuracy (to convert to u-Blox GPS 1e-7deg units mult by 50/3)
    int32_t Longitude;           // [0.0001/60 deg]
    int16_t GeoidSeparation;     // [0.1 meter] difference between Geoid and Ellipsoid
@@ -984,9 +985,12 @@ class GPS_Position: public GPS_Time
    int32_t StdAltitude;         // [0.1 meter] standard pressure altitude (from the pressure sensor and atmosphere calculator)
    int16_t Temperature;         // [0.1 degC]
    int16_t Humidity;            // [0.1%]      relative humidity
-   int16_t LongAccel;           // [0.1m/s^2]  acceleration along the track
+
+   int16_t LongAccel;           // [0.1m/s^2]  acceleration on the Speed
+   int16_t VertAccel;           // [0.1m/s^2]  acceleration on the ClimbRate
    uint16_t Seq;                // sequencial number to track GPS positions in a pipe
 
+   uint8_t PredResid;           // [m] prediction residue to monitor the consistency of the GPS data
    // uint16_t LockTime;           // [sec] Time since lock
    uint8_t NMEAframes;          // count the correct NMEA frames
    uint8_t NMEAerrors;          // cound the NMEA check-sum errors;
@@ -1004,6 +1008,7 @@ class GPS_Position: public GPS_Time
      Altitude=0; GeoidSeparation=0;
      Speed=0; Heading=0; ClimbRate=0; TurnRate=0;
      Temperature=0; Pressure=0; StdAltitude=0; Humidity=0;
+     PredResid=0;
      NMEAframes=0; NMEAerrors=0; }
 
    bool isValid(void) const                          // is GPS data is valid = GPS lock
@@ -1042,7 +1047,8 @@ class GPS_Position: public GPS_Time
    void Print(void) const
    { printf("Time/Date: "); PrintDateTime();
      printf(" FixQual/Mode=%d/%d: %d sats DOP/H/V=%3.1f/%3.1f/%3.1f", FixQuality, FixMode, Satellites, 0.1*PDOP, 0.1*HDOP, 0.1*VDOP);
-     printf(" Lat/Lon/Alt = [%+10.6f,%+10.6f]deg %+3.1f(%+3.1f)m LatCos=%+6.3f", 0.0001/60*Latitude, 0.0001/60*Longitude, 0.1*Altitude, 0.1*GeoidSeparation, 1.0/(1<<12)*LatitudeCosine);
+     printf(" Lat/Lon/Alt = [%+10.6f,%+10.6f]deg %+3.1f(%+3.1f)m LatCos=%+6.3f",
+                  0.0001/60*Latitude, 0.0001/60*Longitude, 0.1*Altitude, 0.1*GeoidSeparation, 1.0/(1<<12)*LatitudeCosine);
      printf(" Speed/Heading = %3.1fm/s %05.1fdeg", 0.1*Speed, 0.1*Heading);
      printf(" Climb = %+5.1fm/s", 0.1*ClimbRate);
      printf(" Turn = %+5.1fdeg/s", 0.1*TurnRate);
@@ -1056,12 +1062,17 @@ class GPS_Position: public GPS_Time
      Len+=sprintf(Out+Len, "Speed/Heading = %3.1fm/s %05.1fdeg\n", 0.1*Speed, 0.1*Heading);
      return Len; }
 
+   int16_t getCFaccel(void) const { return ((int32_t)TurnRate*Speed*229+0x10000)>>17; } // [0.1m/s2]
+
    void PrintLine(void) const
    { PrintTime();
      printf(" %d/%d/%02d/%4.1f/%4.1f/%4.1f", FixQuality, FixMode, Satellites, 0.1*PDOP, 0.1*HDOP, 0.1*VDOP);
      printf(" [%+10.6f,%+10.6f]deg %+3.1f(%+3.1f)m", 0.0001/60*Latitude, 0.0001/60*Longitude, 0.1*Altitude, 0.1*GeoidSeparation);
-     printf(" %4.1fm/s %05.1fdeg", 0.1*Speed, 0.1*Heading);
-     printf(" %d(%d)\n", NMEAframes, NMEAerrors); }
+     printf("%+5.1fm/s", 0.1*ClimbRate);
+     printf(" %4.1fm/s %05.1fdeg%+5.1fdeg/s", 0.1*Speed, 0.1*Heading, 0.1*TurnRate);
+     printf(" [%+4.1f,%+4.1f,%+4.1f]m/s2", 0.1*getCFaccel(), 0.1*LongAccel, 0.1*VertAccel);
+     // printf(" %d(%d)", NMEAframes, NMEAerrors);
+     printf(" %d\n", PredResid); }
 
    int PrintLine(char *Out) const
    { int Len=0; // PrintDateTime(Out);
@@ -1404,23 +1415,30 @@ class GPS_Position: public GPS_Time
      return TimeDiff; }                                                                     // [0.01s]
 */
    int16_t calcDifferentials(GPS_Position &RefPos, bool useBaro=1) // calculate climb rate and turn rate with an earlier reference position
-   { // ClimbRate=0; hasClimb=0;
-     // TurnRate=0;  hasTurn=0;
-     // LongAccel=0; hasAccel=0;
-     if(RefPos.FixQuality==0) return 0;            // give up if no fix on the reference position
+   { if(RefPos.FixQuality==0) return 0;            // give up if no fix on the reference position
      int16_t TimeDiff = calcTimeDiff(RefPos);      // [ms] time difference between positions
      if(TimeDiff<10) return 0;                     // [ms] give up if smaller than 10ms (as well when negative)
+     int32_t nLat, nLon, nAlt; int16_t nHead;
+     RefPos.calcExtrapolation(nLat, nLon, nAlt, nHead, TimeDiff);
+     int32_t residLat=calcLatDistance(nLat);       // [m]
+     int32_t residLon=calcLonDistance(nLon);       // [m]
+     int32_t residAlt=Altitude-nAlt;               // [0.1m]
+     // printf("Residue: [%+3d,%+3d,%+5.1f]m\n", residLat, residLon, 0.1*residAlt);
+     PredResid = abs(residLat)+abs(residLon)+(abs(residAlt)+5)/10; // [m]
      TurnRate = Heading-RefPos.Heading;            // [0.1deg/s] turn rate
      if(TurnRate>1800) TurnRate-=3600; else if(TurnRate<(-1800)) TurnRate+=3600; // wrap-around
-     ClimbRate = Altitude-RefPos.Altitude;         // [0.1m/s] climb rate as altitude difference
+     int32_t AltDist = Altitude-RefPos.Altitude;
+     ClimbRate = AltDist;                         // [0.1m/s] climb rate as altitude difference
      if(useBaro && hasBaro && RefPos.hasBaro && (abs(Altitude-StdAltitude)<2500) ) // if there is baro data then
      { ClimbRate += StdAltitude-RefPos.StdAltitude; // [0.1m/s] on pressure altitude
        ClimbRate = (ClimbRate+1)>>1; }             // take average of the GPS and baro climb rate
      LongAccel = Speed-RefPos.Speed;               // longitual acceleration
+     VertAccel = ClimbRate-RefPos.ClimbRate;       // vertical acceleration
      if(TimeDiff==100)                             // [ms] if 0.1sec difference
      { ClimbRate *=10;
        TurnRate  *=10;
-       LongAccel *=10; }
+       LongAccel *=10;
+       VertAccel *=10; }
      if(TimeDiff==200)                             // [ms] if 0.2sec difference
      { ClimbRate *=5;
        TurnRate  *=5;
@@ -1428,21 +1446,25 @@ class GPS_Position: public GPS_Time
      if(TimeDiff==250)                             // [ms] if 0.25sec difference
      { ClimbRate *=4;
        TurnRate  *=4;
-       LongAccel *=4; }
+       LongAccel *=4;
+       VertAccel *=4; }
      else if(TimeDiff==500)
      { ClimbRate *=2;
        TurnRate  *=2;
-       LongAccel *=2; }
+       LongAccel *=2;
+       VertAccel *=2; }
      else if(TimeDiff==1000)
      { }
      else if(TimeDiff==2000)
      { ClimbRate = (ClimbRate+1)>>1;
        TurnRate  = ( TurnRate+1)>>1;
-       LongAccel = (LongAccel+1)>>1; }
+       LongAccel = (LongAccel+1)>>1;
+       VertAccel = (VertAccel+1)>>1; }
      else if(TimeDiff!=0)
      { ClimbRate = ((int32_t)ClimbRate*1000)/TimeDiff;
        TurnRate  = ((int32_t) TurnRate*1000)/TimeDiff;
-       LongAccel = ((int32_t)LongAccel*1000)/TimeDiff; }
+       LongAccel = ((int32_t)LongAccel*1000)/TimeDiff;
+       VertAccel = ((int32_t)VertAccel*1000)/TimeDiff; }
      // printf("calcDifferences( , %d) %02d.%03ds hasBaro:%d:%d %4dms %3.1f/%3.1f m %+4.1f m/s\n",
      //         useBaro, Sec, mSec, hasBaro, RefPos.hasBaro, TimeDiff, 0.1*Altitude, 0.1*StdAltitude, 0.1*ClimbRate);
      hasClimb=1; hasTurn=1; hasAccel=1;
@@ -1667,9 +1689,9 @@ class GPS_Position: public GPS_Time
    }
 
    // uint8_t getFreqPlan(void) const // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zeeland
-   // { if( (Longitude>=(-20*600000)) && (Longitude<=(60*600000)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
-   //   if( Latitude<(20*600000) )                                            // below 20deg latitude
-   //   { if( ( Longitude>(164*600000)) && (Latitude<(-30*600000)) && (Latitude>(-48*600000)) ) return 4;  // => New Zeeland
+   // { if( (Longitude>=(-20*LatDeg)) && (Longitude<=(60*LatDeg)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
+   //   if( Latitude<(20*LatDeg) )                                            // below 20deg latitude
+   //   { if( ( Longitude>(164*LatDeg)) && (Latitude<(-30*LatDeg)) && (Latitude>(-48*600000)) ) return 4;  // => New Zeeland
    //     return 3; }                                                         // => Australia + South America: upper half of 915MHz band
    //   return 2; }                                                           // => USA/Canada: full 915MHz band
 
@@ -1694,7 +1716,7 @@ class GPS_Position: public GPS_Time
   }
 
   template <class OGNx_Packet>
-   void Encode(OGNx_Packet &Packet, int16_t dTime) const                       // Encode position which is extrapolated by the given fraction of a second
+   void Encode(OGNx_Packet &Packet, int16_t dTime) const                      // Encode position which is extrapolated by the given fraction of a second
    { Packet.Position.FixQuality = FixQuality<3 ? FixQuality:3;                //
      if((FixQuality>0)&&(FixMode>=2)) Packet.Position.FixMode = FixMode-2;    //
                                  else Packet.Position.FixMode = 0;
@@ -1743,20 +1765,20 @@ class GPS_Position: public GPS_Time
      mSec=fTime; }
 
    // extrapolate GPS position by a fraction of a second
-   void calcExtrapolation(int32_t &Lat, int32_t &Lon, int32_t &Alt, int16_t &Head, int32_t dTime) const // [msec]
-   { int16_t HeadAngle = ((int32_t)Heading<<12)/225;                         // []
-     int16_t TurnAngle = (((dTime*TurnRate)/250)<<9)/225;                    // []
+   void calcExtrapolation(int32_t &Lat, int32_t &Lon, int32_t &Alt, int16_t &Head, int32_t msTime) const // [msec]
+   { int16_t HeadAngle = ((int32_t)Heading<<12)/225;                         // [16-bit cordic]
+     int16_t TurnAngle = (((msTime*TurnRate)/250)<<9)/225;                   // [16-bit cordic]
              HeadAngle += TurnAngle;
-     int32_t LatSpeed = ((int32_t)Speed*Icos(HeadAngle)+0x800)>>12;                // [0.1m/s]
-     int32_t LonSpeed = ((int32_t)Speed*Isin(HeadAngle)+0x800)>>12;                // [0.1m/s]
-     Lat = Latitude  + calcLatitudeExtrapolation (dTime, LatSpeed);
-     Lon = Longitude + calcLongitudeExtrapolation(dTime, LonSpeed);
-     Alt = Altitude  + calcAltitudeExtrapolation(dTime);
-     Head = Heading  + (dTime*TurnRate)/1000;
-     if(Head<0) Head+=3600; else if(Head>=3600) Head-=3600; }
+     int32_t LatSpeed = ((int32_t)Speed*Icos(HeadAngle)+0x800)>>12;          // [0.1m/s]
+     int32_t LonSpeed = ((int32_t)Speed*Isin(HeadAngle)+0x800)>>12;          // [0.1m/s]
+     Lat = Latitude  + calcLatitudeExtrapolation (msTime, LatSpeed);
+     Lon = Longitude + calcLongitudeExtrapolation(msTime, LonSpeed);
+     Alt = Altitude  + calcAltitudeExtrapolation(msTime);                    // [0.1m]
+     Head = Heading  + (msTime*TurnRate)/1000;
+     if(Head<0) Head+=3600; else if(Head>=3600) Head-=3600; }                // [0.1deg] normalize
 
-   int32_t calcAltitudeExtrapolation(int32_t Time)  const                    // [ms]
-   { return Time*ClimbRate/1000; }                                           // [0.1m]
+   int32_t calcAltitudeExtrapolation(int32_t msTime)  const                  // [ms]
+   { return msTime*ClimbRate/1000; }                                         // [0.1m]
 
    // int32_t calcLatitudeExtrapolation(int32_t Time, int32_t LatSpeed)  const  // [ms] [0.1m/s]
    // { return (Time/10*LatSpeed*177+0x4000)>>15; }                             // [0.1m]
@@ -1774,8 +1796,16 @@ class GPS_Position: public GPS_Time
    int32_t calcLongitudeExtrapolation(int32_t Time, int32_t LonSpeed, int16_t LatCosine)  const // [ms]
    { return (((Time*LonSpeed*283+64)>>7))/LatCosine; }
 
-   // static int32_t calcLatDistance(int32_t Lat1, int32_t Lat2)             // [m] distance along latitude
-   // { return ((int64_t)(Lat2-Lat1)*0x2f684bda+0x80000000)>>32; }
+   static int32_t calcLatDistance(int32_t Lat1, int32_t Lat2)             // [m] distance along latitude
+   { return ((int64_t)(Lat2-Lat1)*0x2f684bda+0x80000000)>>32; }
+
+   static int32_t calcLonDistance(int32_t Lon1, int32_t Lon2, int16_t LatCos)  // [m] distance along longitude
+   { int32_t dLon=Lon2-Lon1;
+     const int32_t HalfCircle = LatDeg*180;
+     if(dLon>HalfCircle) dLon-=HalfCircle;
+     else if(dLon<(-HalfCircle)) dLon+=HalfCircle;
+     int32_t Dist = ((int64_t)(dLon)*0x2f684bda+0x80000000)>>32;             // [m]
+     return (Dist*LatCos+0x800)>>12; }                                       // distance corrected by the latitude cosine
 
    // static int32_t calcLatAngle32(int32_t Lat)                             // convert latitude to 32-bit integer angle
    // { return ((int64_t)Lat*2668799779u+0x4000000)>>27; }
@@ -1794,15 +1824,11 @@ class GPS_Position: public GPS_Time
      if(LatCos<=0) LatCos=1;                                                 // protect against zero as it is used for division
      return LatCos; }
 
-   // int32_t getLatDistance(int32_t RefLatitude) const                      // [m] distance along latitude
-   // { return calcLatDistance(RefLatitude, Latitude); }
+   int32_t calcLatDistance(int32_t RefLatitude) const                         // [m] distance along latitude
+   { return calcLatDistance(RefLatitude, Latitude); }
 
-   // int32_t getLonDistance(int32_t RefLongitude) const                     // [m] distance along longitude
-   // { int32_t Dist = calcLatDistance(RefLongitude, Longitude);             //
-   //   int16_t LatAngle =  calcLatAngle16(Latitude);
-   //   int32_t LatCos = calcLatCosine(LatAngle);
-   //   // printf("Latitude=%+d, LatAngle=%04X LatCos=%08X\n", Latitude, (uint16_t)LatAngle, LatCos);
-   //   return ((int64_t)Dist*LatCos+0x40000000)>>31; }                      // distance corrected by the latitude cosine
+   int32_t calcLonDistance(int32_t RefLongitude) const                        // [m] distance along longitude
+   { return calcLonDistance(RefLongitude, Longitude, LatitudeCosine); }       // need checking for 180deg boundary and corrected by latitude cosine
 
    void calcLatitudeCosine(void)
    { int16_t LatAngle =  calcLatAngle16(Latitude);
@@ -1849,9 +1875,9 @@ class GPS_Position: public GPS_Time
    static int WriteIGCcoord(char *Out, int32_t Coord, uint8_t DegSize, const char *SignChar)
    { int Len=0;
      bool Neg = Coord<0; if(Neg) Coord=(-Coord);
-     int32_t Deg = Coord/600000;
+     int32_t Deg = Coord/LatDeg;
      Len+=Format_UnsDec(Out+Len, (uint32_t)Deg, DegSize);
-     Coord-=Deg*600000; Coord/=10;
+     Coord-=Deg*LatDeg; Coord/=10;
      Len+=Format_UnsDec(Out+Len, (uint32_t)Coord, 5);
      Out[Len++]=SignChar[Neg];
      return Len; }

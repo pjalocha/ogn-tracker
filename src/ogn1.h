@@ -296,7 +296,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
    }
 */
 
-   uint8_t getInfo(char *Value, uint8_t Type=5)
+   uint8_t getInfo(char *Value, uint8_t Type=5) const
    { int Len=0;
      uint8_t InfoType;
      uint8_t Idx=0;
