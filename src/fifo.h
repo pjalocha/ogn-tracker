@@ -4,83 +4,88 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-template <class Type, const size_t Size=8> // size must be (!) a power of 2 like 4, 8, 16, 32, etc.
+template <class Type, const unsigned Size> // size must be (!) a power of 2 like 4, 8, 16, 32, etc.
  class FIFO
 { public:
-   static const size_t Len = Size;
-   static const size_t PtrMask = Size-1;
+   static const unsigned Len = Size;
+   static const unsigned PtrMask = Size-1;
 
+   volatile unsigned ReadPtr;
+   volatile unsigned WritePtr;
    Type Data[Len];
-   size_t ReadPtr;
-   size_t WritePtr;
 
   public:
-   void Clear(void)                       // clear all stored data
+   FIFO() { Clear(); }
+
+   bool isCorrupt(void) const
+   { return ReadPtr>=Size || WritePtr>=Size; }
+
+   void Clear(void)                          // clear all stored data
    { ReadPtr=0; WritePtr=0; }
 
-   size_t Write(Type Byte)                // write a single element
-   { size_t Ptr=WritePtr;
+   unsigned Write(Type Byte)                // write a single element
+   { unsigned Ptr=WritePtr;
      Data[Ptr]=Byte;
      Ptr++; Ptr&=PtrMask;
      if(Ptr==ReadPtr) return 0;
      WritePtr=Ptr; return 1; }
 
    bool isFull(void) const               // if FIFO full ?
-   { size_t Ptr=WritePtr;
+   { unsigned Ptr=WritePtr;
      Ptr++; Ptr&=PtrMask;
      return Ptr==ReadPtr; }
 
-    size_t Free(void) const               // number of free elements: how much can you write into te FIFO
+    unsigned Free(void) const               // number of free elements: how much can you write into te FIFO
     { return ((ReadPtr-WritePtr-1)&PtrMask); }
 
-    size_t Full(void) const               // number of stored elements: how much you can read from the FIFO
+    unsigned Full(void) const               // number of stored elements: how much you can read from the FIFO
     { return ((WritePtr-ReadPtr)&PtrMask); }
 
    Type *getWrite(void)                  // get pointer to the next element which can be written
-   { return Data+WritePtr; }
+   { return Data+WritePtr; }             // even when the FIFO is full this element exists
 
-   size_t Write(void)                    // advance the write pointer: to be used with getWrite()
-   { size_t Ptr=WritePtr;
+   unsigned Write(void)                    // advance the write pointer: to be used with getWrite()
+   { unsigned Ptr=WritePtr;
      Ptr++; Ptr&=PtrMask;
-     if(Ptr==ReadPtr) return 0;
+     if(Ptr==ReadPtr) return 0;            // but, when the write pointer hits the read pointer then give up, do not advance
      WritePtr=Ptr; return 1; }
 
-   size_t Read(Type &Byte)               // read a single element
-   { size_t Ptr=ReadPtr;
-     if(Ptr==WritePtr) return 0;
+   unsigned Read(Type &Byte)               // read a single element
+   { unsigned Ptr=ReadPtr;
+     if(Ptr==WritePtr) return 0;           // FIFO empty
      Byte=Data[Ptr];
-     Ptr++; Ptr&=PtrMask;
-     ReadPtr=Ptr; return 1; }
+     Ptr++; Ptr&=PtrMask;                  // increment pointer
+     ReadPtr=Ptr; return 1; }              // store it
 
-   void Read(void)
-   { size_t Ptr=ReadPtr;
+   void Read(void)                         // increment the read-pointer (thus forget the oldest item)
+   { unsigned Ptr=ReadPtr;
      if(Ptr==WritePtr) return;
      Ptr++; Ptr&=PtrMask;
      ReadPtr=Ptr; }
 
-   Type *getRead(void)
+   Type *getRead(void)                     // get pointer to the most recent item.
    { if(ReadPtr==WritePtr) return 0;
      return Data+ReadPtr; }
 
-   Type *getRead(size_t Idx)
+   Type *getRead(unsigned Idx)
    { if(Idx>=Full()) return 0;
-     size_t Ptr=(ReadPtr+Idx)&PtrMask;
+     unsigned Ptr=(ReadPtr+Idx)&PtrMask;
      return Data+Ptr; }
 
-   size_t getReadBlock(Type *&Byte)      // get a pointer to the first element and the number of consecutive elements available for read
+   unsigned getReadBlock(Type *&Byte)      // get a pointer to the first element and the number of consecutive elements available for read
    { if(ReadPtr==WritePtr) { Byte=0; return 0; }
      Byte = Data+ReadPtr;
      if(ReadPtr<WritePtr) return WritePtr-ReadPtr;
      return Size-ReadPtr; }
 
-   void flushReadBlock(size_t Len)       // flush the elements which were already read: to be used after getReadBlock()
+   void flushReadBlock(unsigned Len)       // flush the elements which were already read: to be used after getReadBlock()
    { ReadPtr+=Len; ReadPtr&=PtrMask; }
 
-   bool isEmpty(void) const              // is the FIFO all empty ?
+   bool isEmpty(void) const                // is the FIFO all empty ?
    { return ReadPtr==WritePtr; }
 
-   size_t Write(const Type *Data, size_t Len) // write a block of elements into the FIFO (could possibly be smarter than colling single Write many times)
-   { size_t Idx;
+   unsigned Write(const Type *Data, unsigned Len) // write a block of elements into the FIFO (could possibly be smarter than colling single Write many times)
+   { unsigned Idx;
      for(Idx=0; Idx<Len; Idx++)
      { if(Write(Data[Idx])==0) break; }
      return Idx; }

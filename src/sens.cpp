@@ -264,14 +264,16 @@ static void ProcBaro(void)
 #endif
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     if(Parameters.Verbose)
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, Line, 0, Len);                       // send NMEA sentence to the console (UART1)
-      xSemaphoreGive(CONS_Mutex); }
+    { if(xSemaphoreTake(CONS_Mutex, 20))
+      { Format_String(CONS_UART_Write, Line, 0, Len);                       // send NMEA sentence to the console (UART1)
+        xSemaphoreGive(CONS_Mutex); }
+    }
 #ifdef WITH_SDLOG
     if(Log_Free()>=128)
-    { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
-      Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
-      xSemaphoreGive(Log_Mutex); }
+    { if(xSemaphoreTake(Log_Mutex, 20))
+      { Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
+        xSemaphoreGive(Log_Mutex); }
+    }
 #endif
 
     Len=0;                                                           // start preparing the PGRMZ NMEA sentence
@@ -283,14 +285,16 @@ static void ProcBaro(void)
     Len+=Format_String(Line+Len, "3");                               // 1 no fix, 2 - 2D, 3 - 3D; assume 3D for now
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     if(Parameters.Verbose)
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
-      xSemaphoreGive(CONS_Mutex); }
+    { if(xSemaphoreTake(CONS_Mutex, 10))
+      { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
+        xSemaphoreGive(CONS_Mutex); }
+    }
 #ifdef WITH_SDLOG
     if(Log_Free()>=128)
-    { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
-      Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
-      xSemaphoreGive(Log_Mutex); }
+    { if(xSemaphoreTake(Log_Mutex, 20))
+      { Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
+        xSemaphoreGive(Log_Mutex); }
+    }
 #endif
 
     Len=0;
@@ -307,14 +311,16 @@ static void ProcBaro(void)
     // Len+=Format_String(Line+Len, "999");                          // [%] battery level
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     if(Parameters.Verbose)
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
-      xSemaphoreGive(CONS_Mutex); }
+    { if(xSemaphoreTake(CONS_Mutex, 20))
+      { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
+        xSemaphoreGive(CONS_Mutex); }
+    }
 #ifdef WITH_SDLOG
     if(Log_Free()>=128)
-    { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
-      Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
-      xSemaphoreGive(Log_Mutex); }
+    { if(xSemaphoreTake(Log_Mutex, 20))
+      { Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
+        xSemaphoreGive(Log_Mutex); }
+    }
 #endif
 
 }

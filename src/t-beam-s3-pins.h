@@ -16,9 +16,6 @@
 #define Radio_PinIRQ1  1 // IRQ
 #define Radio_PinBusy  4 // Busy: only for SX1262
 
-// #define I2C_PinSCL    41 // SCL
-// #define I2C_PinSDA    42 // SDA
-
 // External I2C for BME280, RTC, OLED, Magnetic sensor
 #define I2C_PinSCL    18 // SCL
 #define I2C_PinSDA    17 // SDA

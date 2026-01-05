@@ -279,7 +279,7 @@ class LoRaWANnode
          TxOpt[TxOptLen++]=(RxSNR>>2)&0x3F;                          // Rx SNR
          continue; }
        break; }
-// #ifdef WITH_PRINTF
+#ifdef WITH_PRINTF
      printf("RxOpt: [%d] ", OptLen);
      for(int Idx=0; Idx<OptLen; Idx++)
        printf("%02X", Opt[Idx]);
@@ -287,7 +287,7 @@ class LoRaWANnode
      for(int Idx=0; Idx<TxOptLen; Idx++)
        printf("%02X", TxOpt[Idx]);
      printf("\n");
-// #endif
+#endif
    }
    // { Format_String(CONS_UART_Write, "LoRaWAN Opt: ");
    //   for(uint8_t Idx=0; Idx<Len; Idx++)
@@ -295,18 +295,22 @@ class LoRaWANnode
    //   Format_String(CONS_UART_Write, "\n"); }
 
   int WriteToFile(const char *Name)
-  { FILE *File = fopen(Name, "wb"); if(File==0) return -1;
+  { setCRC();
+    FILE *File = fopen(Name, "wb"); if(File==0) return ESP_FAIL;
     int Written = fwrite(this, 1, SaveBytes, File);
     fclose(File); return Written; }
 
   int ReadFromFile(const char *Name)
-  { FILE *File = fopen(Name, "rb"); if(File==0) return -1;
+  { FILE *File = fopen(Name, "rb"); if(File==0) return ESP_FAIL;
     int Read = fread(this, 1, SaveBytes, File);
-    fclose(File); return Read; }
+    fclose(File);
+    if(!goodCRC()) return ESP_FAIL;
+    return Read; }
 
 // #ifdef WITH_ESP32
   esp_err_t WriteToNVS(const char *Name="LoRaWAN", const char *NameSpace="TRACKER")
-  { nvs_handle Handle;
+  { setCRC();
+    nvs_handle Handle;
     esp_err_t Err = nvs_open(NameSpace, NVS_READWRITE, &Handle);
     if(Err!=ESP_OK) return Err;
     Err = nvs_set_blob(Handle, Name, this, SaveBytes);
@@ -323,6 +327,7 @@ class LoRaWANnode
     if( (Err==ESP_OK) && (Size<=SaveBytes) )
       Err = nvs_get_blob(Handle, Name, this, &Size);                // read the Blob from the Flash
     nvs_close(Handle);
+    if(!goodCRC()) return ESP_FAIL;
     return Err; }
 // #endif // WITH_ESP32
 

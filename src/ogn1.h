@@ -176,7 +176,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      unsigned int DataLen   : 4;                      // 0..14 number of bytes in the message
      unsigned int ReportType: 4;                      // 15 for the manufacturer specific mesage
      unsigned int ManufID   : 8;                      // Manufacturer identification: 0 for Cube-Board
-   } ManufMsg;                                        // manufacturer-specific message
+   } __attribute__((packed)) ManufMsg;                // manufacturer-specific message
 
   } ;
 
@@ -295,6 +295,18 @@ class OGN1_Packet          // Packet structure for the OGN tracker
              (1.0/64)*DecodeVoltage(), Status.TxPower+4, -0.5*Status.RadioNoise, (1<<Status.RxRate)-1 );
    }
 */
+
+   uint8_t getInfo(char *Value, uint8_t Type=5) const
+   { int Len=0;
+     uint8_t InfoType;
+     uint8_t Idx=0;
+     for( ; ; )
+     { uint8_t Chars = readInfo(Value, InfoType, Idx);
+       if(Chars==0) break;
+       if(InfoType==Type) return Len-1;
+       Idx+=Chars; }
+     return 0; }
+
    int PrintDeviceInfo(char *Out) const
    { int Len=0;
      char Value[16];
@@ -797,9 +809,10 @@ class OGN1_Packet          // Packet structure for the OGN tracker
 #endif // __AVR__
 
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
-   int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon, uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
+   int calcDistanceVector(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon,
+              uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
    { LatDist = DecodeLatitude()-RefLat; if(abs(LatDist)>1080000) return -1; // to prevent overflow, corresponds to about 200km
-     LatDist = (LatDist*1517+0x1000)>>13;              // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
+     LatDist = (LatDist*1517+0x1000)>>13;      // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
      if(abs(LatDist)>MaxDist) return -1;
      LonDist = DecodeLongitude()-RefLon; if(abs(LatDist)>1080000) return -1;
      LonDist = (LonDist*1517+0x1000)>>13;
@@ -879,7 +892,8 @@ class OGN1_Packet          // Packet structure for the OGN tracker
    void clrBaro(void)                   { Position.BaroMSB=0; Position.BaroAltDiff=0; }
    int16_t getBaroAltDiff(void) const   { int16_t AltDiff=Position.BaroAltDiff; if(Position.BaroMSB==0) AltDiff|=0xFF00; return AltDiff; }
    void setBaroAltDiff(int32_t AltDiff)
-   { if(AltDiff<(-255)) AltDiff=(-255); else if(AltDiff>255) AltDiff=255;
+   { // if(AltDiff<(-255)) AltDiff=(-255); else if(AltDiff>255) AltDiff=255;
+     if(AltDiff<(-255) || AltDiff>255) { clrBaro(); return; }
      Position.BaroMSB = (AltDiff&0xFF00)==0; Position.BaroAltDiff=AltDiff&0xFF; }
    void EncodeStdAltitude(int32_t StdAlt) { setBaroAltDiff((StdAlt-DecodeAltitude())); }
    int32_t DecodeStdAltitude(void) const { return (DecodeAltitude()+getBaroAltDiff()); }
@@ -992,11 +1006,11 @@ class OGN1_Packet          // Packet structure for the OGN tracker
    uint8_t addInfo(const char *Value, uint8_t InfoType)  // add an info field
    { uint8_t Idx=Info.DataChars;                         // number of characters already in the info packet
      if(Idx) Idx++;                                      // if at least one already, then skip over the terminator
-     if(Idx>=15) return 0;
+     if(Idx>=15) return 0;                               // return zero when no more speca
      uint8_t Len=0;
      for( ; ; )
      { uint8_t Char = Value[Len]; if(Char==0) break;
-       if(Idx>=15) return 0;
+       if(Idx>=15) return 0;                             // return zero when no more space
        setInfoChar(Char, Idx++);
        Len++; }
      setInfoChar(InfoType, Idx);                         // terminating character

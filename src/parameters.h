@@ -32,8 +32,8 @@ class FlashParameters
        uint8_t  AddrType:2;  // 0=RND, 1=ICAO, 2=FLR, 3=OGN
        uint8_t  AcftType:4;  // 1=glider, 2=towplane, 3=helicopter, etc.
        bool      NoTrack:1;  // unused
-       bool      Stealth:1;  // unused
-     } ;
+       bool      Stealth:1;  // used for OGN packets
+     } __attribute__((packed));
    } ;
 
    union
@@ -45,7 +45,8 @@ class FlashParameters
        bool      RFchipTypeHW:  1; // is this RFM69HW (Tx power up to +20dBm) ?
       uint8_t        FreqPlan:  3; // 0=default or force given frequency hopping plan
        bool         RelayMode:  1; // Static relay-mode: rarely transmit own position, priority to relays or other aircrafts
-     } ;
+       // 5 bits spare
+     } __attribute__((packed));
    } ;
 
     // int16_t  RFchipFreqCorr; // [0.1ppm] frequency correction for crystal frequency offset
@@ -57,10 +58,8 @@ class FlashParameters
      struct
      { uint32_t  CONbaud:24; // [bps] Console baud rate
        uint8_t   CONprot: 8; // [bit-mask] Console protocol mask: 0=minGPS, 1=allGPS, 2=Baro, 3=UBX, 4=OGN, 5=FLARM, 6=GDL90, 7=$PGAV5
-     } ;
+     } __attribute__((packed));
    } ;
-
-    int16_t  PressCorr;      // [0.25Pa] pressure correction for the baro
 
    union
    { uint16_t Flags;
@@ -74,12 +73,14 @@ class FlashParameters
        uint8_t  Verbose:2;   //
        uint8_t  NavRate:3;   // [Hz] GPS position report rate
         int8_t TimeCorr:3;   // [sec] it appears for ArduPilot you need to correct time by 3 seconds which is likely the leap-second issue
-     } ;
+     } __attribute__((packed));
    } ;                       //
+
+   int16_t  PressCorr;       // [0.25Pa] pressure correction for the baro
 
    int16_t  GeoidSepar;      // [0.1m] Geoid-Separation, apparently ArduPilot MAVlink does not give this value (although present in the format)
                              //  or it could be a problem of some GPSes
-  uint8_t  PPSdelay;         // [ms] delay between the PPS and the data burst starts on the GPS UART (used when PPS failed or is not there)
+   uint8_t  PPSdelay;        // [ms] delay between the PPS and the data burst starts on the GPS UART (used when PPS failed or is not there)
 
   union
   { uint8_t  GNSS;
@@ -91,8 +92,8 @@ class FlashParameters
       bool EnableIMES:1;     // 0
       bool EnableQZSS:1;     // 1
       bool EnableGLO :1;     // 1
-      //
-    } ;
+      // one bit spare
+    } __attribute__((packed));
   } ;
 
    static const uint8_t InfoParmLen = 16; // [char] max. size of an infp-parameter
@@ -127,22 +128,22 @@ class FlashParameters
      struct
      { uint32_t PageMask:27;                          // enable/disable individual pages on the LCD or OLED screen
        uint8_t InitialPage:5;                         // the first page to show after boot
-     } ;
+     } __attribute__((packed));
    } ;
 
-#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
+// #if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    char BTname[16];
    // char  BTpin[16];
-#endif
+// #endif
 
-#ifdef WITH_AP
+// #ifdef WITH_AP
    char APname[32];
    char APpass[31];
    uint8_t APchan;
 uint16_t APport;
   int8_t APminSig;
   int8_t APtxPwr;
-#endif
+// #endif
 
 #ifdef WITH_STRATUX
    char StratuxWIFI[32];
@@ -180,15 +181,17 @@ uint16_t StratuxPort;
   union
   { uint16_t TxProtMask;
     struct
-    { bool TxFLR:1;          // #0 FLARM
-      bool TxOGN:1;          // #1 OGN
+    { bool TxFLR :1;         // #0 FLARM
+      bool TxOGN :1;         // #1 OGN
       bool TxADSL:1;         // #2 ADS-L
-      bool TxPAW:1;          // #3 PAW
-      bool TxFNT:1;          // #4 FANET
-      bool TxWAN:1;          // #5 LoRaWAN
+      bool TxPAW :1;         // #3 PAW
+      bool TxFNT :1;         // #4 FANET
+      bool TxWAN :1;         // #5 LoRaWAN
       bool TxADSB:1;         // #6 ADS-B
       bool TxODID:1;         // #7 Open-Drone-ID
-    } ;
+      bool TxMSH :1;         // #8 Meshtastic
+      // 7 bits spare
+    } __attribute__((packed));
   } ;
 
   union
@@ -202,7 +205,8 @@ uint16_t StratuxPort;
       bool RxWAN:1;
       bool RxADSB:1;
       bool RxODID:1;
-    } ;
+      // 8 bits spare
+    } __attribute__((packed));
   } ;
 
   uint32_t CheckSum;
@@ -229,10 +233,10 @@ uint16_t StratuxPort;
 #ifdef WITH_LORAWAN
    static void clrKey(uint8_t *Key) { for(int Idx=0; Idx<16; Idx++) Key[Idx]=0x00; }
 
-   static bool hasKey(const uint8_t *Key)                                                     // check if Key!=0
+   static bool hasKey(const uint8_t *Key)                             // check if Key is all-zero
    { for(int Idx=0; Idx<16; Idx++)
-     { if(Key[Idx]) return 1; }                                                            // if any byte is non-zero => 1
-     return 0; }
+     { if(Key[Idx]) return 1; }                                       // if any byte is non-zero then return true
+     return 0; }                                                      // return false
 
    bool hasAppKey(void)    const   { return hasKey(AppKey); }
    bool hasAppSesKey(void) const   { return hasKey(AppSesKey); }
@@ -284,8 +288,8 @@ uint16_t StratuxPort;
     TxPower        =        14; // [dBm] for RFM69HW
     RFchipTypeHW   =         1;
 #endif
-    TxProtMask       =    0xFF;
-    RxProtMask       =    0xFF;
+    TxProtMask     =    0xFFFF;
+    RxProtMask     =    0xFFFF;
 
     Flags          =         0;
 #ifdef WITH_GPS_UBX
@@ -535,6 +539,24 @@ uint16_t StratuxPort;
     if(calcCheckSum(Addr, Words)!=0) return -1;                           // verify check-sum in Flash
     return 0; }
 #endif // WITH_STM32
+
+  static char AddrTypeChar(uint8_t AddrType)
+  { if(AddrType==3) return 'O';
+    if(AddrType==2) return 'F';
+    if(AddrType==1) return 'I';
+    return 'R'; }
+
+  char AddrTypeChar(void) const { return AddrTypeChar(AddrType); }
+
+  static const char *AcftTypeName(uint8_t AcftType)
+  { const char *TypeName[16] = { "----", "Glid", "Tow ", "Heli",
+                                 "SkyD", "Drop", "Hang", "Para",
+                                 "Pwrd", "Jet ", "UFO ", "Ball",
+                                 "Zepp", "UAV ", "Car ", "Fix " } ;
+    if(AcftType<16) return TypeName[AcftType];
+    return TypeName[0]; }
+
+  const char *AcftTypeName(void) const { return AcftTypeName(AcftType); }
 
   uint8_t Print(char *Line)       // print parameters on a single line, suitable for console output
   { uint8_t Len=0;
@@ -984,8 +1006,8 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "TxHW"      ,(uint32_t)RFchipTypeHW     ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "TxProtMask" ,    (uint32_t)TxProtMask,2); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "RxProtMask" ,    (uint32_t)RxProtMask,2); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "TxProtMask" ,  (uint32_t)TxProtMask,  4); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "RxProtMask" ,  (uint32_t)RxProtMask,  4); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "FreqPlan"  ,(uint32_t)FreqPlan         ); strcat(Line, " #  [ 0..5]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Float1 (Line, "FreqCorr"  , (int32_t)RFchipFreqCorr   ); strcat(Line, " #  [  ppm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TempCorr"  , (int32_t)RFchipTempCorr   ); strcat(Line, " #  [ degC]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -1058,8 +1080,8 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "TxHW"      ,(uint32_t)RFchipTypeHW     ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "TxProtMask" ,    (uint32_t)TxProtMask,2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "RxProtMask" ,    (uint32_t)RxProtMask,2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "TxProtMask" ,  (uint32_t)TxProtMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "RxProtMask" ,  (uint32_t)RxProtMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "FreqPlan"  ,(uint32_t)FreqPlan         ); strcat(Line, " #  [ 0..5]\n"); Format_String(Output, Line);
     Write_Float1 (Line, "FreqCorr"  , (int32_t)RFchipFreqCorr   ); strcat(Line, " #  [  ppm]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TempCorr"  , (int32_t)RFchipTempCorr   ); strcat(Line, " #  [ degC]\n"); Format_String(Output, Line);
@@ -1117,6 +1139,6 @@ uint16_t StratuxPort;
 #endif
   }
 
-} ;
+} /* __attribute__((packed)) */ ;
 
 #endif // __PARAMETERS_H__

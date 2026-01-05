@@ -1,6 +1,9 @@
 #ifndef __IGC_KEY_H__
 #define __IGC_KEY_H__
 
+#include "nvs.h"
+#include "nvs_flash.h"
+
 // #define MBEDTLS_ECDSA_DETERMINISTIC
 
 // #include "mbedtls/md5.h"
@@ -11,37 +14,11 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/ecdsa.h"
-#include "mbedtls/sha256.h"
 #include "mbedtls/ecp.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/version.h"
 
-class SHA256
-{ public:
-   mbedtls_sha256_context Context;
-
-  public:
-   void Init(void)                               { mbedtls_sha256_init(&Context); }
-   void Free(void)                               { mbedtls_sha256_free(&Context); }
-   int  Start(void)                              { return mbedtls_sha256_starts_ret(&Context, 0); }
-   int  Update(const uint8_t *Input, size_t Len) { return mbedtls_sha256_update_ret(&Context, Input, Len); }
-   void Clone(const SHA256 &Src)                 { mbedtls_sha256_clone(&Context, &Src.Context); }
-   int  Finish(uint8_t CheckSum[32])             { return mbedtls_sha256_finish_ret(&Context, CheckSum); }
-
-} ;
-
-class SHA512
-{ public:
-   mbedtls_sha512_context Context;
-
-  public:
-   void Init(void)                              { mbedtls_sha512_init(&Context); }
-   void Free(void)                              { mbedtls_sha512_free(&Context); }
-   int Start(void)                              { return mbedtls_sha512_starts_ret(&Context, 0); }
-   int Update(const uint8_t *Input, size_t Len) { return mbedtls_sha512_update_ret(&Context, Input, Len); }
-   int Finish(uint8_t CheckSum[64])             { return mbedtls_sha512_finish_ret(&Context, CheckSum); }
-
-} ;
+#include "sha.h"
 
 // Uncomment to force use of a specific curve
 #define ECPARAMS    MBEDTLS_ECP_DP_SECP256K1
@@ -113,7 +90,7 @@ class IGC_Key
 
    int Verify_SHA256(unsigned char *Sign, int sig_len, const uint8_t *Hash, int HashLen)      // Verify a signature
    { int Ret=mbedtls_ecdsa_read_signature (&SignCtx, Hash, HashLen, Sign, sig_len);
-     return Ret; }                                         // return the size of the signature
+     return Ret; }                                             // return the size of the signature
 
    int Pub_WriteBin(uint8_t *Data, int MaxLen)                 // write the public key in a binary form
    { size_t Len=0;
@@ -135,10 +112,10 @@ class IGC_Key
    int Priv_Write(uint8_t *Out, int MaxLen)                    // write the private key in an ASCII form
    { return mbedtls_pk_write_key_pem(&Key, Out, MaxLen); }     // return zero if success
 
-   int Pub_Write_DER(uint8_t *Out, int MaxLen)                     // write the public key in an ASCII form
+   int Pub_Write_DER(uint8_t *Out, int MaxLen)                 // write the public key in an ASCII form
    { return mbedtls_pk_write_pubkey_der(&Key, Out, MaxLen); }  // return zero if success
 
-   int Priv_Write_DER(uint8_t *Out, int MaxLen)                    // write the private key in an ASCII form
+   int Priv_Write_DER(uint8_t *Out, int MaxLen)                // write the private key in an ASCII form
    { return mbedtls_pk_write_key_der(&Key, Out, MaxLen); }     // return zero if success
 
 #ifdef WITH_ESP32

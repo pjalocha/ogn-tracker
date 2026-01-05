@@ -419,7 +419,7 @@ template <class Float>
      { Sum+=ExtSymb[Symb][Pulse]; }
      Sum=Norm/Sum;
      for(int Pulse=0; Pulse<PulsesPerSlot; Pulse++)
-     { ExtSymb[Symb][Pulse]*=Sum; }    
+     { ExtSymb[Symb][Pulse]*=Sum; }
    }
 
 } ;

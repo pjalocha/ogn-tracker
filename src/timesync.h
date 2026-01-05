@@ -11,12 +11,23 @@ class TimeSync
    uint32_t sysTime;       // [ms]  system time which corresponds to the above UTC
 
   public:
-   uint16_t getFracTime(uint32_t msTime)
+   uint16_t getFracTime(uint32_t msTime) const
    { msTime = msTime+1000-sysTime;
      if(msTime<1000) return msTime;
      if(msTime<2000) return msTime-1000;
      if(msTime<3000) return msTime-2000;
      return msTime%1000; }
+
+   void Norm(uint32_t msTime)
+   { int32_t msDiff = msTime-sysTime;
+     if(msDiff>=2000) { sysTime+=2000; UTC+=2; return; }
+     if(msDiff>=1000) { sysTime+=1000; UTC++; }
+   }
+
+   // uint32_t getUTC(uint32_t msTime) const
+   // { int32_t msDiff = msTime-sysTime;
+   //   if(msDiff>=0) return UTC+msDiff/1000;
+   // }
 
 } ;
 
