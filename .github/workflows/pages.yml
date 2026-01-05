@@ -44,8 +44,8 @@ jobs:
           VARIANTS=(
             "ttgo-sx1276-tbeam-v10:esp32:ESP32"
             "ttgo-sx1262-tbeam-v10:esp32:ESP32"
-            "HTIT-Tracker:esp32s3:ESP32S3"
-            "ThinkNode-M5:esp32s3:ESP32S3"
+            "HTIT-Tracker:esp32s3:ESP32-S3"
+            "ThinkNode-M5:esp32s3:ESP32-S3"
           )
 
           for v in "${VARIANTS[@]}"; do
