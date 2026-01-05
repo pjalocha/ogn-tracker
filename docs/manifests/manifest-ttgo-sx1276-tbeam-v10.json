@@ -1,0 +1,11 @@
+{
+  "name": "OGN-Tracker (T-Beam v1.0 SX1276)",
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "../firmware/ttgo-sx1276-tbeam-v10/merged.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
