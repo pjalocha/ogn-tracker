@@ -42,20 +42,19 @@ jobs:
         run: |
           pio run -e ${{ matrix.env }}
 
-      # Prepare files for GitHub Pages
-      - name: Copy binaries into docs/
-        run: |
-          mkdir -p docs/firmware/${{ matrix.env }}
-          # App image (usually exists)
-          cp .pio/build/${{ matrix.env }}/firmware.bin docs/firmware/${{ matrix.env }}/firmware.bin
 
-          # If these exist, include them for "first install" flashing
-          if [ -f .pio/build/${{ matrix.env }}/bootloader.bin ]; then
-            cp .pio/build/${{ matrix.env }}/bootloader.bin docs/firmware/${{ matrix.env }}/bootloader.bin
-          fi
-          if [ -f .pio/build/${{ matrix.env }}/partitions.bin ]; then
-            cp .pio/build/${{ matrix.env }}/partitions.bin docs/firmware/${{ matrix.env }}/partitions.bin
-          fi
+      - name: Merge ESP32 binaries
+        run: |
+          pip install esptool
+          ENV=${{ matrix.env }}
+          mkdir -p docs/firmware/$ENV
+
+          # Default ESP32 offsets – adjust if needed
+          esptool.py --chip esp32 merge_bin \
+            -o docs/firmware/$ENV/merged.bin \
+            0x1000  .pio/build/$ENV/bootloader.bin \
+            0x8000  .pio/build/$ENV/partitions.bin \
+            0x10000 .pio/build/$ENV/firmware.bin
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
