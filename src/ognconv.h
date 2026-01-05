@@ -113,5 +113,6 @@ int APRS2IGC(char *Out, const char *Inp, int GeoidSepar);   // convert APRS mess
 float BaroTemp(float h);                    // temperature [K] at given altitude [m]
 float BaroPress(float h);                   // pressure [Pa] at given altitude [m]
 float BaroAlt(float P);                     // altitude [m] for given pressure [Pa]
+float DewPoint(float T, float RH);          // DewPoint [degC] from given temperature [degC] and relative humidity [%]
 
 #endif // __OGNCONV_H__

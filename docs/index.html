@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OGN-Tracker Web Installer</title>
+</head>
+<body>
+  <h1>OGN-Tracker Web Installer</h1>
+
+  <label for="variant">Variant:</label>
+  <select id="variant">
+    <option value="ttgo-sx1276-tbeam-v10">T-Beam v1.0 (SX1276)</option>
+    <option value="ttgo-sx1262-tbeam-v10">T-Beam v1.0 (SX1262)</option>
+    <option value="HTIT-Tracker">HTIT-Tracker</option>
+    <option value="ThinkNode-M5">ThinkNode-M5</option>
+  </select>
+
+  <div style="margin:16px 0">
+    <script type="module" src="https://unpkg.com/esp-web-tools@latest/dist/web/install-button.js?module"></script>
+    <esp-web-install-button id="install" manifest="manifests/manifest-ttgo-sx1276-tbeam-v10.json"></esp-web-install-button>
+  </div>
+
+  <p>Use Chrome/Edge (Web Serial). Connect USB, then Install.</p>
+
+  <script>
+    const sel = document.getElementById("variant");
+    const btn = document.getElementById("install");
+    sel.addEventListener("change", () => {
+      btn.setAttribute("manifest", `manifests/manifest-${sel.value}.json`);
+    });
+  </script>
+</body>
+</html>
+

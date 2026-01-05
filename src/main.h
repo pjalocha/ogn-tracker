@@ -3,6 +3,9 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+// #define millis() (xTaskGetTickCount())
+#define xTaskGetTickCount() (millis())
+
 uint64_t getUniqueMAC(void);
 uint64_t getUniqueID(void);
 uint32_t getUniqueAddress(void);
@@ -11,7 +14,11 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION 0.1.9
+#define VERSION "0.1.12"
+#endif
+
+#ifndef SOFT_NAME
+#define SOFT_NAME "OGNv" VERSION
 #endif
 
 #define HARDWARE_ID 0x04
@@ -26,9 +33,13 @@ uint32_t getUniqueAddress(void);
 #define DEFAULT_GeoidSepar     40         // [m]
 #define DEFAULT_CONbaud    115200         // [bps]
 #define DEFAULT_PPSdelay      100         // [ms]
-#define DEFAULT_FreqPlan        1
+#define DEFAULT_FreqPlan        0
 
 #include "parameters.h"
+
+#ifdef WITH_LORA32
+#include "heltec-lora32-pins.h"
+#endif
 
 #ifdef WITH_TBEAM07
 #include "t-beam-v07-pins.h"
@@ -38,8 +49,8 @@ uint32_t getUniqueAddress(void);
 #include "t-beam-v10-pins.h"
 #endif
 
-#ifdef WITH_TBEAM20
-#include "t-beam-v10-pins.h"
+#ifdef WITH_TBEAM12
+#include "t-beam-v12-pins.h"
 #endif
 
 #ifdef WITH_TBEAMS3
@@ -49,6 +60,13 @@ uint32_t getUniqueAddress(void);
 #ifdef WITH_HTIT_TRACKER
 #include "htit-tracker-pins.h"
 #endif
+
+#ifdef WITH_THINKNODE_M5
+#include "thinknode-m5-pins.h"
+#endif
+
+const uint8_t KNOB_Tick = 15;
+#include "play.h"
 
 extern FlashParameters Parameters;
 
@@ -78,6 +96,9 @@ template <class Type>
  uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, Type &Object, uint8_t Wait=10)
 { return I2C_Read (Bus, Addr, Reg, (uint8_t *)&Object, sizeof(Type), Wait); }
 
+void LED_OGN_RX(uint8_t ms);
+void LED_OGN_TX(uint8_t ms);
+
 void LED_PCB_On   (bool ON=1);           // LED on the PCB for vizual indications
 void LED_PCB_Off  (void);
 void LED_PCB_Flash(uint8_t Time=100);    // Flash the PCB LED for a period of [ms]
@@ -88,14 +109,30 @@ int  CONS_UART_Free       (void);          // how many bytes can be written to t
 
 int   GPS_UART_Full         (void);
 int   GPS_UART_Read         (uint8_t &Byte);
+int   GPS_UART_Read(uint8_t *Data, int Max);
 void  GPS_UART_Write        (char     Byte);
 void  GPS_UART_Flush        (int MaxWait  );
 void  GPS_UART_SetBaudrate  (int BaudRate );
+
 #ifdef GPS_PinPPS
 bool  GPS_PPS_isOn();
+
+extern uint32_t PPS_Intr_usTime;   // [us] micros() counter at the time of the PPS
+extern uint32_t PPS_Intr_msTime;   // [ms] millis() counter at the time of the PPS
+
+extern uint32_t PPS_usPrecTime;
+extern uint32_t PPS_usTimeRMS;
+
+extern uint32_t PPS_Intr_usFirst;  // [us] the time of the first interrupt in a series
+extern uint32_t PPS_Intr_Count;    // [count] of good PPS interrupts in the series
+extern uint32_t PPS_Intr_Missed;   // [count] of missed PPS interrupts
+
+extern  int32_t PPS_usPeriodErr;   // [1/16us] PPS period systematic error
+extern uint32_t PPS_usPeriodRMS;   // [ ]
 #else
 inline bool  GPS_PPS_isOn() { return 0; }
 #endif
+
 #ifdef GPS_PinEna
 void GPS_ENABLE(void);
 void GPS_DISABLE(void);

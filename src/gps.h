@@ -1,18 +1,20 @@
+#pragma once
 
-#include "hal.h"
+#include "main.h"
 
 #include "timesync.h"
 #include "ogn.h"
 #include "lowpass2.h"
 #include "flight.h"
+#include "gps-satlist.h"
 
 // extern uint8_t GPS_PowerMode;               // 0=shutdown, 1=reduced, 2=normal
 
-#ifdef WITH_ESP32
+// #ifdef WITH_ESP32
 const  uint8_t GPS_PosPipeSize         = 16; // number of GPS positions held in a pipe
-#else
-const  uint8_t GPS_PosPipeSize         =  4; // number of GPS positions held in a pipe
-#endif
+// #else
+// const  uint8_t GPS_PosPipeSize         =  4; // number of GPS positions held in a pipe
+// #endif
 
 extern uint8_t      GPS_PosIdx;                   // Pipe index, increments with every GPS position received
 extern GPS_Position GPS_Pos[GPS_PosPipeSize];    // GPS position pipe
@@ -27,8 +29,8 @@ extern          uint32_t GPS_TimeSinceLock; // [sec] time since GPS has a valid 
 // extern          uint32_t GPS_Random;        // random number produced from the GPS data
 extern          uint16_t GPS_PosPeriod;     // [msec] how often (which period) the GPS/MAV is sending the positions
 
-extern          uint16_t GPS_SatSNR;        // [0.25dB] average SNR for satellites being tracked
-extern           uint8_t GPS_SatCnt;        // [0.25dB] number of satellites being tracked
+extern           uint8_t GPS_SatSNR;        // [0.25dB] average SNR for satellites being tracked
+extern           uint8_t GPS_SatCnt;        // [count] number of satellites being tracked
 
 typedef union
          { uint8_t  Flags;
@@ -45,6 +47,9 @@ typedef union
          } Status;                          //
 
 extern Status GPS_Status;                   // GPS status bits
+
+extern char GPS_Hardware[12];
+extern char GPS_Firmware[244];
 
 uint32_t GPS_getBaudRate(void);             // [bps]
 
@@ -63,6 +68,8 @@ extern uint8_t  MAVLINK_BattCap;    // [%]
 extern EventGroupHandle_t GPS_Event;
 const EventBits_t GPSevt_PPS    = 0x01;
 const EventBits_t GPSevt_NewPos = 0x02;
+
+extern GPS_SatList GPS_SatMon;              // list of satellites for SNR monitoring
 
 extern FlightMonitor Flight;                // detect/monitor takeoff/flight/landing
 

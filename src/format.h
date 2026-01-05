@@ -140,7 +140,7 @@ template <class Type>
    Dig=Read_Dec1(Inp[Len]); if(Dig<0) goto Ret;
    Value+=Dig; Len++;
    Dig=Read_Dec1(Inp[Len]); if(Dig>=5) Value++;
-   Ret: if(Sign=='-') Value=(-Value); return Len; }
+   Ret: if(Sign=='-') Value=(-Value); return Len; }    // return number of processed input characters
 
 int8_t Read_LatDDMMSS(int32_t &Lat, const char *Inp);
 int8_t Read_LonDDMMSS(int32_t &Lon, const char *Inp);

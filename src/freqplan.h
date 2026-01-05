@@ -49,24 +49,29 @@ class FreqPlan
        return Channel; }                                                    // return 0..Channels-1 for USA/CA or Australia.
      return Slot^OGN; }                                                     // if Europe/South Africa: return 0 or 1 for EU freq. plan
 
-   uint32_t getChanFrequency(int Channel) const { return BaseFreq+ChanSepar*Channel; }
+   uint32_t getChanFrequency(int Channel) const
+   { if(Channel<Channels) return BaseFreq+ChanSepar*Channel;
+     return getFreqOBAND(); }
 
    uint32_t getFrequency(uint32_t Time, uint8_t Slot=0, uint8_t OGN=1) const
    { uint8_t Channel=getChannel(Time, Slot, OGN); return BaseFreq+ChanSepar*Channel; } // return frequency [Hz] for given UTC time and slot
 
-   uint32_t getFreqPAW(uint32_t Time)
-   { if(Plan<=1) return 869525000;
+   uint32_t getFreqOBAND(uint8_t Chan=2) const
+   { if(Plan<=1) return 869425000+50000*Chan;                                // Europe and default is 869.525MHz (5 channels for LDR)
      return 0; }
 
-   uint32_t getFreqFNT(uint32_t Time)
-   { if(Plan<=1) return BaseFreq;                                          // Europe and default is 868.2MHz
-     uint32_t Freq1 = getFrequency(Time, 0, 0);
-     if(Plan==5) return Freq1;                                             // for 434MHz is same as "FLARM", which is never used there
-     uint32_t Freq2 = getFrequency(Time, 0, 1);
-     return (Freq1+Freq2)/2; }                                             // other hopping systems is half-way between FLARM and OGN
+   uint32_t getFreqMESHT(void) const { return getFreqOBAND(); }
+
+   uint32_t getFreqFANET(void) const
+   { if(Plan<=1) return 868200000;                                           // Europe and default is 868.200MHz
+     return 0; }
+   //  uint32_t Freq1 = getFrequency(Time, 0, 0);
+   //  if(Plan==6) return Freq1;                                             // for 434MHz is same as "FLARM", which is never used there
+   //  uint32_t Freq2 = getFrequency(Time, 0, 1);
+   //  return (Freq1+Freq2)/2; }                                             // other hopping systems is half-way between FLARM and OGN
 
    uint8_t static calcPlan(int32_t Latitude, int32_t Longitude) // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zeeland
-   { if( (Longitude>=(-20*600000)) && (Longitude<=(60*600000)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
+   { if( (Longitude>=(-26*600000)) && (Longitude<=(60*600000)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
      if( Latitude<(20*600000) )                                            // below 20deg latitude
      { if( ( Longitude>(164*600000)) && (Latitude<(-30*600000)) && (Latitude>(-48*600000)) ) return 4;  // => New Zeeland
        return 3; }                                                         // => Australia + South America: upper half of 915MHz band

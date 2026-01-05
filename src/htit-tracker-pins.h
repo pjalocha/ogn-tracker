@@ -31,10 +31,9 @@
 #define Radio_PinCS    8 // CS
 #define Radio_PinIRQ1 14 // IRQ
 #define Radio_PinBusy 13 // Busy: only for SX1262
+#define Radio_SckFreq 8000000
 
-// seems to have no I2C defined
-// #define I2C_PinSCL    18 // SCL
-// #define I2C_PinSDA    17 // SDA
+// I2C is not defined by manufacturer, using custom pins
 #define I2C_PinSDA 45
 #define I2C_PinSCL 46
 

@@ -462,8 +462,14 @@ static void Table_System(httpd_req_t *Req)
 #if defined(WITH_HELTEC) || defined(WITH_HELTEC_V2)
   Len+=Format_String(Line+Len, "HELTEC");
 #endif
-#if defined(WITH_TBEAM) || defined(WITH_TBEAM_V10)
-  Len+=Format_String(Line+Len, "T-BEAM");
+#if defined(WITH_TBEAM07)
+  Len+=Format_String(Line+Len, "T-BEAMv0.7");
+#endif
+#if defined(WITH_TBEAM10)
+  Len+=Format_String(Line+Len, "T-BEAMv1.0");
+#endif
+#if defined(WITH_TBEAM12)
+  Len+=Format_String(Line+Len, "T-BEAMv1.2");
 #endif
   Len+=Format_String(Line+Len, "</td></tr>\n");
   httpd_resp_send_chunk(Req, Line, Len);
@@ -743,7 +749,7 @@ static void Table_Relay(httpd_req_t *Req)
   httpd_resp_sendstr_chunk(Req, "<thead><tr><th>Relay</th><th>Rank</th><th>[sec]</th></tr></thead>\n<tbody>\n");
 
   for( uint8_t Idx=0; Idx<RelayQueueSize; Idx++)
-  { OGN_RxPacket<OGN_Packet> *Packet = RelayQueue.Packet+Idx; if(Packet->Rank==0) continue;
+  { OGN_RxPacket<OGN_Packet> *Packet = OGN_RelayQueue.Packet+Idx; if(Packet->Rank==0) continue;
     Len =Format_String(Line, "<tr><td>");
     Line[Len++]='0'+Packet->Packet.Header.AddrType;
     Line[Len++]=':';

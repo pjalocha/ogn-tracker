@@ -1,6 +1,6 @@
 #include <ctype.h>
 
-#include "hal.h"
+#include "main.h"
 
 #include "tcpip_adapter.h"
 #include "esp_wifi.h"
@@ -45,18 +45,7 @@ void vTaskAP(void* pvParameters)
   AP_RxFIFO.Clear();
   vTaskDelay(1000);
 
-  WIFI_State.Flags=0;
-  Err=WIFI_Init();
-#ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, "WIFI_Init() => ");
-  if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
-  Format_SignDec(CONS_UART_Write, Err);
-  Format_String(CONS_UART_Write, "\n");
-  xSemaphoreGive(CONS_Mutex);
-#endif
-
-  Err=WIFI_StartAP(Parameters.APname, Parameters.APpass);
+  Err=WIFI_StartAP(Parameters.APname, Parameters.APpass, Parameters.APchan);
   WIFI_setTxPower(Parameters.APtxPwr);
   WIFI_setPowerSave(1);
 

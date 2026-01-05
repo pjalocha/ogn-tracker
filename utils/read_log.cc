@@ -61,7 +61,7 @@ static int List(void)
       LineIdx=0; continue; }
     if(LineIdx<MaxLineLen) Line[LineIdx++]=Byte;                      // add the byte to the line, keep collecting more bytes
   }
-  printf("%d log files\n", LogFileList.size());
+  printf("%u log files\n", (unsigned)LogFileList.size());
 
   return LogFileList.size(); }
 

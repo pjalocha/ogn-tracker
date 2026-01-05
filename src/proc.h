@@ -1,4 +1,6 @@
-// #include "flight.h"
+#pragma once
+
+extern uint8_t AlarmLevel;
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
@@ -16,7 +18,7 @@ const uint8_t RelayQueueSize = 32;
 const uint8_t RelayQueueSize = 16;
 #endif
 
-extern OGN_PrioQueue<OGN_Packet, RelayQueueSize> RelayQueue;       // received packets and candidates to be relayed
+extern Relay_PrioQueue<OGN_RxPacket<OGN_Packet>, RelayQueueSize> OGN_RelayQueue;       // received packets and candidates to be relayed
 
 #ifdef __cplusplus
   extern "C"

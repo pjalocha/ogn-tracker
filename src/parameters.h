@@ -4,10 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// #if defined(WITH_STM32) || defined(WITH_ESP32)
-// #include "hal.h"
-// #endif
-
 #include "ogn.h"
 
 #ifdef WITH_ESP32
@@ -36,8 +32,8 @@ class FlashParameters
        uint8_t  AddrType:2;  // 0=RND, 1=ICAO, 2=FLR, 3=OGN
        uint8_t  AcftType:4;  // 1=glider, 2=towplane, 3=helicopter, etc.
        bool      NoTrack:1;  // unused
-       bool      Stealth:1;  // unused
-     } ;
+       bool      Stealth:1;  // used for OGN packets
+     } __attribute__((packed));
    } ;
 
    union
@@ -49,7 +45,8 @@ class FlashParameters
        bool      RFchipTypeHW:  1; // is this RFM69HW (Tx power up to +20dBm) ?
       uint8_t        FreqPlan:  3; // 0=default or force given frequency hopping plan
        bool         RelayMode:  1; // Static relay-mode: rarely transmit own position, priority to relays or other aircrafts
-     } ;
+       // 5 bits spare
+     } __attribute__((packed));
    } ;
 
     // int16_t  RFchipFreqCorr; // [0.1ppm] frequency correction for crystal frequency offset
@@ -61,31 +58,29 @@ class FlashParameters
      struct
      { uint32_t  CONbaud:24; // [bps] Console baud rate
        uint8_t   CONprot: 8; // [bit-mask] Console protocol mask: 0=minGPS, 1=allGPS, 2=Baro, 3=UBX, 4=OGN, 5=FLARM, 6=GDL90, 7=$PGAV5
-     } ;
+     } __attribute__((packed));
    } ;
-
-    int16_t  PressCorr;      // [0.25Pa] pressure correction for the baro
 
    union
    { uint16_t Flags;
      struct
      { bool SaveToFlash:1;   // Save parameters from the config file to Flash
-       bool PowerON    :1;
-       bool SpareBit   :1;
-       // bool       hasBT:1;   // has BT interface on the console
-       // bool       BT_ON:1;   // BT on after power up
+       bool PowerON    :1;   // stay ON or OFF - to prevent accidential turn-ON
+       bool WiFiON     :1;   // start WiFi (if not then start BT)
        bool manGeoidSepar:1; // GeoidSepar is manually configured as the GPS or MAVlink are not able to deliver it
        bool     Encrypt:1;   // encrypt the position packets
        uint8_t  NavMode:3;   // GPS navigation mode/model
        uint8_t  Verbose:2;   //
        uint8_t  NavRate:3;   // [Hz] GPS position report rate
         int8_t TimeCorr:3;   // [sec] it appears for ArduPilot you need to correct time by 3 seconds which is likely the leap-second issue
-     } ;
+     } __attribute__((packed));
    } ;                       //
+
+   int16_t  PressCorr;       // [0.25Pa] pressure correction for the baro
 
    int16_t  GeoidSepar;      // [0.1m] Geoid-Separation, apparently ArduPilot MAVlink does not give this value (although present in the format)
                              //  or it could be a problem of some GPSes
-  uint8_t  PPSdelay;         // [ms] delay between the PPS and the data burst starts on the GPS UART (used when PPS failed or is not there)
+   uint8_t  PPSdelay;        // [ms] delay between the PPS and the data burst starts on the GPS UART (used when PPS failed or is not there)
 
   union
   { uint8_t  GNSS;
@@ -97,8 +92,8 @@ class FlashParameters
       bool EnableIMES:1;     // 0
       bool EnableQZSS:1;     // 1
       bool EnableGLO :1;     // 1
-      //
-    } ;
+      // one bit spare
+    } __attribute__((packed));
   } ;
 
    static const uint8_t InfoParmLen = 16; // [char] max. size of an infp-parameter
@@ -133,21 +128,22 @@ class FlashParameters
      struct
      { uint32_t PageMask:27;                          // enable/disable individual pages on the LCD or OLED screen
        uint8_t InitialPage:5;                         // the first page to show after boot
-     } ;
+     } __attribute__((packed));
    } ;
 
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+// #if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    char BTname[16];
    // char  BTpin[16];
-#endif
+// #endif
 
-#ifdef WITH_AP
+// #ifdef WITH_AP
    char APname[32];
-   char APpass[32];
+   char APpass[31];
+   uint8_t APchan;
 uint16_t APport;
   int8_t APminSig;
   int8_t APtxPwr;
-#endif
+// #endif
 
 #ifdef WITH_STRATUX
    char StratuxWIFI[32];
@@ -158,36 +154,44 @@ uint16_t StratuxPort;
   int8_t StratuxTxPwr;
 #endif
 
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
    static const uint8_t WIFInameLen = 32;
    static const uint8_t WIFIpassLen = 64;
    static const uint8_t WIFIsets    = 10;
    char *getWIFIname(uint8_t Idx) { return Idx<WIFIsets ? WIFIname[Idx]:0; }
    char *getWIFIpass(uint8_t Idx) { return Idx<WIFIsets ? WIFIpass[Idx]:0; }
 
-   char WIFIname[WIFIsets][32];
+   char WIFIname[WIFIsets][32];  // WiFi networks name/pass to connect to for log upload or APRS server
    char WIFIpass[WIFIsets][64];
+#endif
+#ifdef WITH_UPLOAD
+   char UploadURL[64];           // URL to upload log files
 #endif
 
 #ifdef WITH_ENCRYPT
   uint32_t EncryptKey[4];    // encryption key
 #endif
 #ifdef WITH_LORAWAN
-  uint8_t AppKey[16];
+  uint8_t AppKey[16];        // for OTAA: Application Key for TTN or Heliuem or other
+  uint8_t AppSesKey[16];     // for ABP:
+  uint8_t NetSesKey[16];
+  uint32_t DevAddr;
 #endif
 
   union
   { uint16_t TxProtMask;
     struct
-    { bool TxFLR:1;          // #0 FLARM
-      bool TxOGN:1;          // #1 OGN
+    { bool TxFLR :1;         // #0 FLARM
+      bool TxOGN :1;         // #1 OGN
       bool TxADSL:1;         // #2 ADS-L
-      bool TxPAW:1;          // #3 PAW
-      bool TxFNT:1;          // #4 FANET
-      bool TxWAN:1;          // #5 LoRaWAN
+      bool TxPAW :1;         // #3 PAW
+      bool TxFNT :1;         // #4 FANET
+      bool TxWAN :1;         // #5 LoRaWAN
       bool TxADSB:1;         // #6 ADS-B
       bool TxODID:1;         // #7 Open-Drone-ID
-    } ;
+      bool TxMSH :1;         // #8 Meshtastic
+      // 7 bits spare
+    } __attribute__((packed));
   } ;
 
   union
@@ -201,12 +205,13 @@ uint16_t StratuxPort;
       bool RxWAN:1;
       bool RxADSB:1;
       bool RxODID:1;
-    } ;
+      // 8 bits spare
+    } __attribute__((packed));
   } ;
 
   uint32_t CheckSum;
 
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
    const char *getWIFIpass(const char *NetName) const
    { for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
      { if(strcmp(NetName, WIFIname[Idx])==0) return WIFIpass[Idx]; }
@@ -226,14 +231,27 @@ uint16_t StratuxPort;
    static const uint32_t CheckInit = 0x89ABCDEF;
 
 #ifdef WITH_LORAWAN
-   bool hasAppKey(void) const
-   { for(int Idx=0; Idx<16; Idx++)
-     { if(AppKey[Idx]) return 1; }
-     return 0; }
+   static void clrKey(uint8_t *Key) { for(int Idx=0; Idx<16; Idx++) Key[Idx]=0x00; }
 
-   void clrAppKey(void) { for(int Idx=0; Idx<16; Idx++) AppKey[Idx]=0x00; }                   // set AppKey to all-zero
-   void cpyAppKey(uint8_t *Key) { memcpy(Key, AppKey, 16); }                                  // copy AppKey from given pointer
-   bool sameAppKey(const uint8_t *RefKey) const { return memcmp(AppKey, RefKey, 16)==0; }     // is AppKey same as given ?
+   static bool hasKey(const uint8_t *Key)                             // check if Key is all-zero
+   { for(int Idx=0; Idx<16; Idx++)
+     { if(Key[Idx]) return 1; }                                       // if any byte is non-zero then return true
+     return 0; }                                                      // return false
+
+   bool hasAppKey(void)    const   { return hasKey(AppKey); }
+   bool hasAppSesKey(void) const   { return hasKey(AppSesKey); }
+   bool hasNetSesKey(void) const   { return hasKey(NetSesKey); }
+
+   void clrAppKey(void)    { clrKey(AppKey); }                                                // set AppKey to all-zero
+   void clrAppSesKey(void) { clrKey(AppSesKey); }
+   void clrNetSesKey(void) { clrKey(NetSesKey); }
+
+   void  cpyAppKey   (uint8_t *Key) { memcpy(Key, AppKey, 16); }                                    // copy AppKey from given pointer
+   bool sameAppKey   (const uint8_t *RefKey) const { return memcmp(AppKey, RefKey, 16)==0; }        // is AppKey same as given ?
+   void  cpyAppSesKey(uint8_t *Key) { memcpy(Key, AppSesKey, 16); }                                 // copy AppKey from given pointer
+   bool sameAppSesKey(const uint8_t *RefKey) const { return memcmp(AppSesKey, RefKey, 16)==0; }     // is AppKey same as given ?
+   void  cpyNetSesKey(uint8_t *Key) { memcpy(Key, NetSesKey, 16); }                                 // copy AppKey from given pointer
+   bool sameNetSesKey(const uint8_t *RefKey) const { return memcmp(NetSesKey, RefKey, 16)==0; }     // is AppKey same as given ?
 #endif
 
    uint32_t static calcCheckSum(volatile uint32_t *Word, uint32_t Words)                      // calculate check-sum of pointed data
@@ -270,8 +288,8 @@ uint16_t StratuxPort;
     TxPower        =        14; // [dBm] for RFM69HW
     RFchipTypeHW   =         1;
 #endif
-    TxProtMask       =    0xFF;
-    RxProtMask       =    0xFF;
+    TxProtMask     =    0xFFFF;
+    RxProtMask     =    0xFFFF;
 
     Flags          =         0;
 #ifdef WITH_GPS_UBX
@@ -306,18 +324,22 @@ uint16_t StratuxPort;
       InfoParmValue(Idx)[0] = 0;
 #ifdef WITH_LORAWAN
     clrAppKey();
+    clrAppSesKey();
+    clrNetSesKey();
+    DevAddr=0;
 #endif
 #ifdef WITH_ENCRYPT
     for(uint8_t Idx=0; Idx<4; Idx++) EncryptKey[Idx]=0;
 #endif
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
    getAprsCall(BTname);
    // strcpy(BTpin, "1234");
 #endif
 #ifdef WITH_AP
    getAprsCall(APname);
-   APpass[0]=0;
-   APport  = 2000;
+   APpass[0]= 0;
+   APchan   = 6;
+   APport   = 2000;
    APminSig = -70; // [dBm]
    APtxPwr  =  40; // [0.25dBm]
 #endif
@@ -329,10 +351,13 @@ uint16_t StratuxPort;
    StratuxMinSig  = -70; // [dBm]
    StratuxTxPwr   =  40; // [0.25dBm]
 #endif
-#ifdef WITH_APRS
-    for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
-    { WIFIname[Idx][0] = 0;
-      WIFIpass[Idx][0] = 0; }
+#ifdef WITH_WIFI
+   for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
+   { WIFIname[Idx][0] = 0;
+     WIFIpass[Idx][0] = 0; }
+#endif
+#ifdef WITH_UPLOAD
+   UploadURL[0] = 0;
 #endif
   }
 
@@ -515,6 +540,24 @@ uint16_t StratuxPort;
     return 0; }
 #endif // WITH_STM32
 
+  static char AddrTypeChar(uint8_t AddrType)
+  { if(AddrType==3) return 'O';
+    if(AddrType==2) return 'F';
+    if(AddrType==1) return 'I';
+    return 'R'; }
+
+  char AddrTypeChar(void) const { return AddrTypeChar(AddrType); }
+
+  static const char *AcftTypeName(uint8_t AcftType)
+  { const char *TypeName[16] = { "----", "Glid", "Tow ", "Heli",
+                                 "SkyD", "Drop", "Hang", "Para",
+                                 "Pwrd", "Jet ", "UFO ", "Ball",
+                                 "Zepp", "UAV ", "Car ", "Fix " } ;
+    if(AcftType<16) return TypeName[AcftType];
+    return TypeName[0]; }
+
+  const char *AcftTypeName(void) const { return AcftTypeName(AcftType); }
+
   uint8_t Print(char *Line)       // print parameters on a single line, suitable for console output
   { uint8_t Len=0;
     Line[Len++]=HexDigit(AcftType); Line[Len++]=':';
@@ -573,26 +616,34 @@ uint16_t StratuxPort;
   uint8_t WritePOGNS_Pilot(char *Line)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNS,Pilot=");
-    Len+=Format_String(Line+Len, Pilot);
+    // Len+=Format_String(Line+Len, Pilot);
+    Len+=Write_StringEsc(Line+Len, Pilot, 16);
     Len+=Format_String(Line+Len, ",Crew=");
-    Len+=Format_String(Line+Len, Crew);
+    // Len+=Format_String(Line+Len, Crew);
+    Len+=Write_StringEsc(Line+Len, Crew, 16);
     Len+=Format_String(Line+Len, ",Reg=");
-    Len+=Format_String(Line+Len, Reg);
+    // Len+=Format_String(Line+Len, Reg);
+    Len+=Write_StringEsc(Line+Len, Reg, 16);
     Len+=Format_String(Line+Len, ",Base=");
-    Len+=Format_String(Line+Len, Base);
+    // Len+=Format_String(Line+Len, Base);
+    Len+=Write_StringEsc(Line+Len, Base, 16);
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     Line[Len]=0; return Len; }
 
   uint8_t WritePOGNS_Acft(char *Line)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNS,Manuf=");
-    Len+=Format_String(Line+Len, Manuf);
+    // Len+=Format_String(Line+Len, Manuf);
+    Len+=Write_StringEsc(Line+Len, Manuf, 16);
     Len+=Format_String(Line+Len, ",Model=");
-    Len+=Format_String(Line+Len, Model);
+    // Len+=Format_String(Line+Len, Model);
+    Len+=Write_StringEsc(Line+Len, Model, 16);
     Len+=Format_String(Line+Len, ",Type=");
-    Len+=Format_String(Line+Len, Type);
+    // Len+=Format_String(Line+Len, Type);
+    Len+=Write_StringEsc(Line+Len, Type, 16);
     Len+=Format_String(Line+Len, ",SN=");
-    Len+=Format_String(Line+Len, SN);
+    // Len+=Format_String(Line+Len, SN);
+    Len+=Write_StringEsc(Line+Len, SN, 16);
     Len+=NMEA_AppendCheckCRNL(Line, Len);
     Line[Len]=0; return Len; }
 
@@ -654,20 +705,27 @@ uint16_t StratuxPort;
   { if( (ch>='0') && (ch<='9') ) return 1;  // numbers
     if( (ch>='A') && (ch<='Z') ) return 1;  // uppercase letters
     if( (ch>='a') && (ch<='z') ) return 1;  // lowercase letters
-    if(strchr(".@-+_/#", ch)) return 1;     // any of the listed special characters
+    if(strchr(".@-+_/#:", ch)) return 1;    // any of the listed special characters
     return 0; }
 
   static int8_t Read_String(char *Value, const char *Inp, uint8_t MaxLen)
-  { const char *Val = SkipBlanks(Inp);
+  { const char *Str = SkipBlanks(Inp);
+    // if(Str[0]=='\"') return (Str-Inp) + Read_QuotedString(Value, Str, MaxLen);
     uint8_t Idx;
     for(Idx=0; Idx<MaxLen; Idx++)
-    { char ch=(*Val); if(ch==0) break;
+    { char ch=(*Str); if(ch==0) break;
+      if(ch=='\\' && Str[1]=='x')
+      { int8_t H=Read_Hex1(Str[2]);
+        int8_t L=Read_Hex1(Str[3]);
+        if(H>=0 && L>=0)
+        { Value[Idx] = (H<<4) | L;
+          Str+=4; continue; }
+      }
       if(!isStringChar(ch)) break;
-      Value[Idx] = ch;
-      Val++; }
+      Value[Idx] = ch; Str++; }
     for( ; Idx<MaxLen; Idx++)
       Value[Idx]=0;
-    return Val-Inp; }
+    return Str-Inp; }                            // return number of characters read
 
   static const char *SkipBlanks(const char *Inp) // skip space and all control codes thus below 32
   { for( ; ; )
@@ -675,6 +733,16 @@ uint16_t StratuxPort;
       if(ch>' ') break;
       Inp++; }
     return Inp; }
+
+  static int Read_Key(uint8_t *Key, const char *Inp, int Size=16)
+  { if(Inp[0]=='0' && Inp[1]=='x') Inp+=2;                     // skip initial 0x if present
+    for(uint8_t Idx=0; Idx<Size; Idx++)                                // read 16 hex bytes
+    { uint8_t Byte;
+      uint8_t Len=Read_Hex(Byte, Inp);
+      if(Len!=2) break;
+      Key[Idx]=Byte;
+      Inp+=2; }
+    return 0; }
 
   bool ReadParam(const char *Name, const char *Value)                           // interprete "Name = Value" line
   { if(strcmp(Name, "Address")==0)
@@ -748,13 +816,16 @@ uint16_t StratuxPort;
       Verbose=Mode; return 1; }
 #ifdef WITH_LORAWAN
     if(strcmp(Name, "AppKey")==0)
-    { if(Value[0]=='0' && Value[1]=='x') Value+=2;                     // skip initial 0x if present
-      for(uint8_t Idx=0; Idx<16; Idx++)                                // read 16 hex bytes
-      { uint8_t Byte;
-        uint8_t Len=Read_Hex(Byte, Value);
-        if(Len!=2) break;
-        AppKey[Idx]=Byte;
-        Value+=2; }
+    { Read_Key(AppKey, Value);
+      return 1; }
+    if(strcmp(Name, "DevAddr")==0)
+    { uint64_t Addr; if(Read_Int(Addr, Value)<=0) return 0;
+      DevAddr=Addr; return 1; }
+    if(strcmp(Name, "AppSesKey")==0)
+    { Read_Key(AppSesKey, Value);
+      return 1; }
+    if(strcmp(Name, "NetSesKey")==0)
+    { Read_Key(NetSesKey, Value);
       return 1; }
 #endif
 #ifdef WITH_ENCRYPT
@@ -783,12 +854,18 @@ uint16_t StratuxPort;
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
     { if(strcmp(Name, OGN_Packet::InfoParmName(Idx))==0)
         return Read_String(InfoParmValue(Idx), Value, 16)>=0; }
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     if(strcmp(Name, "BTname")==0) return Read_String(BTname, Value, 16)>=0;
 #endif
 #ifdef WITH_AP
     if(strcmp(Name, "APname")==0) return Read_String(APname, Value, 16)>=0;
     if(strcmp(Name, "APpass")==0) return Read_String(APpass, Value, 16)>=0;
+    if(strcmp(Name, "APchan")==0)
+    { int32_t Chan; if(Read_Int(Chan, Value)<=0) return 0;
+      if(Chan<=0 || Chan>13) Chan=6; APchan=Chan; return 1; }
+    if(strcmp(Name, "APminSig")==0)
+    { int32_t Sig; if(Read_Int(Sig, Value)<=0) return 0;
+      if(Sig<=(-100) || Sig>(-20)) Sig=-70; APminSig=Sig; return 1; }
     if(strcmp(Name, "APport")==0)
     { int32_t Port; if(Read_Int(Port, Value)<=0) return 0;
       if(Port<=0 || Port>0xFFFF) Port=30011; APport=Port; return 1; }
@@ -825,6 +902,9 @@ uint16_t StratuxPort;
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIname[Idx], Value, WIFInameLen)>=0; }
     if( (memcmp(Name, "WIFIpass", 8)==0) && (strlen(Name)==9) )
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
+#endif
+#ifdef WITH_WIFI
+    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 64)>=0;
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
@@ -864,7 +944,8 @@ uint16_t StratuxPort;
     int Lines=ReadFromFile(File);
     fclose(File); return Lines; }
 
-  static int Write_Hex(char *Line, const char *Name, uint32_t Value, uint8_t Digits)
+  template <class Type>
+   static int Write_Hex(char *Line, const char *Name, Type Value, uint8_t Digits)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = 0x");
     Len+=Format_Hex(Line+Len, Value, Digits);
@@ -875,6 +956,13 @@ uint16_t StratuxPort;
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
     Len+=Format_UnsDec(Line+Len, Value);
+    Len+=Format_String(Line+Len, ";");
+    Line[Len]=0; return Len; }
+
+  static int Write_Bool(char *Line, const char *Name, bool Value)
+  { uint8_t Len=Format_String(Line, Name, 14, 0);
+    Len+=Format_String(Line+Len, " = ");
+    Line[Len++] = '0'+Value;
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
@@ -892,24 +980,34 @@ uint16_t StratuxPort;
     Len+=Format_String(Line+Len, ";");
     Line[Len]=0; return Len; }
 
-  int Write_String(char *Line, const char *Name, char *Value, uint8_t MaxLen=16)
+  static int Write_String(char *Line, const char *Name, const char *Value, uint8_t MaxLen)
   { uint8_t Len=Format_String(Line, Name, 14, 0);
     Len+=Format_String(Line+Len, " = ");
-    Len+=Format_String(Line+Len, Value, 0, MaxLen);
+    // Len+=Format_String(Line+Len, Value, 0, MaxLen);
+    Len+=Write_StringEsc(Line+Len, Value, MaxLen);
     Line[Len]=0; return Len; }
+
+  static int Write_StringEsc(char *Line, const char *Str, uint8_t MaxLen)
+  { int Len=0;
+    for(uint8_t Idx=0; Idx<MaxLen; Idx++)
+    { char ch = Str[Idx]; if(ch==0) break;
+      if(isStringChar(ch)) { Line[Len++] = ch; continue; }
+      Line[Len++]='\\'; Line[Len++]='x'; Line[Len++]=HexDigit(ch>>4); Line[Len++]=HexDigit(ch&0x0F);
+    }
+    return Len; }
 
   int WriteToFile(FILE *File)
   { char Line[80];
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "Stealth"   ,          Stealth,        1); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Bool   (Line, "Stealth"   ,          Stealth          ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "CONbaud"   ,          CONbaud          ); strcat(Line, " #  [  bps]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "TxHW"      ,(uint32_t)RFchipTypeHW     ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "TxProtMask" ,    (uint32_t)TxProtMask,2); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Hex    (Line, "RxProtMask" ,    (uint32_t)RxProtMask,2); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "TxProtMask" ,  (uint32_t)TxProtMask,  4); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "RxProtMask" ,  (uint32_t)RxProtMask,  4); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "FreqPlan"  ,(uint32_t)FreqPlan         ); strcat(Line, " #  [ 0..5]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Float1 (Line, "FreqCorr"  , (int32_t)RFchipFreqCorr   ); strcat(Line, " #  [  ppm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TempCorr"  , (int32_t)RFchipTempCorr   ); strcat(Line, " #  [ degC]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -935,14 +1033,15 @@ uint16_t StratuxPort;
     Write_UnsDec (Line, "Bluetooth" ,          BT_ON            ); strcat(Line, " #  [  1|0]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
-    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx)); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx), 16); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_AP
     strcpy(Line, "APname         = "); strcat(Line, APname); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     strcpy(Line, "APpass         = "); strcat(Line, APpass); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_UnsDec (Line, "APport"  ,  (uint32_t)APport ); strcat(Line, " #  [port]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_UnsDec (Line, "APport"  ,  (uint32_t)APport );     strcat(Line, " #  [port]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_UnsDec (Line, "APchan"   , (uint32_t)APchan);      strcat(Line, " #  [chan]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Float1(Line, "APtxPwr"  ,  (int32_t)10*APtxPwr/4); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_STRATUX
@@ -953,13 +1052,16 @@ uint16_t StratuxPort;
     Write_Float1(Line, "StratuxTxPwr"  ,  (int32_t)10*StratuxTxPwr/4); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "StratuxMinSig",   (int32_t)StratuxMinSig); strcat(Line, " #  [ dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { if(WIFIname[Idx][0]==0) continue;
       strcpy(Line, "WIFIname"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIname[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
+#endif
+#ifdef WITH_UPLOAD
+    strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
     return 10+InfoParmNum; }
 
@@ -973,13 +1075,13 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "Stealth"   ,          Stealth,        1); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
+    Write_Bool   (Line, "Stealth"   ,          Stealth          ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "CONbaud"   ,          CONbaud          ); strcat(Line, " #  [  bps]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "TxHW"      ,(uint32_t)RFchipTypeHW     ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "TxProtMask" ,    (uint32_t)TxProtMask,2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "RxProtMask" ,    (uint32_t)RxProtMask,2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "TxProtMask" ,  (uint32_t)TxProtMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "RxProtMask" ,  (uint32_t)RxProtMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "FreqPlan"  ,(uint32_t)FreqPlan         ); strcat(Line, " #  [ 0..5]\n"); Format_String(Output, Line);
     Write_Float1 (Line, "FreqCorr"  , (int32_t)RFchipFreqCorr   ); strcat(Line, " #  [  ppm]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TempCorr"  , (int32_t)RFchipTempCorr   ); strcat(Line, " #  [ degC]\n"); Format_String(Output, Line);
@@ -1004,17 +1106,18 @@ uint16_t StratuxPort;
 #ifdef WITH_BT_PWR
     Write_UnsDec (Line, "Bluetooth" ,          BT_ON            ); strcat(Line, " #  [  1|0]\n"); Format_String(Output, Line);
 #endif
-#if defined(WITH_BT_SPP) || defined(WITH_BLE_SPP)
+#if defined(WITH_BT_SPP) || defined(WITH_BT4_SPP) || defined(WITH_BLE_SPP)
     strcpy(Line, "BTname         = "); strcat(Line, BTname); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
 #ifdef WITH_AP
     strcpy(Line, "APname         = "); strcat(Line, APname); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
     strcpy(Line, "APpass         = "); strcat(Line, APpass); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
-    Write_UnsDec (Line, "APport", (uint32_t)APport    ); strcat(Line, " #  [port]\n"); Format_String(Output, Line);
-    Write_Float1 (Line, "APtxPwr", (int32_t)10*APtxPwr/4); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
+    Write_UnsDec (Line, "APport", (uint32_t)APport    ); strcat(Line,     " #  [port]\n"); Format_String(Output, Line);
+    Write_UnsDec (Line, "APchan", (uint32_t)APchan    ); strcat(Line,     " #  [chan]\n"); Format_String(Output, Line);
+    Write_Float1 (Line, "APtxPwr", (int32_t)10*APtxPwr/4); strcat(Line,   " #  [ dBm]\n"); Format_String(Output, Line);
 #endif
     for(uint8_t Idx=0; Idx<InfoParmNum; Idx++)
-    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx)); strcat(Line, "; #  [char]\n"); Format_String(Output, Line); }
+    { Write_String (Line, OGN_Packet::InfoParmName(Idx), InfoParmValue(Idx), 16); strcat(Line, "; #  [char]\n"); Format_String(Output, Line); }
 #ifdef WITH_STRATUX
     strcpy(Line, "StratuxWIFI    = "); strcat(Line, StratuxWIFI); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
     strcpy(Line, "StratuxPass    = "); strcat(Line, StratuxPass); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
@@ -1023,7 +1126,7 @@ uint16_t StratuxPort;
     Write_Float1 (Line, "StratuxTxPwr", (int32_t)10*StratuxTxPwr/4); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
     Write_SignDec (Line, "StratuxMinSig", (int32_t)StratuxMinSig); strcat(Line, " #  [ dBm]\n"); Format_String(Output, Line);
 #endif
-#ifdef WITH_APRS
+#ifdef WITH_WIFI
     for(uint8_t Idx=0; Idx<WIFIsets; Idx++)
     { if(WIFIname[Idx][0]==0) continue;
       strcpy(Line, "WIFIname"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIname[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
@@ -1031,8 +1134,11 @@ uint16_t StratuxPort;
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
 #endif
+#ifdef WITH_WIFI
+    strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
+#endif
   }
 
-} ;
+} /* __attribute__((packed)) */ ;
 
 #endif // __PARAMETERS_H__

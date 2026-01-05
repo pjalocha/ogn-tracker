@@ -11,7 +11,7 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
 
  class NMEA_RxMsg                    // receiver for the NMEA sentences
 { public:
-   static const uint8_t MaxLen=120;  // maximum length
+   static const uint8_t MaxLen=104;  // maximum length
    static const uint8_t MaxParms=24; // maximum number of parameters (commas)
    uint8_t Data[MaxLen];             // the message itself
    uint8_t Len;                      // number of bytes
@@ -29,19 +29,23 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
      { (*SendByte)(Data[Idx]); }
      (*SendByte)('\r'); (*SendByte)('\n'); }
 
+   int ProcessLine(const char *Line)
+   { Clear();
+     int Idx=0;
+     for( ; ; Idx++)
+     { uint8_t Byte=Line[Idx]; if(Byte==0) break;
+       ProcessByte(Byte);
+       if(Byte<=' ' || isComplete()) break; }
+     return Idx; }
+
    void ProcessByte(uint8_t Byte)            // pass all bytes through this call and it will build the frame
      {
        if(isComplete()) return;              // if already a complete frame, ignore extra bytes
        if(Len==0)                            // if data is empty
        { if(Byte!='$') return;               // then ignore all bytes but '$'
          Data[Len++]=Byte;                   // start storing the frame
-         setLoading(); Check=0x00; Parms=0; } // set state to "isLoading", clear checksum
-/*
-       if(Byte=='$')                         // should '$' sign restart an ongoing NMEA sentence ?
-       { Len=0; Data[Len++]=Byte;
-         setLoading(); Check=0x00; Parms=0; }
-*/
-       else
+         setLoading(); Check=0x00; Parms=0;  // set state to "isLoading", clear checksum
+       } else                                // if not empty (being loaded)
        { if((Byte=='\r')||(Byte=='\n'))      // if CR (or NL ?) then frame is complete
          { setComplete(); if(Len<MaxLen) Data[Len]=0;
            return; }
@@ -111,6 +115,10 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
      { if(Data[1]!='G') return 0;
        return Data[2]=='A'; }
 
+   uint8_t isGQ(void) const                     // QZSS
+     { if(Data[1]!='G') return 0;
+       return Data[2]=='Q'; }
+
    uint8_t isGN(void) const
      { if(Data[1]!='G') return 0;
        return Data[2]=='N'; }
@@ -118,6 +126,10 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
    uint8_t isBD(void) const                     // for Beidou GSA and GSV
      { if(Data[1]!='B') return 0;
        return Data[2]=='D'; }
+
+   uint8_t isGB(void) const                     // for Beidou GSA and GSV
+     { if(Data[1]!='G') return 0;
+       return Data[2]=='B'; }
 
    uint8_t isGx(void) const                     // GPS or GLONASS sentence ?
      { return Data[1]=='G'; }
@@ -196,30 +208,30 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
 
    uint8_t isGPGSV(void) const                   // GPS satellite data
      { if(!isGP()) return 0;
-       if(Data[3]!='G') return 0;
-       if(Data[4]!='S') return 0;
-       return Data[5]=='V'; }
+       return isGxGSV(); }
 
    uint8_t isGLGSV(void) const                   // GLONASS satellite data
      { if(!isGL()) return 0;
-       if(Data[3]!='G') return 0;
-       if(Data[4]!='S') return 0;
-       return Data[5]=='V'; }
+       return isGxGSV(); }
 
    uint8_t isGAGSV(void) const                   // GALILEO satellite data
      { if(!isGA()) return 0;
-       if(Data[3]!='G') return 0;
-       if(Data[4]!='S') return 0;
-       return Data[5]=='V'; }
+       return isGxGSV(); }
+
+   uint8_t isGBGSV(void) const                   // BEIDOU satellite data
+     { if(!isGB()) return 0;
+       return isGxGSV(); }
 
    uint8_t isBDGSV(void) const                   // BEIDOU satellite data
      { if(!isBD()) return 0;
-       if(Data[3]!='G') return 0;
-       if(Data[4]!='S') return 0;
-       return Data[5]=='V'; }
+       return isGxGSV(); }
 
-   uint8_t isGPTXT(void) const                   // GPS test message
-     { if(!isGP()) return 0;
+   uint8_t isGQGSV(void) const                   // QZSS satellite data
+     { if(!isGQ()) return 0;
+       return isGxGSV(); }
+
+   uint8_t isGxTXT(void) const                   // GPS test message
+     { if(!isGx()) return 0;
        if(Data[3]!='T') return 0;
        if(Data[4]!='X') return 0;
        return Data[5]=='T'; }
