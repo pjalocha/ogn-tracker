@@ -13,6 +13,9 @@ jobs:
       matrix:
         env:
           - ttgo-sx1276-tbeam-v10
+          - ttgo-sx1262-tbeam-v10
+          - HTIT-Tracker
+          - ThinkNode-M5
 
     steps:
       - uses: actions/checkout@v4
