@@ -991,7 +991,7 @@ class GPS_Position: public GPS_Time
    uint16_t Seq;                // sequencial number to track GPS positions in a pipe
 
    uint8_t PredResid;           // [m] prediction residue to monitor the consistency of the GPS data
-   // uint16_t LockTime;           // [sec] Time since lock
+   uint8_t LockTime;            // [sec] Time since lock
    uint8_t NMEAframes;          // count the correct NMEA frames
    uint8_t NMEAerrors;          // cound the NMEA check-sum errors;
 
@@ -1008,7 +1008,7 @@ class GPS_Position: public GPS_Time
      Altitude=0; GeoidSeparation=0;
      Speed=0; Heading=0; ClimbRate=0; TurnRate=0;
      Temperature=0; Pressure=0; StdAltitude=0; Humidity=0;
-     PredResid=0;
+     PredResid=0; LockTime=0;
      NMEAframes=0; NMEAerrors=0; }
 
    bool isValid(void) const                          // is GPS data is valid = GPS lock
@@ -1796,13 +1796,13 @@ class GPS_Position: public GPS_Time
    int32_t calcLongitudeExtrapolation(int32_t Time, int32_t LonSpeed, int16_t LatCosine)  const // [ms]
    { return (((Time*LonSpeed*283+64)>>7))/LatCosine; }
 
-   static int32_t calcLatDistance(int32_t Lat1, int32_t Lat2)             // [m] distance along latitude
-   { return ((int64_t)(Lat2-Lat1)*0x2f684bda+0x80000000)>>32; }
+   static int32_t calcLatDistance(int32_t Lat1, int32_t Lat2)                // [m] distance along latitude
+   { return ((int64_t)(Lat2-Lat1)*0x2f684bda+0x80000000)>>32; }              // (1.0/600000)*(40e6/360)*0x100000000 = 0x2F684BDA
 
    static int32_t calcLonDistance(int32_t Lon1, int32_t Lon2, int16_t LatCos)  // [m] distance along longitude
    { int32_t dLon=Lon2-Lon1;
-     const int32_t HalfCircle = LatDeg*180;
-     if(dLon>HalfCircle) dLon-=HalfCircle;
+     const int32_t HalfCircle = LatDeg*180;                                  // we may cross the 180deg
+     if(dLon>HalfCircle) dLon-=HalfCircle;                                   // check
      else if(dLon<(-HalfCircle)) dLon+=HalfCircle;
      int32_t Dist = ((int64_t)(dLon)*0x2f684bda+0x80000000)>>32;             // [m]
      return (Dist*LatCos+0x800)>>12; }                                       // distance corrected by the latitude cosine
@@ -1821,7 +1821,7 @@ class GPS_Position: public GPS_Time
 
    static int16_t calcLatCosine(int16_t LatAngle)
    { int16_t LatCos=Icos(LatAngle);
-     if(LatCos<=0) LatCos=1;                                                 // protect against zero as it is used for division
+     if(LatCos<=0) LatCos=1;                                                  // protect against zero as it is used for division
      return LatCos; }
 
    int32_t calcLatDistance(int32_t RefLatitude) const                         // [m] distance along latitude
@@ -1831,7 +1831,7 @@ class GPS_Position: public GPS_Time
    { return calcLonDistance(RefLongitude, Longitude, LatitudeCosine); }       // need checking for 180deg boundary and corrected by latitude cosine
 
    void calcLatitudeCosine(void)
-   { int16_t LatAngle =  calcLatAngle16(Latitude);
+   { int16_t LatAngle = calcLatAngle16(Latitude);
        LatitudeCosine = calcLatCosine(LatAngle); }
 
    int WriteAPRS(char *Out, const char *Call, const char *Icon, uint32_t ID)

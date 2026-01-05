@@ -9,7 +9,7 @@
 // Coordinate scales:
 // - uBlox GPS and FLARM:       LSB = 1e-7 deg
 // - OGN-Tracker:               LSB = 0.0001/60 deg
-// - FANET/ADS-L pseudo-cordic: LSB =
+// - FANET/ADS-L pseudo-cordic: LSB = 1/93206 deg for Lat or 1/46603 deg for Lon
 // - True cordic:               2^32 = 360 deg
 
 int32_t Coord_FNTtoOGN(int32_t Coord) { return ((int64_t)Coord*27000219 +(1<<28))>>29; }    // [FANET cordic] => [0.0001/60 deg]
