@@ -345,20 +345,50 @@ uint16_t BatterySense(int Samples)
 //   digitalWrite(ADC_BattSenseEna, HIGH);
 // #endif
   uint32_t RawVoltage=0;
-  for( int Idx=0; Idx<Samples; Idx++)
-  { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
-  RawVoltage = (RawVoltage+Samples/2)/Samples;
-#ifdef WITH_HTIT_TRACKER
-  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs)*5;  // HTIT-Tracker has 1:4.9 voltage divider
+  for( int Idx=0; Idx<Samples; Idx++) {
+  RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
+  RawVoltage = (RawVoltage)/Samples;
+
+  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs);
+ 
+#ifdef BATT_ADC_RATIO     // custom ADC voltage divider ratio
+  Volt = Volt*BATT_ADC_RATIO; // custom ADC voltage divider ratio
 #else
-  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs)*2;
+  Volt = Volt*2;
 #endif
+
+#ifdef BATT_ADC_BIAS  // custom ADC bias value
+  if(Volt>=BATT_ADC_BIAS) Volt-=BATT_ADC_BIAS;
+#else
   const uint16_t Bias = 50;  // apparently, there is 80mV bias in the battery voltage measurement
   if(Volt>=Bias) Volt-=Bias;
+#endif
+
 // #ifdef ADC_BattSenseEna
 //   digitalWrite(ADC_BattSenseEna, LOW);
 // #endif
+
   return Volt; } // [mV]
+
+  uint16_t BatterySenseRaw(int Samples)
+{
+#ifdef WITH_XPOWERS
+  if(PMU) return PMU->getBattVoltage();
+#endif
+#ifdef WITH_AXP
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202) return AXP.getBattVoltage();
+#endif
+// #ifdef ADC_BattSenseEna
+//   digitalWrite(ADC_BattSenseEna, HIGH);
+// #endif
+  uint32_t RawVoltage=0;
+  for( int Idx=0; Idx<Samples; Idx++) {
+  RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
+  RawVoltage = (RawVoltage)/Samples;
+
+  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs);
+ Serial.printf("Vraw: %dmV\n", Volt);
+ return Volt; } // [mV]
 
 // =======================================================================================================
 

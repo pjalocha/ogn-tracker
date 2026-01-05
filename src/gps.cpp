@@ -720,7 +720,7 @@ static void GPS_NMEA(void)                                                 // wh
 #endif
   { if(Parameters.Verbose && !NMEA.isGxGSV())
     { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
+      Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);  
       CONS_UART_Write('\r'); CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex); }
 #ifdef WITH_SDLOG

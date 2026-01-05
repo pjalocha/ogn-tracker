@@ -824,7 +824,6 @@ void Radio_Task(void *Parms)
     if(xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
-
   }
 }
 

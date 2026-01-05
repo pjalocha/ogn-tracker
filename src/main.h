@@ -102,6 +102,7 @@ void GPS_DISABLE(void);
 #endif
 
 uint16_t BatterySense(int Samples=4); // [mV]
+uint16_t BatterySenseRaw(int Samples=4); // [mV]
 
 #ifdef WITH_SPIFFS
 int  SPIFFS_Register(const char *Path="/spiffs", const char *Label="intlog", size_t MaxOpenFiles=5);
