@@ -6,7 +6,6 @@ It works on TTGO modules like various T-Beam modules including the ESP32-S3 vers
 ## New: firmware installer for dummies
 
 Use Chrome/Edge: https://pjalocha.github.io/ogn-tracker/
-Works with ESP32 T-Beam but not yet with ESP32-S3 devices
 
 ## Hardware
 to run an OGN-Tracker you need to have at least:
