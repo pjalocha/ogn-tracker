@@ -60,18 +60,18 @@ jobs:
             mkdir -p "docs/firmware/$ENV"
 
             if [ -n "${BOOTAPP_OFS:-}" ]; then
-              esptool.py --chip "$CHIP" merge_bin \
+              esptool --chip "$CHIP" merge-bin \
                 -o "docs/firmware/$ENV/merged.bin" \
-                "BOOT_OFS"     ".pio/build/$ENV/bootloader.bin" \
-                "PART_OFS"     ".pio/build/$ENV/partitions.bin" \
-                "BOOTAPP_OFS"  "boot_app0.bin" \
-                "APP_OFS"      ".pio/build/$ENV/firmware.bin"
+                "$BOOT_OFS"     ".pio/build/$ENV/bootloader.bin" \
+                "$PART_OFS"     ".pio/build/$ENV/partitions.bin" \
+                "$BOOTAPP_OFS"  "boot_app0.bin" \
+                "$APP_OFS"      ".pio/build/$ENV/firmware.bin"
             else
-              esptool.py --chip "$CHIP" merge_bin \
+              esptool --chip "$CHIP" merge-bin \
                 -o "docs/firmware/$ENV/merged.bin" \
-                "BOOT_OFS"     ".pio/build/$ENV/bootloader.bin" \
-                "PART_OFS"     ".pio/build/$ENV/partitions.bin" \
-                "APP_OFS"      ".pio/build/$ENV/firmware.bin"
+                "$BOOT_OFS"     ".pio/build/$ENV/bootloader.bin" \
+                "$PART_OFS"     ".pio/build/$ENV/partitions.bin" \
+                "$APP_OFS"      ".pio/build/$ENV/firmware.bin"
             fi
 
             printf '{\n  "name": "OGN-Tracker (%s)",\n  "builds": [\n    {\n      "chipFamily": "%s",\n      "parts": [\n        { "path": "../firmware/%s/merged.bin", "offset": 0 }\n      ]\n    }\n  ]\n}\n' \
