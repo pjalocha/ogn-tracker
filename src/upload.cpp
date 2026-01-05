@@ -62,7 +62,8 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
   esp_http_client_config_t Config =
   { .url = Parameters.UploadURL,
     .method = HTTP_METHOD_POST,
-    .event_handler = NULL };
+    .event_handler = NULL
+  };
 
   esp_http_client_handle_t Client = esp_http_client_init(&Config);
   // esp_http_client_set_method(Client, HTTP_METHOD_POST);
@@ -107,7 +108,7 @@ static int RemoteLogFileName(char *Name, uint32_t Time)
   Len+=FlashLog_ShortFileName(Name+Len, Time);
   return Len; }
 
-static int UploadOldestFile(bool Delete=1)
+static int UploadOldestFile(bool Delete=0)                   // SP9WPN: tymczasowo Delete=0, potem przywrócić =1
 { uint32_t Oldest=0;
   int Files=FlashLog_FindOldestFile(Oldest);
   if(Files==0 || Oldest==0) return 0;

@@ -165,7 +165,10 @@ uint16_t StratuxPort;
    char WIFIpass[WIFIsets][64];
 #endif
 #ifdef WITH_UPLOAD
-   char UploadURL[64];           // URL to upload log files
+   char UploadURL[128];           // URL to upload log files
+#endif
+#ifdef WITH_OTA
+   char FirmwareURL[128];           // URL to upload log files
 #endif
 
 #ifdef WITH_ENCRYPT
@@ -358,6 +361,9 @@ uint16_t StratuxPort;
 #endif
 #ifdef WITH_UPLOAD
    UploadURL[0] = 0;
+#endif
+#ifdef WITH_OTA
+   FirmwareURL[0] = 0;
 #endif
   }
 
@@ -905,6 +911,9 @@ uint16_t StratuxPort;
 #endif
 #ifdef WITH_WIFI
     if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 64)>=0;
+#ifdef WITH_OTA
+    if(strcmp(Name, "FirmwareURL")==0) return Read_String(FirmwareURL, Value, 64)>=0;
+#endif
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
@@ -1063,6 +1072,9 @@ uint16_t StratuxPort;
 #ifdef WITH_UPLOAD
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
+#ifdef WITH_OTA
+    strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
+#endif
     return 10+InfoParmNum; }
 
   int WriteToFile(const char *Name = "/spiffs/TRACKER.CFG")
@@ -1133,10 +1145,12 @@ uint16_t StratuxPort;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
-#endif
-#ifdef WITH_WIFI
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
+#ifdef WITH_OTA
+    strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
+#endif
+    strcpy(Line, "Firmware built on "); strcat(Line, __DATE__); strcat(Line, " "); strcat(Line, __TIME__); strcat(Line, "\n"); Format_String(Output, Line);
   }
 
 } /* __attribute__((packed)) */ ;

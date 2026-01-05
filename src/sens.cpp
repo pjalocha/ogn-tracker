@@ -263,7 +263,7 @@ static void ProcBaro(void)
       Line[Len++]=','; }
 #endif
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose)
+    if(Parameters.Verbose >= 3)
     { if(xSemaphoreTake(CONS_Mutex, 20))
       { Format_String(CONS_UART_Write, Line, 0, Len);                       // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }
@@ -284,7 +284,7 @@ static void ProcBaro(void)
     Len+=Format_String(Line+Len, "f,");                              // normally f for feet, but metres and m works with XcSoar
     Len+=Format_String(Line+Len, "3");                               // 1 no fix, 2 - 2D, 3 - 3D; assume 3D for now
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose)
+    if(Parameters.Verbose >= 3)
     { if(xSemaphoreTake(CONS_Mutex, 10))
       { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }
@@ -310,7 +310,7 @@ static void ProcBaro(void)
     Len+=Format_UnsDec(Line+Len, (BatteryVoltage+128)>>8, 4, 3);     // [mV] Battery voltage
     // Len+=Format_String(Line+Len, "999");                          // [%] battery level
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose)
+    if(Parameters.Verbose >= 3)
     { if(xSemaphoreTake(CONS_Mutex, 20))
       { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }

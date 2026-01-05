@@ -36,6 +36,10 @@
 #include "upload.h"
 #endif
 
+#ifdef WITH_OTA
+#include "ota.h"
+#endif
+
 #ifdef WITH_AP
 #include "ap.h"
 #endif
@@ -979,6 +983,9 @@ void setup()
 #endif
 #ifdef WITH_EPAPER
   xTaskCreate(EPD_Task    ,  "EPD" ,  4000, NULL, 0, NULL);  //
+#endif
+#ifdef WITH_OTA
+  xTaskCreate(vTaskOTA    , "OTA"  ,  4000, NULL, 0, NULL);
 #endif
 
 }
