@@ -77,7 +77,7 @@ class PAW_Packet
      Alt = Altitude;
      return 3; }
 
-   void Write(const uint8_t *Data) { memcpy(Byte, Data, Size); }
+   void Read(const uint8_t *Data) { memcpy(Byte, Data, Size); }
 
    int Write(OGN1_Packet &Packet)                          // convert to an OGN packet
    { Packet.HeaderWord=0;
@@ -103,7 +103,9 @@ class PAW_Packet
      Address  = Packet.Header.Address;                     // [24-bit]
      if(Packet.Header.NonPos) return 0;                    // encode only position packets
      AcftType = Packet.Position.AcftType;                  // [4-bit] aircraft-type
-     Altitude = Packet.DecodeAltitude();                   // [m]
+     int Alt = Packet.DecodeAltitude();                    // [m]
+     if(Alt>4000) return 0;                                // PAW has only 12 bits for altitude
+     Altitude = Alt;
      Heading = Packet.DecodeHeading()/10;                  // [deg]
      Speed = (398*(int32_t)Packet.DecodeSpeed()+1024)>>11; // [0.1m/s] => [kts]
      Latitude  = (0.0001f/60)*Packet.DecodeLatitude();     // [deg]
@@ -233,11 +235,20 @@ class PAW_Packet
 
 class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
 { public:
-   uint8_t  CSNR;           // [0.5dB]  carrier Signal-to-Noise Ratio
-   uint8_t   SNR;           // [0.25dB]
-   int16_t FreqOfs;         // [10Hz]
    uint32_t Time;           // [sec]
    uint32_t nsTime;         // [nsec]
+   uint8_t  CSNR;           // [0.5dB]  carrier Signal-to-Noise Ratio
+   uint8_t   SNR;           // [0.25dB]
+   int16_t  FreqOfs;        // [10Hz]
+   uint16_t RxChan;
+   uint8_t  RxErr;
+   union
+   { uint8_t Flags;
+     struct
+     { bool PAW:1;
+       bool LDR:1;
+     } ;
+   } ;
 
   public:
    void Print(void) const
@@ -262,8 +273,6 @@ class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
    int WriteStxJSON(char *JSON) const
    { int Len = PAW_Packet::WriteStxJSON(JSON);
      uint32_t PosTime=getSlotTime();
-     // if(OGN)
-     // { }
      Len+=Format_String(JSON+Len, ",\"time\":");
      Len+=Format_UnsDec(JSON+Len, PosTime);
      int64_t RxTime=(int64_t)Time-PosTime; RxTime*=1000; RxTime+=nsTime/1000000;

@@ -29,9 +29,15 @@
 
 #ifdef WITH_GDL90
 #include "gdl90.h"
-GDL90_HEARTBEAT GDL_HEARTBEAT;
-GDL90_REPORT GDL_REPORT;
+static GDL90_HEARTBEAT GDL_HEARTBEAT;
+static GDL90_REPORT GDL_REPORT;
 #endif
+
+#ifdef WITH_MESHT
+#include "mesht-proto.h"
+#endif
+
+uint8_t AlarmLevel = 0;
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
@@ -236,6 +242,28 @@ static void getTelemSatSNR(ADSL_Packet &Packet)
   Packet.SatSNR.Data.HDOP = GPS_SatMon.HDOP;
   Packet.SatSNR.Data.VDOP = GPS_SatMon.VDOP; }
 
+static bool getTelemInfo(ADSL_Packet &Packet)
+{ Packet.Init(0x42);
+  Packet.setAddress    (Parameters.Address);
+  Packet.setAddrTypeOGN(Parameters.AddrType);
+  Packet.setRelay(0);
+  static uint8_t InfoIdx=0;
+  char *Value=0;
+  for( ; ; )
+  { InfoIdx++; if(InfoIdx>=Parameters.InfoParmNum) { InfoIdx=0; break; }
+    Value=Parameters.InfoParmValue(InfoIdx);
+    if(Value[0]) break; }
+  if(Value[0]==0) return 0;
+  Packet.Info.Header.TelemType=0x01;
+  Packet.Info.Header.InfoType=InfoIdx;
+  uint8_t Idx=0;
+  for( ; Idx<14; Idx++)
+  { char Ch=Value[Idx]; if(Ch==0) break;
+    Packet.Info.Msg[Idx]=Ch; }
+  for( ; Idx<14; Idx++)
+  { Packet.Info.Msg[Idx]=0; }
+  return 1; }
+
 static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
@@ -250,9 +278,9 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
         else { SNR=0; }
   Packet.Telemetry.GPS.SNR=SNR;
-  uint16_t BattVolt = BatterySense();                               // [mV] measure battery voltage
+  uint16_t BattVolt = (BatteryVoltage+128)>>8; // BatterySense();   // [mV] measure battery voltage
   Packet.Telemetry.Battery.Voltage  = EncodeUR2V8(BattVolt/4);
-  int BattCap = ((int)BattVolt-3300)/16;                            // approx. formula
+  int BattCap = ((int)BattVolt-3300)/13;                            // approx. formula
   Packet.Telemetry.Battery.Capacity = Limit(BattCap, 0, 63);
   Packet.Telemetry.Radio.RxNoise = Limit(120+(int)floorf(Radio_BkgRSSI+0.5), 0, 63);
   Packet.Telemetry.Radio.RxRate  = EncodeUR2V4(floorf(Radio_PktRate*4+0.5f));
@@ -260,30 +288,6 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
 
 static void ReadStatus(OGN_Packet &Packet)
 {
-// #ifdef WITH_JACEK
-/*
-  xSemaphoreTake(ADC1_Mutex, portMAX_DELAY);
-  uint16_t MCU_Vtemp  = ADC_Read_MCU_Vtemp();                                // T = 25+(V25-Vtemp)/Avg_Slope; V25=1.43+/-0.1V, Avg_Slope=4.3+/-0.3mV/degC
-  uint16_t MCU_Vref   = ADC_Read_MCU_Vref();                                 // VDD = 1.2*4096/Vref
-           MCU_Vtemp += ADC_Read_MCU_Vtemp();                                // measure again and average
-           MCU_Vref  += ADC_Read_MCU_Vref();
-#ifdef WITH_BATT_SENSE
-  uint16_t Vbatt       = ADC_Read_Vbatt();                                   // measure voltage on PB1
-           Vbatt      += ADC_Read_Vbatt();
-#endif
-  xSemaphoreGive(ADC1_Mutex);
-   int16_t MCU_Temp = -999;                                                  // [0.1degC]
-  uint16_t MCU_VCC = 0;                                                      // [0.01V]
-  if(MCU_Vref)
-  { MCU_Temp = 250 + ( ( ( (int32_t)1430 - ((int32_t)1200*(int32_t)MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref )*(int32_t)37 +8 )>>4); // [0.1degC]
-    MCU_VCC  = ( ((uint32_t)240<<12)+(MCU_Vref>>1))/MCU_Vref; }              // [0.01V]
-  Packet.EncodeVoltage(((MCU_VCC<<4)+12)/25);                     // [1/64V]  write supply voltage to the status packet
-#ifdef WITH_BATT_SENSE
-  if(MCU_Vref)
-    Packet.EncodeVoltage(((int32_t)154*(int32_t)Vbatt+(MCU_Vref>>1))/MCU_Vref); // [1/64V] battery voltage assuming 1:1 divider form battery to PB1
-#endif
-*/
-
   // Packet.clrHumidity();
 #ifdef WITH_STM32
 #ifdef WITH_JACEK
@@ -424,18 +428,88 @@ static uint8_t WritePFLAU(char *NMEA, uint8_t GPS=1)    // produce the (mostly d
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
+#ifdef WITH_MESHT
+static MeshtProto_NodeInfo Mesht_NodeInfo;
+static MeshtProto_GPS Mesht_GPS;
+static AES128 AES;
+
+static uint32_t MeshtHash(uint32_t X)
+{ X ^= X>>16;
+  X *= 0x85ebca6b;
+  X ^= X>>13;
+  X *= 0xc2b2ae35;
+  X ^= X>>16;
+  return X; }
+
+static int getMeshNodeInfo(void)
+{ Mesht_NodeInfo.Clear();
+  Mesht_NodeInfo.MAC=getUniqueID();
+  sprintf(Mesht_NodeInfo.ID,    "!%08x",   (uint32_t)Mesht_NodeInfo.MAC);
+  sprintf(Mesht_NodeInfo.Short, "%04x",    (uint16_t)Mesht_NodeInfo.MAC);
+  Mesht_NodeInfo.Role=5;                 // 5:tracker
+#if defined(WITH_TBEAM07) || defined(WITH_TBEAM10) || defined(WITH_TBEAM12)
+  Mesht_NodeInfo.Hardware=4;             // 4:T-Beam
+#endif
+#ifdef WITH_HTIT_TRACKER
+  Mesht_NodeInfo.Hardware=48;            // ?
+#endif
+  sprintf(Mesht_NodeInfo.Name, "OGN:%X:%s:%s", Parameters.AcftType, Parameters.Reg, Parameters.Pilot);
+  return 1; }
+
+static int getMeshtGPS(const GPS_Position *Position)
+{ Mesht_GPS.Clear();
+  Mesht_GPS.Time = Position->getUnixTime();
+  if(!Position->isValid()) return 0;
+  Mesht_GPS.Lat = (int64_t)Position->Latitude*50/3;
+  Mesht_GPS.Lon = (int64_t)Position->Longitude*50/3;
+  Mesht_GPS.AltMSL = (Position->Altitude+5)/10; Mesht_GPS.hasAltMSL=Mesht_GPS.AltMSL>0;
+  Mesht_GPS.Speed  = (Position->Speed+5)/10; Mesht_GPS.hasSpeed=1;
+  Mesht_GPS.Track  =  Position->Heading*10; Mesht_GPS.hasTrack=1;
+  Mesht_GPS.Prec_bits=32;
+  return 1; }
+
+static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
+{ int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
+  if(!OK) return 0;
+  static uint8_t InfoBackOff=0;
+  int Len=0;
+  OK=getMeshtGPS(Position);
+  if(OK) Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
+  if(InfoBackOff) InfoBackOff--;
+  if(!OK || InfoBackOff==0)
+  { OK=getMeshNodeInfo();
+    if(OK) Len=MeshtProto::EncodeNodeInfo(Packet->getMeshtMsg(), Mesht_NodeInfo);
+    InfoBackOff = 10+Random.RX%5; }
+  if(!OK || Len==0) return 0;
+  Packet->Len=Packet->HeaderSize+Len;
+  Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time
+  OK=Packet->encryptMeshtMsg(AES);
+  return OK; }
+#endif
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+
 // process received OGN packets
 static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
-  if( RxPacket->Packet.Header.NonPos)                                                 // status or info packet
-  {
+{ uint32_t Address  = RxPacket->Packet.Header.Address;
+  uint8_t  AddrType = RxPacket->Packet.Header.AddrType;
+  uint8_t OwnPacket = ( Address  == Parameters.Address  )
+                   && ( AddrType == Parameters.AddrType );
+  if(RxPacket->Packet.Header.NonPos)                                                 // status or info packet
+  { if(RxPacket->Packet.isInfo())                                                    // info packet
+    { char Call[16]= { 0 };
+      if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
+      { // Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+#ifdef WITH_LOOKOUT
+        Look.setTargetCall(Address, AddrType+4, Call);
+#endif
+      }
+    }
 #ifdef WITH_SDLOG
-    IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
+    IGClog_FIFO.Write(*RxPacket);                                                     // log all non-position packets ?
 #endif
     return ; }
-  uint8_t MyOwnPacket = ( RxPacket->Packet.Header.Address  == Parameters.Address  )
-                     && ( RxPacket->Packet.Header.AddrType == Parameters.AddrType );
-  if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
+  if(OwnPacket) return;                                                             // don't process my own (relayed) packets
   if(RxPacket->Packet.Header.Encrypted && RxPacket->RxErr<10)                         // here we attempt to relay encrypted packets
   { RxPacket->calcRelayRank(GPS_Altitude/10);
     OGN_RxPacket<OGN_Packet> *PrevRxPacket = OGN_RelayQueue.addNew(RxPacketIdx);      // add to the relay queue and get the previous packet of same ID
@@ -443,6 +517,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
     IGClog_FIFO.Write(*RxPacket);                                                     // log encrypted position packets
 #endif
     return; }
+  int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   bool DistOK = RxPacket->Packet.calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
   if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;
@@ -481,11 +556,11 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
      bool Signif = PrevRxPacket==0;
@@ -530,19 +605,28 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 
 // process received ADS-L packets
 static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
-  if(!RxPacket->Packet.isPos())                                                 // status or info packet
-  {
-// #ifdef WITH_SDLOG
-//     IGClog_FIFO.Write(*RxPacket);                                                     // unconditionally log all non-position packets ?
-// #endif
-    return ; }
+{ uint32_t Address = RxPacket->Packet.getAddress();
   uint8_t AddrType = RxPacket->Packet.getAddrTable();
   if(AddrType<4) AddrType=0;
   else AddrType-=4;
-  uint8_t MyOwnPacket = ( RxPacket->Packet.getAddress()  == Parameters.Address )
-                     && (                       AddrType == Parameters.AddrType);
+  uint8_t MyOwnPacket = ( Address  == Parameters.Address )
+                     && ( AddrType == Parameters.AddrType);
+  if(RxPacket->Packet.isTelemetry())
+  { // Serial.printf("ProcessRxADSL() %02X:%06X Telem:%d\n", AddrType, Address, RxPacket->Packet.Telemetry.Header.TelemType);
+    char Call[16] = { 0 };
+    if(RxPacket->RxErr<=4 && RxPacket->Packet.getInfo(Call, 5)>0)
+    { // Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
+#ifdef WITH_LOOKOUT
+      Look.setTargetCall(Address, AddrType+4, Call);
+#endif
+    }
+#ifdef WITH_SDLOG
+    // IGClog_FIFO.Write(*RxPacket);                                                     // log all telemetry packets$
+#endif
+    return ; }
+  if(!RxPacket->Packet.isPosition()) return;
   if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
+  int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   bool DistOK = RxPacket->calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
   if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;
@@ -563,11 +647,11 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(KNOB_Tick>12) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
 /*
@@ -723,11 +807,15 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_GPS_UBX
     if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
+#ifdef WITH_GPS_PCAS
+    if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+#endif
 #ifdef WITH_GPS_MTK
     if(msTime<300) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
 
     if(SlotTime==PrevSlotTime) continue;                                // stil same time slot, go back to RX processing
+    // Serial.printf("PROC: %u(%u)\n", SlotTime, PrevSlotTime);
 
     PrevSlotTime=SlotTime;                                              // new slot started
                                                                         // this part of the loop is executed only once per slot-time
@@ -878,10 +966,22 @@ void vTaskPROC(void* pvParameters)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
-        XorShift32(Random.RX);
         FNT_TxFIFO.Write();
+        XorShift32(Random.RX);
         FNTbackOff = 8+(Random.RX&0x1); }                                   // every 9 or 10sec
 #endif // WITH_FANET
+#ifdef WITH_MESHT
+      static uint8_t MSHbackOff=0;
+      if(MSHbackOff) MSHbackOff--;
+      else if(Parameters.TxMSH && Position->isValid() && Radio_FreqPlan.Plan<=1)
+      { MESHT_Packet *Packet = MSH_TxFIFO.getWrite();
+        int OK=getMeshtPacket(Packet, Position);
+        if(OK)
+        { MSH_TxFIFO.Write();
+          XorShift32(Random.RX);                                              // random for next packet time
+          MSHbackOff = 50+(Random.RX%19); }                                   // every minute or so
+      }
+#endif // WITH_MESHT
 #ifdef WITH_PAW
       XorShift32(Random.RX);
       static uint8_t PAW_BackOff=0;
@@ -889,9 +989,6 @@ void vTaskPROC(void* pvParameters)
       else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
       { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
         int Good=TxPacket->Read(PosPacket.Packet);                       // convert OGN position packet to PilotAware
-// #ifdef WITH_ADSL
-//         if(AdslPacket && (RX&10)) { TxPacket->Copy(&(AdslPacket->Version)); Good=1; }
-// #endif
         if(Good)
         { PAW_TxFIFO.Write();                                            // complete the write into the transmitter queue
           PAW_BackOff = 3+Random.RX%3; }                                 // randomly choose time to transmit next PAW packet
@@ -934,16 +1031,16 @@ void vTaskPROC(void* pvParameters)
         // int8_t Bearing = (12*(int32_t)RelBearing+0x8000)>>16;              // [-12..+12]
 #ifdef WITH_BEEPER                                                         // make the sound according to the level
         if(Warn<=1)
-        { if(KNOB_Tick>8)
+        { if(AlarmLevel>2)
           { Play(Play_Vol_1 | Play_Oct_1 | 4, 200); }
         }
         else if(Warn<=2)
-        { if(KNOB_Tick>4)
+        { if(AlarmLevel>1)
           { Play(Play_Vol_3 | Play_Oct_1 | 8, 150); Play(Play_Oct_1 | 8, 150);
             Play(Play_Vol_3 | Play_Oct_1 | 8, 150); }
         }
         else if(Warn<=3)
-        { if(KNOB_Tick>2)
+        { if(AlarmLevel>0)
           { Play(Play_Vol_3 | Play_Oct_1 |11, 100); Play(Play_Oct_1 |11, 100);
             Play(Play_Vol_3 | Play_Oct_1 |11, 100); Play(Play_Oct_1 |11, 100);
             Play(Play_Vol_3 | Play_Oct_1 |11, 100); }
@@ -1070,8 +1167,9 @@ void vTaskPROC(void* pvParameters)
       if(StatTxBackOff) StatTxBackOff--;
       else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
-        if(StatTxPkt==0) getTelemStatus(*Packet, Position);
+             if(StatTxPkt==0) getTelemStatus(*Packet, Position);
         else if(StatTxPkt==1) getTelemSatSNR(*Packet);
+        else if(StatTxPkt==2 && getTelemInfo(*Packet)) { }
         else if(!getTelemSatPPS(*Packet)) getTelemSatSNR(*Packet);
         StatTxPkt++; if(StatTxPkt>=3) StatTxPkt=0;
         Packet->Scramble();

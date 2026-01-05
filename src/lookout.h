@@ -23,7 +23,7 @@ class LookOut_Target           // describes a flying aircrafts
      struct
      { uint32_t  Address:24;  // 24-bit address
        uint8_t  AddrType: 8;  // ADS-L address-type
-     } ;
+     }  __attribute__((packed));
    } ;
    Acft_RelPos     Pos;        // Position relative to the reference Lat/Lon/Alt
     int8_t        Pred;        // [0.5sec] amount of time by which own position has been predicted/extrapolated
@@ -31,8 +31,8 @@ class LookOut_Target           // describes a flying aircrafts
 
    uint8_t     SysMask;        // bit mask for RF systems received: 0=FLR, 1=OGN, 2=PilotAware, 3=FANET, 4=ADS-L, 5=ADS-B
 
-   uint8_t AcftType;           // ADS-B, ADSL or FLARN/OGN aircraft-type
-   char Call[11];
+   uint8_t    AcftType;        // ADS-B, ADSL or FLARN/OGN aircraft-type
+   char       Call[11];
 
    union
    { uint8_t Flags;            // single-bit flags
@@ -43,7 +43,7 @@ class LookOut_Target           // describes a flying aircrafts
        // bool   hasStdAlt  :1;   // has pressure StdAlt
        bool   Reported   :1;   // this target has already been reported with $PFLAA or GDL90
        bool   Alloc      :1;   // is allocated or not (a free slot, where a new target can go into)
-     } ;
+     }  __attribute__((packed));
    } ;
 
    union
@@ -52,7 +52,7 @@ class LookOut_Target           // describes a flying aircrafts
      { uint16_t DistMargin;     // [0.5m] remaining safety margin: if positive, then considered not a thread at all
        uint8_t  TimeMargin;     // [0.5s] time to target (if no distance margin left)
        uint8_t  WarnLevel;      // assigned warning level: 0, 1, 2 or 3
-     } ;
+     }  __attribute__((packed));
    } ;
 
    int16_t        dX;        // [0.5m]   relative position of target
@@ -117,15 +117,17 @@ class LookOut_Target           // describes a flying aircrafts
      NMEA[Len++]=',';
      Len+=Format_SignDec(NMEA+Len, dZ/2, 1, 0, 1);                          // [m] relative altitude
      NMEA[Len++]=',';
-     uint8_t AddrType = (ID>>24)&0x03;
-// #ifdef WITH_SKYDEMON                                               // SkyDemon hack which accepts only 1 or 2
-     if(AddrType!=1) AddrType=2;
+     uint8_t AddrType = (ID>>24)&0x03F;
+// #ifdef WITH_SKYDEMON                                            // SkyDemon hack which accepts only 1 or 2
+//      if(AddrType!=1) AddrType=2;
+     bool ICAO=AddrType==5;
 // #endif
-     NMEA[Len++]='0'+AddrType;                                     // address-type (3=OGN, but not accepted by SkyDemon)
+     NMEA[Len++]='2'-ICAO;                                         // address-type (3=OGN, but not accepted by SkyDemon)
      NMEA[Len++]=',';
      uint32_t Addr = ID&0xFFFFFF;                                  // [24-bit] address
      Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));               // 24-bit address: RND, ICAO, FLARM, OGN
      Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
+     if(Call[0]) { NMEA[Len++]='|'; Len+=Format_String(NMEA+Len, Call); }
      NMEA[Len++]=',';
      // Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*225+0x800)>>12, 4, 1); // [deg] heading (by GPS)
      Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*45+0x1000)>>13);  // [deg] heading - without decimal part
@@ -305,10 +307,10 @@ template <const uint8_t MaxTgts=32>
 
    void Write(GDL90_REPORT &Report) const                   // Own GDL90 position report
    { Report.Clear();
-     Report.setAddress(ID&0xFFFFFF);
-     Report.setAddrType(((ID>>24)&0x03)!=1);                // ICAO or non-ICAO
-     Report.setAcftTypeOGN(ID>>26);
-     Report.setAcftCall(ID);
+     Report.setAddress(Address);
+     Report.setAddrType(AddrType!=5);                       // ICAO or non-ICAO
+     Report.setAcftTypeOGN(AcftType);
+     Report.setAcftCall(ID);  ///
      int32_t Alt = RefAlt+(Pos.Z>>1)+(Pos.dStdAlt>>1);      // [m]
      Report.setAltitude(MetersToFeet(Alt));
      Report.setHeading(Pos.Heading>>8);
@@ -322,10 +324,10 @@ template <const uint8_t MaxTgts=32>
    void Write(GDL90_REPORT &Report, const LookOut_Target *Tgt) const   // Target GDL90 position report
    { Report.Clear();
      Report.setAlertStatus(Tgt->WarnLevel>0);
-     Report.setAddress(Tgt->ID&0xFFFFFF);
-     Report.setAddrType(((Tgt->ID>>24)&0x03)!=1);
-     Report.setAcftTypeOGN(Tgt->ID>>26);
-     Report.setAcftCall(Tgt->ID);
+     Report.setAddress(Tgt->Address);
+     Report.setAddrType(Tgt->AddrType!=5);
+     Report.setAcftTypeOGN(Tgt->AcftType);
+     Report.setAcftCall(Tgt->ID); ///
      int32_t Alt = RefAlt+(Tgt->Pos.Z>>1)+(Tgt->Pos.dStdAlt>>1); // [m]
      Report.setAltitude(MetersToFeet(Alt));
      Report.setHeading(Tgt->Pos.Heading>>8);
@@ -385,7 +387,7 @@ template <const uint8_t MaxTgts=32>
     int32_t Start(OGNx_Packet &OwnPos, uint32_t RxTime)
    { Clear();
      // ID = OwnPos.getAddressAndType() | ((uint32_t)OwnPos.Position.AcftType<<26) ;
-     ID = OwnPos.Header.Address |((uint32_t)OwnPos.Header.AddrType<<24);
+     ID = OwnPos.Header.Address | ((uint32_t)(OwnPos.Header.AddrType+4)<<24);
      AcftType = OwnPos.Position.AcftType;
      RefTime = OwnPos.getTime(RxTime);                // set reference time
      RefLat = OwnPos.DecodeLatitude();                // and reference positon
@@ -445,12 +447,12 @@ template <const uint8_t MaxTgts=32>
      if(!New->Pos.hasStdAlt)                                                           // if no baro altitude
      { if(Pos.hasStdAlt) { New->Pos.dStdAlt=Pos.dStdAlt; New->Pos.hasStdAlt=1; } }     // take it from own
      New->Address  = Packet.getAddress();
-     New->AddrType = Packet.getAddrTypeOGN();
+     New->AddrType = Packet.getAddrType();
      New->AcftType = Packet.getAcftTypeOGN();
      return ProcessTarget(New); }
 
    template <class OGNx_Packet>
-    const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime, const char *Call=0)  // process a position of another aircraft in OGN format
+    const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
    { // printf("ProcessTarget(%d) ... entry\n", WeakestIdx);
      LookOut_Target *New = Target+WeakestIdx;                                          // get a free or lowest rank slot
      New->Clear();                                                                     // put the new position there
@@ -458,16 +460,27 @@ template <const uint8_t MaxTgts=32>
      if(!New->Pos.hasStdAlt)                                                           // if no baro altitude
      { if(Pos.hasStdAlt) { New->Pos.dStdAlt=Pos.dStdAlt; New->Pos.hasStdAlt=1;} }      // take it from own
      New->Address  = Packet.Header.Address;
-     New->AddrType = Packet.Header.AddrType;
+     New->AddrType = Packet.Header.AddrType+4;
      New->AcftType = Packet.Position.AcftType;
-     if(Call) { strncpy(New->Call, Call, 10); New->Call[10]=0; }
-         else   New->Call[0]=0;
+     // if(Call) { strncpy(New->Call, Call, 10); New->Call[10]=0; }
+     //     else   New->Call[0]=0;
+     New->Call[0]=0;
      return ProcessTarget(New); }
+
+   void setTargetCall(uint32_t Address, uint8_t AddrType, const char *Call)
+   { uint32_t ID=AddrType; ID = (ID<<=24)|Address;
+     uint8_t Idx=0;
+     for( ; Idx<MaxTargets; Idx++)
+     { if(Target[Idx].Alloc==0) continue;
+       if(Target[Idx].ID==ID) break; }
+     if(Idx>=MaxTargets) return;
+     strncpy(Target[Idx].Call, Call, 10);
+     Target[Idx].Call[10]=0; }
 
    const LookOut_Target *ProcessTarget(LookOut_Target *New)
    {  // printf("ProcessTarget() ... %08X\n", ID);
      uint8_t OldIdx;
-     LookOut_Target *Old = 0;                                                                   // possible previous index to the same ID
+     LookOut_Target *Old = 0;                                                          // possible previous index to the same ID
      for(OldIdx=0; OldIdx<MaxTargets; OldIdx++)                                        // scan targets already on the list
      { if(Target[OldIdx].Alloc==0) continue;                                           // skip not allocated
        if(OldIdx==WeakestIdx) continue;                                                // skip the new position
@@ -523,7 +536,7 @@ template <const uint8_t MaxTgts=32>
 
      return New; }
 
-   uint8_t calcTarget(LookOut_Target *Tgt)                                              // calculate the savety margin for the (new) target
+   uint8_t calcTarget(LookOut_Target *Tgt)                                              // calculate the safety margin for the (new) target
    {
      Tgt->TimeMargin=0xFF;                                                              // initially set inf. time margin
      Tgt->WarnLevel=0;                                                                  // warning level=0

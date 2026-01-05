@@ -32,11 +32,13 @@ class Flarm_Packet
 
   public:
 
-   void PrintBin(uint32_t Word, uint8_t Bits=32) const
-   { putchar(' ');
-     for(int8_t Bit=(Bits-1); Bit>=0; Bit--)
-     { putchar('0'+ ((Word>>(Bits-1))&1) ); Word<<=1; }
-   }
+   // Write NMEA which SkyDemon understands and can decode FLARM
+   int WritePXFLM(char *Line)
+   { int Len=Format_String(Line, "$PXFLM,");
+     for(uint8_t Idx=0; Idx<Bytes; Idx++)
+       Len+=Format_Hex(Line+Len, Byte[Idx]);
+     Len+=NMEA_AppendCheckCRNL(Line, Len);
+     Line[Len]=0; return Len; }
 
   static const uint16_t SYNC_CRC = 0x051E;            // CRC of the three SYNC bytes
 

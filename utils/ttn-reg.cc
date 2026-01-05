@@ -24,6 +24,8 @@ static int PrintHex(char *Out, const uint8_t *Byte, int Len, const char *Format=
 
 // ==================================================================================================================
 
+const char *DataFilename = "ttn-reg.dat";
+
 static SerialPort Port;
 
 // write given number of Data bytes to the serial port
@@ -89,10 +91,10 @@ int main(int argc, char *argv[])
     PortName = argv[1]; }
   if(Port.Open(PortName, BaudRate)<0) { printf("Can't open %s at %dbps\n", PortName, BaudRate); return -1; }
 
-  int64_t JoinEUI    = 0x70B3D57ED0035895;  // OGN application EUI
-  int64_t DevEUI     = 0;
-  char    DevID[40];
-  uint8_t AppKey[16];
+  int64_t JoinEUI    = 0x70B3D57ED0035895;  // 64-bit OGN application EUI
+  int64_t DevEUI     = 0;                   // 64-bit device EUI
+  char    DevID[40];                        //
+  uint8_t AppKey[16];                       // 128-bit application key
 
   for( int Try=0; Try<3; Try++)
   { strcpy(CmdLine, "$POGNS\r\n");
@@ -107,8 +109,8 @@ int main(int argc, char *argv[])
   if(DevEUI<=0xFFFFFFFF) return 0;
 
   if(getrandom(&AppKey, 16, 0)!=16) { printf("Could not produce AppKey\n"); return 0; }
-  sprintf(DevID, "ogntrk-%012lx", DevEUI);
-  PrintHex(CmdLine, AppKey, 16);
+  sprintf(DevID, "ogntrk-%012lx", DevEUI);              // assign some device-id based on EUI (but could be any string)
+  PrintHex(CmdLine, AppKey, 16);                        // print application key in the hex form
   printf("JoinEUI=%016lX, DevEUI=%012lX, DevID=%s, AppKey=%s\n", JoinEUI, DevEUI, DevID, CmdLine);
 
   int CmdLen=sprintf(CmdLine, "ttn-lw-stack.ttn-lw-cli devices delete --application-id=ogn --device-id=%s\n", DevID);
@@ -127,12 +129,13 @@ int main(int argc, char *argv[])
   CmdRet=system(CmdLine);
   printf("%s => %d\n", CmdLine, CmdRet);
 
-  CmdLen=sprintf(CmdLine, "$POGNS,AppKey=");
+  CmdLen=sprintf(CmdLine, "$POGNS,AppKey=");          // construct NMEA to config the new AppKey
   CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
   CmdLen+=sprintf(CmdLine+CmdLen, "\r\n");
   Port.Write(CmdLine);
   printf("Serial <= %s", CmdLine);
 
   Port.Close();
+
   return 0; }
 

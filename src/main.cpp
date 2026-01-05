@@ -57,7 +57,7 @@
 #include <esp_sleep.h>
 #endif
 
-#ifdef Button_Pin
+#if defined(Button_Pin) || defined(Button1_Pin) || defined(Button2_Pin)
 #include "Button2.h"
 #endif
 
@@ -86,6 +86,14 @@
 #include "esp_vfs_fat.h"
 #include "esp_spiffs.h"
 
+#ifdef WITH_EPAPER
+#include "epd.h"
+#endif
+
+#ifdef WITH_THINKNODE_M5
+#include <PCA9557.h>
+#endif
+
 #ifdef WITH_ST7735
 #include "tft.h"
 #endif
@@ -110,11 +118,17 @@ HardItems HardwareStatus = { 0 };
 // VS to store parameters and other data
 
 static int NVS_Init(void)
-{ esp_err_t Err = nvs_flash_init();
-  if (Err == ESP_ERR_NVS_NO_FREE_PAGES)
+{ // nvs_flash_erase();                     // for debug only
+  esp_err_t Err = nvs_flash_init();
+  if(Err==ESP_ERR_NVS_NO_FREE_PAGES)
   { nvs_flash_erase();
-    Err = nvs_flash_init(); }
+    Err=nvs_flash_init(); }
   return Err; }
+
+// =======================================================================================================
+
+SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
+SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
 
 // =======================================================================================================
 
@@ -162,7 +176,7 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
 // =======================================================================================================
 
 uint8_t I2C_Restart(uint8_t Bus)
-{ Wire.end(); Wire.begin(); return 0; }
+{ Wire.end(); Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); return 0; }
 
 uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
 { Wire.beginTransmission(Addr);
@@ -197,6 +211,76 @@ uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprim
 static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
 static void Vext_ON(bool ON=1) { digitalWrite(Vext_PinEna, ON); }
 #endif
+
+// =======================================================================================================
+
+#ifdef WITH_THINKNODE_M5
+static PCA9557 IOexpand(0x18, &Wire);
+
+static void PCA_Init(void)
+{ IOexpand.pinMode(PCA_PinEPD, OUTPUT);
+  IOexpand.pinMode(PCA_PinIO, OUTPUT);
+  IOexpand.digitalWrite(PCA_PinEPD, HIGH);
+  IOexpand.digitalWrite(PCA_PinIO, HIGH);
+
+  IOexpand.pinMode(PCA_PinRED, OUTPUT);      // red LED, when LOW then it flashes when connected to USB
+  IOexpand.pinMode(PCA_PinPWR, OUTPUT);      // when this is high then red LED is either dim or flashing when connected to USB ?
+  IOexpand.pinMode(PCA_PinBLUE, OUTPUT);     // blue LED, HIGH active
+  IOexpand.digitalWrite(PCA_PinRED, LOW);
+  IOexpand.digitalWrite(PCA_PinPWR, LOW);
+  IOexpand.digitalWrite(PCA_PinBLUE, LOW); }
+
+static void PCA_LED_Blue(bool ON=1, int Wait=10)
+{ if(!xSemaphoreTake(I2C_Mutex, Wait)) return;
+  IOexpand.digitalWrite(PCA_PinBLUE, ON);
+  xSemaphoreGive(I2C_Mutex); }
+
+static void PCA_LED_Red(bool ON=1, int Wait=10)
+{ if(!xSemaphoreTake(I2C_Mutex, Wait)) return;
+  IOexpand.digitalWrite(PCA_PinPWR, ON);
+  xSemaphoreGive(I2C_Mutex); }
+
+#endif
+
+static uint8_t  LED_OGN_RX_FlashON    = 0;
+static uint8_t  LED_OGN_RX_FlashLen   = 0;
+static uint32_t LED_OGN_RX_FlashStart = 0;
+
+static uint8_t  LED_OGN_TX_FlashON    = 0;
+static uint8_t  LED_OGN_TX_FlashLen   = 0;
+static uint32_t LED_OGN_TX_FlashStart = 0;
+
+void LED_OGN_RX(uint8_t msLong) { LED_OGN_RX_FlashLen += msLong; }
+void LED_OGN_TX(uint8_t msLong) { LED_OGN_TX_FlashLen += msLong; }
+
+void OGN_LED_Flash(void)
+{ uint32_t Now = millis();
+#ifdef WITH_THINKNODE_M5
+  if(LED_OGN_RX_FlashON)
+  { uint32_t Time = Now-LED_OGN_RX_FlashStart;
+    if(Time>=LED_OGN_RX_FlashLen)
+    { PCA_LED_Blue(0);
+      LED_OGN_RX_FlashLen=0;
+      LED_OGN_RX_FlashON=0; }
+  }
+  else if(LED_OGN_RX_FlashLen)
+  { PCA_LED_Blue(1);
+    LED_OGN_RX_FlashStart=Now;
+    LED_OGN_RX_FlashON=1; }
+
+  if(LED_OGN_TX_FlashON)
+  { uint32_t Time = Now-LED_OGN_TX_FlashStart;
+    if(Time>=LED_OGN_TX_FlashLen)
+    { PCA_LED_Red(0);
+      LED_OGN_TX_FlashLen=0;
+      LED_OGN_TX_FlashON=0; }
+  }
+  else if(LED_OGN_TX_FlashLen)
+  { PCA_LED_Red(1);
+    LED_OGN_TX_FlashStart=Now;
+    LED_OGN_TX_FlashON=1; }
+#endif
+}
 
 // =======================================================================================================
 
@@ -298,11 +382,28 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 
 // =======================================================================================================
 
+#ifdef Button2_Pin
+static Button2 OptButton(Button2_Pin);
+static bool OptButton_isPressed(void) { return digitalRead(Button2_Pin)==0; }
+
+static void OptButton_Single(Button2 Butt) // callback when a single press on the button
+{ if(AlarmLevel>0) AlarmLevel--;
+  else AlarmLevel=4; }
+
+static void OptButton_Init(void)
+{ pinMode(Button2_Pin, INPUT);
+  OptButton.setLongClickTime(2000);
+  OptButton.setClickHandler(OptButton_Single);
+  // OptButton.setDoubleClickHandler(OptButton_Double);
+  // OptButton.setLongClickDetectedHandler(OptButton_Long);
+}
+#endif
+
 #ifdef Button_Pin
 static Button2 Button(Button_Pin);
 static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
-static void Button_Single(Button2 Butt)
+static void Button_Single(Button2 Butt) // callback when a single press on the button
 {
 #ifdef WITH_ST7735
   if(TFT_PageOFF)
@@ -466,7 +567,7 @@ void GPS_DISABLE(void) { gpio_set_level((gpio_num_t)GPS_PinEna, 0); }
 void GPS_ENABLE (void) { gpio_set_level((gpio_num_t)GPS_PinEna, 1); }
 #endif
 
-static void GPS_UART_Init(int BaudRate=9600)
+static void GPS_UART_Init(int BaudRate=115200)
 {
 #ifdef GPS_PinPPS
   // gpio_set_direction((gpio_num_t)GPS_PinPPS, GPIO_MODE_INPUT);
@@ -510,13 +611,14 @@ static void LED_PCB_Init(void)  { pinMode(LED_PCB_Pin, OUTPUT); }
 static void LED_PCB_Init (void)    { }
        void LED_PCB_On   (bool ON) { }
        void LED_PCB_Off  (void)    { }
+#ifdef WITH_THINKNODE_M5
+       void LED_PCB_Flash(uint8_t Time) { LED_OGN_TX(Time); }
+#else
        void LED_PCB_Flash(uint8_t Time) { }
+#endif
 #endif
 
 // =======================================================================================================
-
-SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
-SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
 
 static char Line[128];
 static void PrintPOGNS(void);
@@ -539,6 +641,9 @@ void setup()
 #ifdef Button_Pin
   Button_Init();
 #endif
+#ifdef Button2_Pin
+  OptButton_Init();
+#endif
   LED_PCB_Init();
 #ifdef WITH_HTIT_TRACKER
   Vext_Init();
@@ -546,9 +651,11 @@ void setup()
 #endif
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
-  { Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
+  { Serial.printf("Parameters could not be read from NVS: resetting to defaults\n");
+    Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
   if(Parameters.CONbaud<2400 || Parameters.CONbaud>921600 || Parameters.CONbaud%2400)
-  { Parameters.CONbaud=115200; Parameters.WriteToNVS(); }
+  { Parameters.CONbaud=115200;
+    Parameters.WriteToNVS(); }
 
 #ifdef HARD_NAME
   strcpy(Parameters.Hard, HARD_NAME);
@@ -557,7 +664,7 @@ void setup()
   strcpy(Parameters.Soft, SOFT_NAME);
 #endif
 
-#ifdef ARDUINO_USB_MODE
+#if ARDUINO_USB_CDC_ON_BOOT==1
   Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
 #endif
   Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
@@ -582,7 +689,8 @@ void setup()
 #ifdef BOARD_HAS_PSRAM
   if(psramFound()) Serial.printf("PSRAM:%d/%dkB ", ESP.getFreePsram()>>10, ESP.getPsramSize()>>10);
 #endif
-  Serial.printf("Heap:%d/%dkB CPU:%dMHz\n", ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz());
+  Serial.printf("Heap:%d/%dkB CPU:%dMHz Flash:%dMB\n",
+     ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz(), ESP.getFlashChipSize()/1024/1024);
 
 #ifdef WITH_ST7735
   TFT_Init();
@@ -618,6 +726,7 @@ void setup()
 #endif
       esp_deep_sleep_start(); }            // enter deep sleep
   }
+  // here we could detect long press at startup to reset to defaults
 #endif  // WITH_SLEEP
   TFT_BL(128);
 #endif  // WITH_ST7735
@@ -626,6 +735,16 @@ void setup()
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(20);                                  // [ms]
 #endif
+
+#ifdef WITH_THINKNODE_M5
+  PCA_Init();
+#endif
+
+// #ifdef WITH_EPAPER
+//   EPD_Init();
+//   EPD_DrawID();
+// #endif
+
 #ifdef PMU_I2C_PinSCL
   static TwoWire PMU_I2C = TwoWire(1);
   PMU_I2C.begin(PMU_I2C_PinSDA, PMU_I2C_PinSCL, (uint32_t)400000);
@@ -814,6 +933,26 @@ void setup()
   TFT_DrawID(StartAP);
 #endif
 
+#ifdef WITH_BEEPER
+  Beep_Init();
+  // Beep(800, 32);
+  // delay(200);
+  // Beep(1000, 32);
+  // delay(200);
+  // Beep(0);
+  // delay(200);
+  // Beep_Note(Play_Vol_1 | Play_Oct_0 | 0x05);
+  // delay(200);
+  // Beep_Note(Play_Vol_1 | Play_Oct_0 | 0x08);
+  // delay(200);
+  // Beep_Note(Play_Vol_0 | Play_Oct_0 | 0x00);
+  // delay(200);
+
+  Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
+  Play(Play_Vol_1 | Play_Oct_0 | 0x08, 250);
+  Play(Play_Vol_0 | Play_Oct_0 | 0x00, 100);
+#endif
+
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
   Len+=NMEA_AppendCheckCRNL(Line, Len);
   Line[Len]=0;
@@ -836,7 +975,10 @@ void setup()
     xTaskCreate(vTaskAP,  "AP",  4000, NULL, 0, NULL);
 #endif
 #ifdef WITH_UPLOAD
-  xTaskCreate(vTaskUPLOAD,"UPLOAD",4000, NULL, 0, NULL);
+  xTaskCreate(vTaskUPLOAD, "UPLOAD",  4000, NULL, 0, NULL);
+#endif
+#ifdef WITH_EPAPER
+  xTaskCreate(EPD_Task    ,  "EPD" ,  4000, NULL, 0, NULL);  //
 #endif
 
 }
@@ -1087,7 +1229,7 @@ static int ProcessInput(void)
     {
 #ifdef WITH_GPS_NMEA_PASS
       if(NMEA.isChecked())
-        NMEA.Send(GPS_UART_Write);
+      { if(NMEA.isP()) NMEA.Send(GPS_UART_Write); }
 #endif
       ProcessNMEA();                                              // interpret the NMEA
       NMEA.Clear(); }                                             // clear the NMEA processor for the next sentence
@@ -1100,26 +1242,47 @@ static int ProcessInput(void)
   }
   return Count; }
 
+// static uint32_t PrevMillis=0;
+
 void loop()
-{ vTaskDelay(1);
+{ // uint32_t Now=millis();
+  // uint32_t Diff=Now-PrevMillis;
+  // if(Diff==0) { vTaskDelay(1); Diff++; }
+  // if(Diff>10) Diff=10;
+  vTaskDelay(1);
+#ifdef WITH_BEEPER
+  Play_TimerCheck(1);              // handle playing notes on the buzzer
+#endif
+  OGN_LED_Flash();                 // flash LEDs as requested by Radio Tx/Rx
 #ifdef Button_Pin
-  Button.loop();
+  Button.loop();                   // handle button presses
+#endif
+#ifdef Button2_Pin
+  OptButton.loop();                // handle button presses
 #endif
 #ifdef WITH_BLE_SPP
-  BLE_SPP_Check();
+  BLE_SPP_Check();                 // handle Bluetooth
 #endif
-  // if(ProcessInput()==0) vTaskDelay(1);
-  while(ProcessInput()>0);
-#ifdef WITH_ST7735
+  while(ProcessInput()>0);         // handle console input
   static GPS_Position *PrevGPS=0;
   GPS_Position *GPS = GPS_getPosition();
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
+#ifdef WITH_ST7735
   if(TFT_PageChange)
   { TFT_PageChange=0;
     if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
+#endif
   if(GPS!=PrevGPS)
-  { TFT_PageChange=1;
+  {
+#ifdef WITH_OLED
+    OLED.clearBuffer();
+    OLED_DrawGPS(OLED.getU8g2(), GPS);
+    OLED_DrawStatusBar(OLED.getU8g2(), GPS);
+    OLED.sendBuffer();
+#endif
+#ifdef WITH_ST7735
+    TFT_PageChange=1;
 #ifdef WITH_TFT_DIM
     uint32_t msTime = millis();
     if(BatteryVoltageRate>0x10) TFT_PageActive = msTime;
@@ -1130,8 +1293,8 @@ void loop()
 #endif
     if(TFT_PageOFF) TFT_BL(0);
               else  TFT_BL(128);
+#endif // WITH_ST7735
     PrevGPS=GPS; }
-#endif
 }
 
 // =======================================================================================================

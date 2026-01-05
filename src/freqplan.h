@@ -60,6 +60,8 @@ class FreqPlan
    { if(Plan<=1) return 869425000+50000*Chan;                                // Europe and default is 869.525MHz (5 channels for LDR)
      return 0; }
 
+   uint32_t getFreqMESHT(void) const { return getFreqOBAND(); }
+
    uint32_t getFreqFANET(void) const
    { if(Plan<=1) return 868200000;                                           // Europe and default is 868.200MHz
      return 0; }

@@ -32,7 +32,7 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
     { bool hasStdAlt:1;
       bool hasClimb :1;
       bool hasTurn  :1;
-    } ;
+    }  __attribute__((packed));
   } ;
    // int16_t Ax,Ay;                // [1/16m/s^2] acceleration vactor
    // int16_t R;                    // [0.5m] (signed) turning radius - calc. from Turn and Speed

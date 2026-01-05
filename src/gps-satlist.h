@@ -1,3 +1,5 @@
+#pragma once
+
 #include <algorithm>
 
 #include "format.h"
@@ -32,12 +34,12 @@ class GPS_Sat
   static const uint8_t Sys_GB = 4; // BeiDou
 
   union
-  { uint32_t Word;      // Fit satellite data into one word
+  { uint32_t Word;      // Pack all satellite data into one 32-bit word
     struct
-    { uint16_t Azim :6; // [6deg]
-      uint8_t  Elev :4; // [6deg]  >60 means invalid sky position
+    { uint16_t Azim :6; // [6deg] 0..60, >60 means invalid sky position
+      uint8_t  Elev :4; // [6deg] 0..15
       uint8_t   SNR :6; // [dB/Hz]   0 means invalid
-      uint8_t  Time :4; // [sec]    15 means invalid
+      uint8_t  Time :4; // [sec] 0..14, 15 means invalid
       bool      Fix :1; // Included for fix (listed by GSA)
       uint16_t  PRN :8; // [number] GPS converts to range 1..99 thus we might save one bit
       uint16_t  Sys :3; // [sys-id] sat system/constallation
@@ -46,9 +48,9 @@ class GPS_Sat
 
   void Clear(void) { Word=0; }
 
-  bool hasSkyPos(void) const { return Azim<=60; }
-  bool hasSNR(void)    const { return SNR>0; }
-  bool hasTime(void)   const { return Time<15; }
+  bool hasSkyPos(void) const { return Azim<=60; } // is Elev:Azim in the sky valid ?
+  bool hasSNR(void)    const { return SNR>0; }    // is SNR valid ?
+  bool hasTime(void)   const { return Time<15; }  // is Time valid ?
 
   static const char *SysName(uint8_t Sys)
   { const char *SysTable[8] = { "QZ", "GP", "GL", "GA", "BD", "--", "--", "--" } ;
@@ -134,7 +136,7 @@ class GPS_Sat
    uint8_t CalcStats(void)
    { uint8_t SNR; return CalcStats(SNR); }
 
-   uint8_t CalcStats(uint8_t &AverSNR)
+   uint8_t CalcStats(uint8_t &AverSNR)                   // calc. stats for every GNSS system
    { uint32_t VisSum[8];
      uint32_t FixSum[8];
      for(uint8_t Sys=0; Sys<8; Sys++)                    // clear SNR sums for all systems
@@ -156,9 +158,9 @@ class GPS_Sat
        if(FixSats[Sys]) FixSNR[Sys]=FixSum[Sys]*4/FixSats[Sys];
                    else FixSNR[Sys]=0;
      }
-     if(TotSat) AverSNR = TotSum*4/TotSat;
+     if(TotSat) AverSNR = TotSum*4/TotSat;                // return the average sat. SNR
          else   AverSNR = 0;
-     return TotSat; }
+     return TotSat; }                                     // return number of satellites
 
    uint8_t Find(uint8_t Sys, uint8_t PRN) const      // find given satellite by Sys and PRN
    { uint8_t Idx=0;
@@ -185,7 +187,7 @@ class GPS_Sat
      { if(Sat[Idx].Time!=Time) Sat[Idx].Fix=0; }
    }
 
-   void Clean(uint8_t Time)
+   void Clean(uint8_t Time)                       //
    { for(uint8_t Idx=0; Idx<Size; )
      { if(Sat[Idx].Time==Time) Delete(Idx);
        else Idx++; }
@@ -208,6 +210,8 @@ class GPS_Sat
      return Idx; }
 
    static bool Less(GPS_Sat &Sat1, GPS_Sat &Sat2) { return Sat1.Word<Sat2.Word; }
+   static bool LowerSNR(GPS_Sat &Sat1, GPS_Sat &Sat2) { return Sat1.SNR<Sat2.SNR; }
+   static bool HigherSNR(GPS_Sat &Sat1, GPS_Sat &Sat2) { return Sat1.SNR>Sat2.SNR; }
 
    void Sort(void)
    { if(Size<=1) return;
@@ -301,7 +305,7 @@ class GPS_Sat
      { int8_t PRN =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(PRN <0) break;      // PRN number
        int8_t Elev=Read_Dec2((const char *)GSV.ParmPtr(Parm++)); // if(Elev<0) break;      // [deg] eleveation
       int16_t Azim=Read_Dec3((const char *)GSV.ParmPtr(Parm++)); // if(Azim<0) break;      // [deg] azimuth
-       int8_t SNR =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); // if(SNR<0) SNR=0;       // [dB] SNR or absent when not tracked
+       int8_t SNR =Read_Dec2((const char *)GSV.ParmPtr(Parm++)); if(SNR<0) SNR=0;       // [dB] SNR or absent when not tracked
        if( Elev<0 || Azim<0 ) { Elev=0; Azim=378; }                                     // invalid sky position
        if(SNR<0) SNR=0; else if(SNR>63) SNR=63;
        Add(SatSys, PRN, Elev, Azim, SNR, qSec);

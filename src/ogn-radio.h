@@ -13,7 +13,13 @@
 #include "freqplan.h"
 #include "rx-pkt.h"
 
+// #ifdef WITH_PAW
 #include "paw.h"
+// #endif
+
+#ifdef WITH_MESHT
+#include "mesht.h"
+#endif
 
 /* moved to rx-pkt.h
 const uint8_t Radio_SysID_FLR  = 0;  //
@@ -33,11 +39,20 @@ extern const char *Radio_SysName[8];
 extern FIFO<OGN_TxPacket<OGN_Packet>, 4> OGN_TxFIFO;
 extern FIFO<ADSL_Packet,              4> ADSL_TxFIFO;
 // extern FIFO<ADSL_RID,                 4> RID_TxFIFO;
-extern FIFO<FANET_Packet,             4> FNT_TxFIFO;
+
+#ifdef WITH_PAW
 extern FIFO<PAW_Packet,               4> PAW_TxFIFO;
+#endif
 
 extern FIFO<FSK_RxPacket,            32> FSK_RxFIFO;
+
+#ifdef WITH_FANET
+extern FIFO<FANET_Packet,             4> FNT_TxFIFO;
 extern FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
+#endif
+#ifdef WITH_MESHT
+extern FIFO<MESHT_Packet,             4> MSH_TxFIFO;
+#endif
 
 extern FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
 extern QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot

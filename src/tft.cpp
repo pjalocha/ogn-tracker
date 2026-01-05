@@ -17,6 +17,21 @@ void TFT_Init(void)
 #endif
   TFT.initR(TFT_MODEL); }
 
+const uint8_t ST7735_DispOFF  = 0x28;
+const uint8_t ST7735_DispON   = 0x29;
+const uint8_t ST7735_SleepIn  = 0x10;
+const uint8_t ST7735_SleepOut = 0x11;
+
+void TFT_OFF(void)
+{ TFT.writeCommand(ST7735_DispOFF);
+  TFT.writeCommand(ST7735_SleepIn);
+  delay(5); }
+
+void TFT_ON(void)
+{ TFT.writeCommand(ST7735_SleepOut);
+  delay(120);
+  TFT.writeCommand(ST7735_DispON); }
+
 static const int TFT_BL_Chan = 0;
 static const int TFT_BL_Freq = 5000;
 
@@ -49,6 +64,22 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y)
   TFT_DrawBatt(X, Y, 8, Cells, Full, CellColor, FrameColor);
   Flip++; }
 
+/*
+static char AddrTypeChar(uint8_t AddrType)
+{ if(AddrType==3) return 'O';
+  if(AddrType==2) return 'F';
+  if(AddrType==1) return 'I';
+  return 'R'; }
+
+static const char *AcftTypeName(uint8_t AcftType)
+{ const char *TypeName[16] = { "----", "Glid", "Tow ", "Heli",
+                               "SkyD", "Drop", "Hang", "Para",
+                               "Pwrd", "Jet ", "UFO ", "Ball",
+                               "Zepp", "UAV ", "Car ", "Fix " } ;
+  if(AcftType<16) return TypeName[AcftType];
+  return TypeName[0]; }
+*/
+
 int TFT_DrawID(bool WithAP)
 { char Line[128];
   // TFT.fillScreen(ST77XX_DARKBLUE);
@@ -59,12 +90,13 @@ int TFT_DrawID(bool WithAP)
   int Vert=16;
   TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert);
-  Parameters.Print(Line); Line[10]=0;
+  sprintf(Line, "%s:%c:%06X", Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
+  // Parameters.Print(Line); Line[10]=0;
   TFT.print(Line);
   Vert+=14;
   if(Parameters.Reg[0])
   { TFT.setCursor(2, Vert);
-    sprintf(Line, "Reg: %s", Parameters.Reg);
+    sprintf(Line, "Reg:%s", Parameters.Reg);
     TFT.fillRect(0, Vert-11, TFT.width(), 14, ST77XX_DARKBLUE);
     TFT.print(Line); Vert+=14; }
   if(Parameters.Pilot[0])
@@ -94,8 +126,10 @@ int TFT_DrawID(bool WithAP)
   Line[Len]=0;
   TFT.setFont(0);
   TFT.setTextSize(1);
-  TFT.setCursor(2, 72);
+  TFT.setCursor(2, 63);
   TFT.print(Line);
+  TFT.setCursor(2, 72);
+  TFT.print("(c) Pawel Jalocha");
 
   TFT_DrawBatt(146, 30);
   return 1; }
@@ -130,10 +164,10 @@ int TFT_DrawLookout(void)
   TFT.setTextSize(1);
   int Vert=16;
 
-  const char *AcftTypeName[16] = { "----", "Glid", "Tow ", "Heli",
-                                   "SkyD", "Drop", "Hang", "Para",
-                                   "Pwrd", "Jet ", "UFO ", "Ball",
-                                   "Zepp", "UAV ", "Car ", "Fix " } ;
+  // const char *AcftTypeName[16] = { "----", "Glid", "Tow ", "Heli",
+  //                                  "SkyD", "Drop", "Hang", "Para",
+  //                                  "Pwrd", "Jet ", "UFO ", "Ball",
+  //                                  "Zepp", "UAV ", "Car ", "Fix " } ;
 
   Look.Sort_Dist();
   for( uint8_t Idx=0; Idx<Look.SortSize; Idx++)
@@ -141,7 +175,7 @@ int TFT_DrawLookout(void)
     uint16_t Dir=Tgt->getBearing();                                                   // [cordic]
     Dir = ((uint32_t)Dir*45+0x1000)>>13;                                             // [deg]
     uint32_t Dist=Tgt->getHorDist();                                                  // [0.5m]
-    int Len=sprintf(Line, "%s %03d/%3.1fkm", AcftTypeName[Tgt->AcftType&15], Dir, 0.0005*Dist);
+    int Len=sprintf(Line, "%s %03d/%3.1fkm", Parameters.AcftTypeName(Tgt->AcftType&15), Dir, 0.0005*Dist);
     // int Len=sprintf(Line, "%02X:%06X", Tgt->AddrType, Tgt->Address);
     // if(Tgt->DistMargin) Len+=sprintf(Line+Len, " %3.1fkm", 0.0005*Tgt->HorDist);
     //                else Len+=sprintf(Line+Len, " %3.1fs", 0.5*Tgt->TimeMargin);
@@ -327,7 +361,11 @@ int TFT_DrawLoRaWAN(const GPS_Position *GPS)
   { TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16;
     TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16; }
 
-  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16;
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  Len=Format_String(Line, "Key: ");
+  Len+=Format_HexBytes(Line+Len, WANdev.AppKey, 2); Line[Len++]='.'; Line[Len++]='.';
+  Len+=Format_Hex(Line+Len, WANdev.AppKey[15]); Line[Len]=0;
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE); Vert+=16;
 
   return 1; }
