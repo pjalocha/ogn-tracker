@@ -42,28 +42,37 @@ jobs:
 
           # env:esptool_chip:ESPWebTools_chipFamily
           VARIANTS=(
-            "ttgo-sx1276-tbeam-v10:esp32:ESP32"
-            "ttgo-sx1276-tbeam-v12:esp32:ESP32"
-            "ttgo-sx1262-tbeam-v10:esp32:ESP32"
-            "ttgo-sx1262-tbeam-v12:esp32:ESP32"
-            "ttgo-sx1262-tbeam-s3-mtk-oled:esp32s3:ESP32-S3"
-            "ttgo-sx1262-tbeam-s3-ubx-oled:esp32s3:ESP32-S3"
-            "HTIT-Tracker:esp32s3:ESP32-S3"
-            "ThinkNode-M5:esp32s3:ESP32-S3"
+            "ttgo-sx1276-tbeam-v10:esp32:ESP32:0x1000:0x8000::0x10000"
+            "ttgo-sx1276-tbeam-v12:esp32:ESP32:0x1000:0x8000::0x10000"
+            "ttgo-sx1262-tbeam-v10:esp32:ESP32:0x1000:0x8000::0x10000"
+            "ttgo-sx1262-tbeam-v12:esp32:ESP32:0x1000:0x8000::0x10000"
+            "ttgo-sx1262-tbeam-s3-mtk-oled:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
+            "ttgo-sx1262-tbeam-s3-ubx-oled:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
+            "HTIT-Tracker:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
+            "ThinkNode-M5:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
           )
 
           for v in "${VARIANTS[@]}"; do
-            IFS=: read -r ENV CHIP FAMILY <<< "$v"
+            IFS=: read -r ENV CHIP FAMILY BOOT_OFS PART_OFS BOOTAPP_OFS APP_OFS <<< "$v"
 
             pio run -e "$ENV"
 
             mkdir -p "docs/firmware/$ENV"
-            esptool.py --chip "$CHIP" merge_bin \
-              -o "docs/firmware/$ENV/merged.bin" \
-              0x1000  ".pio/build/$ENV/bootloader.bin" \
-              0x8000  ".pio/build/$ENV/partitions.bin" \
-              0xE000  "boot_app0.bin" \
-              0x10000 ".pio/build/$ENV/firmware.bin"
+
+            if [ -n "${BOOTAPP_OFS:-}" ]; then
+              esptool.py --chip "$CHIP" merge_bin \
+                -o "docs/firmware/$ENV/merged.bin" \
+                "BOOT_OFS"     ".pio/build/$ENV/bootloader.bin" \
+                "PART_OFS"     ".pio/build/$ENV/partitions.bin" \
+                "BOOTAPP_OFS"  "boot_app0.bin" \
+                "APP_OFS"      ".pio/build/$ENV/firmware.bin"
+            else
+              esptool.py --chip "$CHIP" merge_bin \
+                -o "docs/firmware/$ENV/merged.bin" \
+                "BOOT_OFS"     ".pio/build/$ENV/bootloader.bin" \
+                "PART_OFS"     ".pio/build/$ENV/partitions.bin" \
+                "APP_OFS"      ".pio/build/$ENV/firmware.bin"
+            fi
 
             printf '{\n  "name": "OGN-Tracker (%s)",\n  "builds": [\n    {\n      "chipFamily": "%s",\n      "parts": [\n        { "path": "../firmware/%s/merged.bin", "offset": 0 }\n      ]\n    }\n  ]\n}\n' \
               "$ENV" "$FAMILY" "$ENV" > "docs/manifests/manifest-$ENV.json"
