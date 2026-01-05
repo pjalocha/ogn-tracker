@@ -3,6 +3,10 @@ OGN Tracker implementation on ESP32 devices or anything which can be handled wit
 
 It works on TTGO modules like various T-Beam modules including the ESP32-S3 version.
 
+## New: firmware installer for dummies
+
+Use Chrome/Edge: https://<username>.github.io/ogn-tracker/
+
 ## Hardware
 to run an OGN-Tracker you need to have at least:
 + CPU: most common ESP32 -S3 -C3
