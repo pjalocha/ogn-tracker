@@ -656,6 +656,9 @@ void setup()
   if(Parameters.CONbaud<2400 || Parameters.CONbaud>921600 || Parameters.CONbaud%2400)
   { Parameters.CONbaud=115200;
     Parameters.WriteToNVS(); }
+  if(Parameters.BTname[0]==0)                // for the BT to work
+  { Parameters.getAprsCall(Parameters.BTname);
+    Parameters.WriteToNVS(); }
 
 #ifdef HARD_NAME
   strcpy(Parameters.Hard, HARD_NAME);
