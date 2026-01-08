@@ -53,12 +53,13 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y, uint16_t CellSize,
 
 static void TFT_DrawBatt(uint16_t X, uint16_t Y)
 {  int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
-  uint16_t Cells=5;
-   int16_t Full=(BattVolt-3300+80)/160; if(Full<0) Full=0;
+  // int16_t Full=(BattVolt-3300+80)/160; if(Full<0) Full=0;
+   int16_t Full=(BattVolt-3500+64)>>7; if(Full<0) Full=0;
+  const uint16_t Cells=5;
   uint16_t CellColor=ST77XX_GREEN;
   uint16_t FrameColor=ST77XX_WHITE;
-  if(Full<=2) { CellColor=ST77XX_YELLOW; }
-  if(Full<=1) { CellColor=FrameColor=ST77XX_RED; }
+  if(Full<2) { CellColor=ST77XX_YELLOW; }
+  if(Full<1) { CellColor=FrameColor=ST77XX_RED; }
   static uint8_t Flip=0;
   if(BatteryVoltageRate>0 && Flip&1) Full++;
   TFT_DrawBatt(X, Y, 8, Cells, Full, CellColor, FrameColor);

@@ -88,8 +88,8 @@ class MyCallbacks: public BLECharacteristicCallbacks
 void BLE_SPP_Start(const char *DevName)
 { esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
   NimBLEDevice::init(DevName);
-  NimBLEDevice::setMTU(247);   // or 517
-  NimBLEDevice::setPower(3);              // +3db
+  NimBLEDevice::setMTU(247);              // or 517
+  NimBLEDevice::setPower(0);              // [dBm]
   // NimBLEDevice::setSecurityAuth(true, true, false); // bonding, MITM, don't need BLE secure connections as we are using passkey pairing
   // NimBLEDevice::setSecurityPasskey(123456);
   // NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); // Display only passkey
@@ -108,7 +108,13 @@ void BLE_SPP_Start(const char *DevName)
   pService->start();
   NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
+  NimBLEAdvertisementData AdvData;
+  AdvData.setName(DevName);
+  AdvData.setFlags(0x06);
+  pAdvertising->setAdvertisementData(AdvData);
   pAdvertising->enableScanResponse(false);
+  pAdvertising->setMinInterval(3200);   // [0.625ms] = 2.0 s slower advertising => lower power
+  pAdvertising->setMaxInterval(4000);   // [0.625ms] = 2.5 s
   pAdvertising->start(); }
 #else
 void BLE_SPP_Start(const char *DevName)
