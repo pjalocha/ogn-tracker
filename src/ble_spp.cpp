@@ -93,8 +93,8 @@ void BLE_SPP_Start(const char *DevName)
   // NimBLEDevice::setSecurityAuth(true, true, false); // bonding, MITM, don't need BLE secure connections as we are using passkey pairing
   // NimBLEDevice::setSecurityPasskey(123456);
   // NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); // Display only passkey
-  // NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // simplest pairing
-  // NimBLEDevice::setSecurityAuth(true, false, true);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // simplest pairing
+  NimBLEDevice::setSecurityAuth(true, false, true);
   pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
   if(pServer==0) { Serial.printf("Cannot create NimBLE server\n"); return; }
@@ -102,24 +102,26 @@ void BLE_SPP_Start(const char *DevName)
   pCharacteristic = pService->createCharacteristic(
                       CHARACTERISTIC_UUID,
                       NIMBLE_PROPERTY::READ   |
-                      NIMBLE_PROPERTY::WRITE  |
+                      NIMBLE_PROPERTY::WRITE  | NIMBLE_PROPERTY::WRITE_ENC |
                       NIMBLE_PROPERTY::NOTIFY );
   pCharacteristic->setCallbacks(new MyCallbacks());
   pService->start();
   NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
-  NimBLEAdvertisementData AdvData;
-  AdvData.setName(DevName);
-  AdvData.setFlags(0x06);
-  pAdvertising->setAdvertisementData(AdvData);
-  pAdvertising->enableScanResponse(false);
-  pAdvertising->setMinInterval(3200);   // [0.625ms] = 2.0 s slower advertising => lower power
-  pAdvertising->setMaxInterval(4000);   // [0.625ms] = 2.5 s
+  // NimBLEAdvertisementData AdvData;
+  // AdvData.setName(DevName);             // explicitely add device name
+  // AdvData.setFlags(0x06);               // to the advertize packet
+  // pAdvertising->setAdvertisementData(AdvData);
+  NimBLEAdvertisementData ScanResp;
+  ScanResp.setName(DevName);            // have the device name in the BT scan-response
+  pAdvertising->setScanResponseData(ScanResp);
+  pAdvertising->enableScanResponse(true);
+  pAdvertising->setMinInterval(3200);   // [0.625ms] 3200 = 2.0 s slower advertising => lower power
+  pAdvertising->setMaxInterval(4000);   // [0.625ms] 4000 = 2.5 s
   pAdvertising->start(); }
 #else
 void BLE_SPP_Start(const char *DevName)
 { esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
-  delay(500);
   BLEDevice::init(DevName);
   BLEDevice::setMTU(247);      // or 517 (depending on core/support)
   Serial.printf("BLEDevice::init(%s) done\n", DevName);
@@ -136,12 +138,13 @@ void BLE_SPP_Start(const char *DevName)
   pCharacteristic->addDescriptor(new BLE2902());
   pCharacteristic->setCallbacks(new MyCallbacks());
   pService->start();
-  // BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);  // Prefer 100ms connections
-  pAdvertising->setMinPreferred(0x12);
+  pAdvertising->setMinInterval(3200);    // [0.625ms] 3200 = 2.0 s slower advertising => lower power
+  pAdvertising->setMaxInterval(4000);    // [0.625ms] 4000 = 2.5 s
+  // pAdvertising->setMinPreferred(0x12);   // [1.25ms] = 22.5ms prefered connection interval
+  // pAdvertising->setMaxPreferred(0x24);   // [1.25ms] = 45.0ms
   pAdvertising->start(); }
 #endif
 
