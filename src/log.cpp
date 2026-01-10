@@ -36,7 +36,7 @@ static const uint32_t FlashLog_SaveSize = 4096;   // [bytes] reopen the file eve
        bool     FlashLog_SaveReq=0;               // request to save the log right away, like after landing or before shutdown
        uint32_t FlashLog_FileTime=0;              // [sec] UTC time corresponding to the log file
        char     FlashLog_FileName[32];            // current log file name if open
-static FILE *   FlashLog_File=0;                  // current log file if open
+static FILE    *FlashLog_File=0;                  // current log file if open
 static uint32_t FlashLog_FileFlush=0;             // track where the log file has been forced to be written to flash
 
        bool     FlashLog_isOpen(void) { return FlashLog_File; } // is a log file open now ?
@@ -123,7 +123,8 @@ int FlashLog_FindOldestFile(uint32_t &Oldest, uint32_t After) // find the oldest
   return Files; }                                              // return number of log files
 
 int FlashLog_ListFiles(void)                                  // list log files sorted by time
-{ int Files=0;
+{ if(!SPIFFS_Mounted) return 0;
+  int Files=0;
   char Line[64];
   char FullName[32];
   // char HHMMSS[8];
@@ -389,13 +390,13 @@ void vTaskLOG(void* pvParameters)
   { vTaskDelay(1);
     bool Flying = Flight.inFlight();                              // if the aircraft flying ?
     size_t Packets = FlashLog_FIFO.Full();                        // how many packets in the queue ?
-    if(Flying)                                                    // when flying
+    if(Flying && SPIFFS_Mounted)                                  // when flying
     {
 #ifdef WITH_SPIFFS
       if(FlashLog_SaveReq) FlashLog_Reopen();                       // if requested then save the current log (close + reopen)
 #endif
       TickType_t Tick=xTaskGetTickCount();                          // system tick count now
-      if(Packets==0) { PrevTick=Tick; vTaskDelay(100); continue; }  // if none: then give up
+      if(Packets==0) { PrevTick=Tick; vTaskDelay(50); continue; }   // if none: then give up
       if(Packets>=8) { Copy(); PrevTick=Tick; continue; }           // if 8 or more packets then copy them to the log file
       TickType_t Diff = Tick-PrevTick;                              // time since last log action
       if(Diff>=8000) { Copy(); PrevTick=Tick; continue; }           // if more than 8.0sec than copy the packets
@@ -407,6 +408,6 @@ void vTaskLOG(void* pvParameters)
       { FlashLog_FIFO.Read(); vTaskDelay(1); }
 #endif
     }
-    vTaskDelay(100); }
+    vTaskDelay(50); }
 
 }

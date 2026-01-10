@@ -98,6 +98,12 @@
 #include "tft.h"
 #endif
 
+#ifdef WITH_USBMSC
+#include "USB.h"
+#include "USBMSC.h"
+// #include "USBCDC.h"
+#endif
+
 // =======================================================================================================
 
 uint64_t getUniqueMAC(void)                                  // 48-bit unique ID of the ESP32 chip
@@ -136,17 +142,35 @@ SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
 
 #ifdef WITH_SPIFFS_FAT // FAT replaces SPIFFS, hopefully no performace and reliability issues
 
-int SPIFFS_Register(const char *Path, const char *Label, size_t MaxOpenFiles)
-{ esp_vfs_fat_mount_config_t FSconf;
-  FSconf.max_files = MaxOpenFiles;
+static wl_handle_t SPIFFS_Handle = WL_INVALID_HANDLE;
+       bool        SPIFFS_Mounted = false;
+
+static const char *SPIFFS_Path="/spiffs";
+static const char *SPIFFS_Label="intlog";
+static const int   SPIFFS_MaxOpenFiles=6;
+
+void SPIFFS_unMount(void)
+{ if(!SPIFFS_Mounted) return;
+  SPIFFS_Mounted=0;                                              // signal the file system is to be unmounted
+  Serial.printf("SPIFFS/FAT unmount\n");
+  vTaskDelay(100);                                               // give a bit of time for the log to close files
+  esp_vfs_fat_spiflash_unmount(SPIFFS_Path, SPIFFS_Handle); }
+
+void SPIFFS_Mount(void)
+{ if(SPIFFS_Mounted) return;
+  esp_vfs_fat_mount_config_t FSconf;
+  FSconf.max_files = SPIFFS_MaxOpenFiles;
   FSconf.format_if_mount_failed = true;
   FSconf.allocation_unit_size = 4096;
-  static wl_handle_t Handle = WL_INVALID_HANDLE;
-  return esp_vfs_fat_spiflash_mount(Path, Label, &FSconf, &Handle); }
+  int Ret=esp_vfs_fat_spiflash_mount(SPIFFS_Path, SPIFFS_Label, &FSconf, &SPIFFS_Handle);
+  Serial.printf("SPIFFS/FAT mount(%d)\n", Ret);
+  SPIFFS_Mounted = Ret==ESP_OK; }
 
 int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
-{ FATFS *FS=0;
-  Total=0; Used=0;
+{ Total=0; Used=0;
+  if(!SPIFFS_Mounted) return 0;
+  if(Label==0) Label=SPIFFS_Label;
+  FATFS *FS=0;
   size_t FreeClusters;
   int Ret = f_getfree("0:", &FreeClusters, &FS);
   // if(Ret=!FR_OK) return Ret;
@@ -159,18 +183,57 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
 
 #else // SPIFFS: gives troubles when more than few files are open
 
-int SPIFFS_Register(const char *Path, const char *Label, size_t MaxOpenFiles)
+void SPIFFS_Mount(void)
 { esp_vfs_spiffs_conf_t FSconf =
-  { base_path: Path,
-    partition_label: Label,
-    max_files: MaxOpenFiles,
+  { base_path: SPIFFS_Path,
+    partition_label: SPIFFS_Label,
+    max_files: SPIFFS_MaxOpenFiles,
     format_if_mount_failed: true };
-  return esp_vfs_spiffs_register(&FSconf); }
+  int Ret=esp_vfs_spiffs_register(&FSconf);
+  SPIFFS_Mounted = Ret==ESP_OK; }
 
 int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
-{ return esp_spiffs_info(Label, &Total, &Used); }
+{ if(Label==0) Label=SPIFFS_Label;
+  return esp_spiffs_info(Label, &Total, &Used); }
 
 #endif
+#endif
+
+#ifdef WITH_USBMSC
+
+static USBMSC MSC;                                  // USB-memory-device
+       USBCDC USBSerial;
+
+static uint32_t SPIFFS_Blocks = 0;
+
+static int32_t MSC_read_cb(uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize)
+{ size_t addr = (size_t)lba * 512 + offset;
+  return wl_read(SPIFFS_Handle, addr, buffer, bufsize) == ESP_OK ? (int32_t)bufsize : -1; }
+
+static int32_t MSC_write_cb(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize)
+{ size_t addr = (size_t)lba * 512 + offset;
+  return wl_write(SPIFFS_Handle, addr, buffer, bufsize) == ESP_OK ? (int32_t)bufsize : -1; }
+
+static bool MSC_startstop_cb(uint8_t power_condition, bool start, bool load_eject)
+{ // (void)power_condition;
+  if(load_eject && !start) // when USB disconnected then mount SPIFFS for internal logging
+  { SPIFFS_Mount(); }
+  else if(start)           // when USB connected then unmount SPIFFS for internal logging
+  { SPIFFS_unMount(); }
+  return true; }
+
+static void USBMSC_Begin(void)
+{ size_t Bytes = wl_size(SPIFFS_Handle);
+  SPIFFS_Blocks = (uint32_t)(Bytes/512);
+  MSC.vendorID("OGN");
+  MSC.productID("FlashLog");
+  MSC.productRevision("1.0");
+  MSC.onRead(MSC_read_cb);
+  MSC.onWrite(MSC_write_cb);
+  MSC.onStartStop(MSC_startstop_cb);
+  MSC.mediaPresent(true);
+  MSC.begin(SPIFFS_Blocks, 512); }
+
 #endif
 
 // =======================================================================================================
@@ -630,7 +693,7 @@ void setup()
 
   NVS_Init();                                // initialize storage in flash like for parameters
 #ifdef WITH_SPIFFS
-  SPIFFS_Register();                         // initialize the file system in the Flash
+  SPIFFS_Mount();                            // initialize the file system in the Flash
 #endif
 
 // #ifdef WITH_OGN
@@ -651,7 +714,7 @@ void setup()
 #endif
   Parameters.setDefault(getUniqueAddress()); // set default parameter values
   if(Parameters.ReadFromNVS()!=ESP_OK)       // try to get parameters from NVS
-  { Serial.printf("Parameters could not be read from NVS: resetting to defaults\n");
+  { // Serial.printf("Parameters could not be read from NVS: resetting to defaults\n");
     Parameters.WriteToNVS(); }               // if did not work: try to save (default) parameters to NVS
   if(Parameters.CONbaud<2400 || Parameters.CONbaud>921600 || Parameters.CONbaud%2400)
   { Parameters.CONbaud=115200;
@@ -667,10 +730,18 @@ void setup()
   strcpy(Parameters.Soft, SOFT_NAME);
 #endif
 
+#ifdef WITH_USBMSC
+   USBMSC_Begin();
+   USB.begin();
+   USBSerial.begin(Parameters.CONbaud);
+#else
+  Serial.begin(Parameters.CONbaud);          // for USB Console baud rate probably does not matter here
+#endif
+
 #if ARDUINO_USB_CDC_ON_BOOT==1
   Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
 #endif
-  Serial.begin(Parameters.CONbaud);          // USB Console: baud rate probably does not matter here
+
   GPS_UART_Init();
 
   Serial.printf("OGN-Tracker: Hard:%s Soft:%s\n", Parameters.Hard, Parameters.Soft);
@@ -1122,7 +1193,11 @@ static void PrintLoRaWAN()
 #endif
 
 static void ProcessCtrlF(void)                                  // list log files to the console
-{ xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+{
+#ifdef WITH_SPIFFS
+  if(!SPIFFS_Mounted) return;
+#endif
+  if(!xSemaphoreTake(CONS_Mutex, 50)) return;
 #ifdef WITH_SPIFFS
   char FullName[32];
   strcpy(FullName, "/spiffs/");

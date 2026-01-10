@@ -3,6 +3,12 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+#ifdef WITH_USBMSC
+#include "USBCDC.h"
+extern USBCDC USBSerial;
+#define Serial USBSerial
+#endif
+
 // #define millis() (xTaskGetTickCount())
 #define xTaskGetTickCount() (millis())
 
@@ -141,8 +147,9 @@ void GPS_DISABLE(void);
 uint16_t BatterySense(int Samples=4); // [mV]
 
 #ifdef WITH_SPIFFS
-int  SPIFFS_Register(const char *Path="/spiffs", const char *Label="intlog", size_t MaxOpenFiles=5);
-int  SPIFFS_Info(size_t &Total, size_t &Used, const char *Label="intlog");
+int  SPIFFS_Register(void);
+int  SPIFFS_Info(size_t &Total, size_t &Used, const char *Label=0);
+extern bool SPIFFS_Mounted;
 #endif
 
 typedef union
