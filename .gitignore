@@ -4,3 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 platformio.ini
+.vscode/settings.json
+CMakeLists.txt

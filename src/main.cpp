@@ -665,7 +665,10 @@ void setup()
   strcpy(Parameters.Hard, HARD_NAME);
 #endif
 #ifdef SOFT_NAME
-  strcpy(Parameters.Soft, SOFT_NAME);
+  #ifdef WITH_OTA
+    if (Parameters.Soft[0] == 0)             // with OTA, firmware serial number stored as Parameters.Soft
+  #endif
+      strcpy(Parameters.Soft, SOFT_NAME);
 #endif
 
 #if ARDUINO_USB_CDC_ON_BOOT==1
@@ -1209,6 +1212,7 @@ static int ProcessInput(void)
   const uint8_t CtrlF = 'F'-'@';
   const uint8_t CtrlL = 'L'-'@';
   const uint8_t CtrlO = 'O'-'@';
+  const uint8_t CtrlP = 'P'-'@';
   const uint8_t CtrlT = 'T'-'@';
   const uint8_t CtrlX = 'X'-'@';
 
@@ -1230,6 +1234,10 @@ static int ProcessInput(void)
 #endif
     if(Byte==CtrlX) ProcessCtrlX();                                // double Ctrl-X restarts the system
 #endif // of WITH_GPS_UBX_PASS
+
+#ifdef WITH_OTA
+    if(Byte==CtrlP) print_ota_status();                            // print OTA partitions
+#endif
 
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
     if(NMEA.isComplete())                                         // if complete NMEA:

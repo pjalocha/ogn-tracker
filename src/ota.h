@@ -1,6 +1,8 @@
 #include "main.h"
 
 #ifdef __cplusplus
-  extern "C"
+extern "C"
 #endif
- void vTaskOTA(void* pvParameters);
+    void vTaskOTA(void *pvParameters);
+
+void print_ota_status();

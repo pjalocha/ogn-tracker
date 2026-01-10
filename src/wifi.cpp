@@ -4,6 +4,7 @@
 #include "format.h"
 #include "main.h"
 
+
 wifi_config_t           WIFI_Config;            // WIFI config: ESSID, etc.
 tcpip_adapter_ip_info_t WIFI_IP = { 0, 0, 0 };  // WIFI local IP address, mask and gateway
 WIFI_State_t            WIFI_State = { 0 };

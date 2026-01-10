@@ -940,10 +940,10 @@ uint16_t StratuxPort;
     return OK; }
 
   int ReadFromFile(FILE *File)
-  { char Line[80];                                                              // line buffer
+  { char Line[180];                                                              // line buffer
     size_t Lines=0;                                                             // count interpreted lines
     for( ; ; )                                                                  // loop over lines
-    { if(fgets(Line, 80, File)==0) break;                                       // break on EOF or other trouble reading the file
+    { if(fgets(Line, 180, File)==0) break;                                       // break on EOF or other trouble reading the file
       if(strchr(Line, '\n')==0) break;                                          // if no NL then break, line was too long
       if(ReadLine(Line)) Lines++; }                                             // interprete the line, count if positive
     return Lines; }                                                             // return number of interpreted lines
@@ -1006,7 +1006,7 @@ uint16_t StratuxPort;
     return Len; }
 
   int WriteToFile(FILE *File)
-  { char Line[80];
+  { char Line[180];
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -1083,7 +1083,7 @@ uint16_t StratuxPort;
     fclose(File); return Lines; }
 
   void Write(void (*Output)(char))
-  { char Line[80];
+  { char Line[180];
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); Format_String(Output, Line);
@@ -1111,7 +1111,7 @@ uint16_t StratuxPort;
     // Write_Hex    (Line, "EncryptKey[3]",       EncryptKey[3] , 8); strcat(Line, " # [32-bit]\n"); Format_String(Output, Line);
 #endif
     Write_Hex    (Line, "Verbose"  ,      (uint32_t)Verbose,   2); strcat(Line, " #  [ 0..3]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "GNSS"     ,      (uint32_t)GNSS    ,  2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "GNSS"     ,      (uint32_t)GNSS,      2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "PageMask" ,      (uint32_t)PageMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "InitialPage" ,   (uint32_t)InitialPage ); strcat(Line, " #  [     ]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "PPSdelay" ,      (uint32_t)PPSdelay    ); strcat(Line, " #  [   ms]\n"); Format_String(Output, Line);

@@ -81,6 +81,7 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
   { int Read=fread(Line, 1, MaxLineLen, File); if(Read<=0) break;
     SendSize+=Read;
     Err = esp_http_client_write(Client, Line, Read);
+    vTaskDelay(1);                // give over tasks a chance
     if(Err<0) break; }
 
   fclose(File);
@@ -116,7 +117,9 @@ static int UploadOldestFile(bool Delete=0)                   // SP9WPN: tymczaso
   RemoteLogFileName(RemoteFile, Oldest);                     // remote file name, including tracker MAC and ID
   int Err=UploadFile(LocalFile, RemoteFile);
   sprintf(Line, "Upload: %s => %s => %d\n", LocalFile, RemoteFile, Err);
-  Format_String(CONS_UART_Write, Line);
+#ifdef DEBUG_PRINT
+    Format_String(CONS_UART_Write, Line);
+#endif
   if(Err>=0 && Delete) remove(LocalFile);
   return Err; }
 
@@ -152,7 +155,7 @@ static int UploadDialog(void)               // connect and talk to the server ex
     int Write=UploadSocket.Send(Line, strlen(Line));        // send login to the server
     vTaskDelay(1000);
     UploadSocket.Disconnect();
-  }
+
 #ifdef DEBUG_PRINT
   else                                                      // if connection failed to the server
   { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);

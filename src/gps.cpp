@@ -617,7 +617,7 @@ static void GPS_BurstEnd(void)                                             // wh
   // GPS_TimeSync.Norm();
   if(GPS_TimeSync.UTC%10==7)
   { GPS_SatMon.PrintStats(Line);
-    if(Parameters.Verbose >=2 && xSemaphoreTake(CONS_Mutex, 10))
+    if(Parameters.Verbose & 0b01 && xSemaphoreTake(CONS_Mutex, 10))
     { Serial.printf("%s\n", Line);
       xSemaphoreGive(CONS_Mutex); }
   }
@@ -716,7 +716,7 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   {
 #ifdef WITH_GPS_NMEA_PASS                 // pass all GPS NMEA
 #else                                     // or filter them
-    if(Parameters.Verbose >=3 && !NMEA.isGxGSV() && !NMEA.isGxGSA() && !NMEA.isGxTXT())
+    if(Parameters.Verbose & 0b01 && !NMEA.isGxGSV() && !NMEA.isGxGSA() && !NMEA.isGxTXT())
 #endif
     { if(xSemaphoreTake(CONS_Mutex, 10))
       { Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
