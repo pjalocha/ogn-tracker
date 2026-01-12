@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>OGN-Tracker Web Installer</title>
+  <title>OGN-Tracker Install and Configure</title>
 </head>
 <body>
-  <h1>OGN-Tracker Web Installer</h1>
+  <h1>OGN-Tracker Install Firmware</h1>
 
   <label for="variant">Variant:</label>
   <select id="variant">
@@ -26,9 +26,11 @@
   </div>
 
   <p>Use Chrome/Edge (Web Serial). Connect USB, then Install.</p>
-  <br />
+
   <p>If upload fails, you may need to enter bootloader mode by holding USER/BOOT button and pressing RESET or doing power-up.
      After the upload is complete, you need to press RESET again to exit bootloader mode and run the uploaded code</p>
+
+  <h1>OGN-Tracker Configure</h1>
 
 <!-- Command panel -->
 <section style="margin-top:16px; padding:12px; border:1px solid #ccc; border-radius:8px;">
@@ -46,7 +48,7 @@
         <option value="$POGNS,FreqPlan=4">New Zealand</option>
         <option value="$POGNS,FreqPlan=5">Israel</option>
       </select>
-      <button id="btnFreqPlan" disabled>Send</button>
+      <!-- <button id="btnFreqPlan" disabled>Send</button> -->
     </div>
 
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -69,7 +71,7 @@
         <option value="$POGNS,AcftType=14">Ground vehicle</option>
         <option value="$POGNS,AcftType=15">Static object</option>
       </select>
-      <button id="btnAcftType" disabled>Send</button>
+      <!-- <button id="btnAcftType" disabled>Send</button> -->
     </div>
 
     <!-- <button id="btnCmd1" disabled>Europe/Africa</button> -->
@@ -77,8 +79,14 @@
     <!-- <button id="btnCmd3" disabled>Australia/South America</button> -->
     <!-- <button id="btnCmd4" disabled>New Zealand</button> -->
 
+    <input id="cmdReg" type="text" placeholder="Call-sign" style="flex:1; min-width:220px;">
+    <button id="btnReg" disabled>OK</button>
+
+    <input id="cmdPilot" type="text" placeholder="Pilot-name" style="flex:1; min-width:220px;">
+    <button id="btnPilot" disabled>OK</button>
+
     <input id="customCmd" type="text" placeholder="Type command..." style="flex:1; min-width:220px;">
-    <button id="btnSendCustom" disabled>Send</button>
+    <button id="btnSendCustom" disabled>OK</button>
   </div>
 
   <pre id="log" style="margin-top:10px; height:220px; overflow:auto; background:#111; color:#eee; padding:10px; border-radius:6px;"></pre>
@@ -105,16 +113,16 @@
       return;
     }
 
-    // Ask user to pick the ESP serial port
+    // Ask user to pick the ESP32 serial port
     port = await navigator.serial.requestPort();
     await port.open({ baudRate });
 
     el("btnConnect").disabled = true;
     el("btnDisconnect").disabled = false;
     el("cmdFreqPlan").disabled = false;
-    el("btnFreqPlan").disabled = false;
+    // el("btnFreqPlan").disabled = false;
     el("cmdAcftType").disabled = false;
-    el("btnAcftType").disabled = false;
+    // el("btnAcftType").disabled = false;
     // el("btnCmd1").disabled = false;
     // el("btnCmd2").disabled = false;
     // el("btnCmd3").disabled = false;
@@ -138,9 +146,9 @@
     el("btnConnect").disabled = false;
     el("btnDisconnect").disabled = true;
     el("cmdFreqPlan").disabled = true;
-    el("btnFreqPlan").disabled = true;
+    // el("btnFreqPlan").disabled = true;
     el("cmdAcftType").disabled = true;
-    el("btnAcftType").disabled = true;
+    // el("btnAcftType").disabled = true;
     // el("btnCmd1").disabled = true;
     // el("btnCmd2").disabled = true;
     // el("btnCmd3").disabled = true;
@@ -180,22 +188,46 @@
   el("btnConnect").addEventListener("click", connect);
   el("btnDisconnect").addEventListener("click", disconnect);
 
-  el("btnFreqPlan").addEventListener("click", async () => {
+  el("cmdFreqPlan").addEventListener("change", async () => {
     const v = el("cmdFreqPlan").value;
-    if (v) await sendLine(v);
+    if (!v) return;
+    await sendLine(v);
+    // el("cmdFreqPlan").value = "";   // reset to placeholder
   });
-  el("btnAcftType").addEventListener("click", async () => {
+
+  el("cmdAcftType").addEventListener("change", async () => {
     const v = el("cmdAcftType").value;
-    if (v) await sendLine(v);
+    if (!v) return;
+    await sendLine(v);
+    // el("cmdAcftType").value = "";   // reset to placeholder
   });
+
+  // el("btnFreqPlan").addEventListener("click", async () => {
+  //   const v = el("cmdFreqPlan").value;
+  //   if (v) await sendLine(v);
+  // });
+  // el("btnAcftType").addEventListener("click", async () => {
+  //   const v = el("cmdAcftType").value;
+  //   if (v) await sendLine(v);
+  // });
   // el("btnCmd1").addEventListener("click", () => sendLine("$POGNS,FreqPlan=1"));
   // el("btnCmd2").addEventListener("click", () => sendLine("$POGNS,FreqPlan=2"));
   // el("btnCmd3").addEventListener("click", () => sendLine("$POGNS,FreqPlan=3"));
   // el("btnCmd4").addEventListener("click", () => sendLine("$POGNS,FreqPlan=4"));
 
+  el("btnReg").addEventListener("click", () => {
+    const v = el("cmdReg").value.trim();
+    if(v) sendLine('$POGNS,Reg=${v}');
+  });
+
+  el("btnPilot").addEventListener("click", () => {
+    const v = el("cmdPilot").value.trim();
+    if(v) sendLine('$POGNS,Pilot=${v}');
+  });
+
   el("btnSendCustom").addEventListener("click", () => {
     const v = el("customCmd").value.trim();
-    if (v) sendLine(v);
+    if(v) sendLine(v);
   });
 
 })();
