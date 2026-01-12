@@ -543,7 +543,7 @@ static int Radio_TxOBAND(uint8_t *Packet, uint8_t Len)              // transmit 
 // =======================================================================================================
 
 // setup Radio for FANET or MESHT
-static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
+static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
 {                                                                  // first switch to LoRa mode
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
@@ -559,8 +559,8 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
     Radio.setActiveModem(RADIOLIB_SX127X_LORA);
 #endif
-  Radio.setBandwidth(250.0);              // it turns out all this setup must be done again for SX1262, otherwise it does not work
-  Radio.setSpreadingFactor(7);
+  Radio.setBandwidth(BW);                // it turns out all this setup must be done again for SX1262, otherwise it does not work
+  Radio.setSpreadingFactor(SF);
   Radio.setCodingRate(4+CRa);
   Radio.invertIQ(false);
   Radio.setPreambleLength(PreambleLen);
@@ -575,7 +575,7 @@ static void Radio_ConfigLoRa(uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
 }
 
 #ifdef WITH_MESHT
-static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(16, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
+static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(250.0f, 7, 16, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
 
 static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT packet
 { Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
@@ -637,7 +637,7 @@ static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a
   Radio_TxCount[Radio_SysID_FNT]++;
   LED_OGN_TX(20); }
 
-static void Radio_ConfigFANET(uint8_t CRa=1) { Radio_ConfigLoRa(5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
+static void Radio_ConfigFANET(float BW=250.0f, uint8_t CRa=1) { Radio_ConfigLoRa(BW, 7, 5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
 
 /*
 static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radio for FANET
@@ -670,11 +670,11 @@ static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radi
 */
 
 // reception slot with a possible transmission if TxPacket != NULL
-static int Radio_FANETslot(float Freq, float TxPower, uint32_t msTimeLen, FANET_Packet *TxPacket, TimeSync &TimeRef)
+static int Radio_FANETslot(float BW, float Freq, float TxPower, uint32_t msTimeLen, FANET_Packet *TxPacket, TimeSync &TimeRef)
 { // Serial.printf("FANETslot: %6.3fMHz %dms %c\n", 1e-6*Freq, msTimeLen, TxPacket?'T':'r');
   uint32_t msStart = millis();                       // [ms]
   Radio.standby();
-  Radio_ConfigFANET();                               // setup for FANET, includes switching from FSK to LoRa
+  Radio_ConfigFANET(BW);                               // setup for FANET, includes switching from FSK to LoRa
   Radio_setFrequency(Freq);                          // set frequency
   Radio.startReceive();                              // start receiving
   XorShift64(Random.Word);                           // randomize
@@ -900,9 +900,10 @@ void Radio_Task(void *Parms)
 #endif
 
 #ifdef WITH_FANET
-    uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();           // frequency to transmit FANET
+    uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();            // frequency to transmit FANET
     if(FreqFNT)
-    { Radio_ConfigFANET();
+    { float BW=250.0f; if(Radio_FreqPlan.Plan>1) BW=500.0f;      // for plans 2,3 and 4 bandwidth 500kHz
+      Radio_ConfigFANET(BW);
       Radio_setFrequency(1e-6*FreqFNT);
       Radio.startReceive();                                      // start receiving FANET
       for( ; ; )
@@ -916,7 +917,7 @@ void Radio_Task(void *Parms)
       XorShift64(Random.Word);
       int32_t msSlot = 400-msTime;                               //
       // Serial.printf("Pre-slot: %ds @%dms Left:%dms\n", TimeRef.UTC, msTime, msSlot);
-      if(msSlot>40) PktCount+=Radio_FANETslot(FreqFNT, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
+      if(msSlot>40) PktCount+=Radio_FANETslot(BW, FreqFNT, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
     }
 
     // if(msTime<350)

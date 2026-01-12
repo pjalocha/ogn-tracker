@@ -67,7 +67,7 @@ class FreqPlan
 
    uint32_t getFreqFANET(void) const
    { if(Plan<=1) return 868200000;                                           // Europe and default is 868.200MHz
-     // there is 920.800  for USA and others but the bandwidth is 500kHz
+     if(Plan<=4) return 920800000;                                           // for USA/AU/NZ bandwidth is 500kHz
      return 0; }
 
    uint8_t static calcPlan(int32_t Latitude, int32_t Longitude) // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zeeland
