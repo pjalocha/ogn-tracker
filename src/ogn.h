@@ -1688,10 +1688,10 @@ class GPS_Position: public GPS_Time
        Packet.clrHumidity(); }
    }
 
-   // uint8_t getFreqPlan(void) const // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zeeland
+   // uint8_t getFreqPlan(void) const // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zealand
    // { if( (Longitude>=(-20*LatDeg)) && (Longitude<=(60*LatDeg)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
    //   if( Latitude<(20*LatDeg) )                                            // below 20deg latitude
-   //   { if( ( Longitude>(164*LatDeg)) && (Latitude<(-30*LatDeg)) && (Latitude>(-48*600000)) ) return 4;  // => New Zeeland
+   //   { if( ( Longitude>(164*LatDeg)) && (Latitude<(-30*LatDeg)) && (Latitude>(-48*600000)) ) return 4;  // => New Zealand
    //     return 3; }                                                         // => Australia + South America: upper half of 915MHz band
    //   return 2; }                                                           // => USA/Canada: full 915MHz band
 

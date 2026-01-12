@@ -968,7 +968,8 @@ void vTaskPROC(void* pvParameters)
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
         FNT_TxFIFO.Write();
         XorShift32(Random.RX);
-        FNTbackOff = 8+(Random.RX&0x1); }                                   // every 9 or 10sec
+        uint8_t TxPeriod=8; if(Radio_FreqPlan.Plan>1) TxPeriod=4;                //
+        FNTbackOff = TxPeriod+(Random.RX%3); }                                   // every 10 or 5 sec
 #endif // WITH_FANET
 #ifdef WITH_MESHT
       static uint8_t MSHbackOff=0;
