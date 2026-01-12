@@ -57,12 +57,12 @@ class FreqPlan
    { uint8_t Channel=getChannel(Time, Slot, OGN); return BaseFreq+ChanSepar*Channel; } // return frequency [Hz] for given UTC time and slot
 
    uint32_t getFreqOBAND(void) const
-   { if(Plan<=1) return 869425000;                                           // Europe and default is 869.525MHz
+   { if(Plan<=1) return 869525000;                                           // Europe and default is 869.525MHz
      if(Plan==4) return 869225000;                                           // New Zeeland: center of the narrow 869.20-.25 ISM band
      return 0; }
 
    uint32_t getFreqMESHT(void) const
-   { if(Plan<=1) return 869425000;                                           // Europe and default is 869.525MHz
+   { if(Plan<=1) return 869525000;                                           // Europe and default is 869.525MHz
      return 0; }
 
    uint32_t getFreqFANET(void) const
