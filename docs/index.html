@@ -82,8 +82,8 @@
       <select id="cmdControls" disabled>
         <option value="">Controls</option>
         <option value="$POGNS">Parameters NMEA</option>
-        <option value="\x03">List parameters</option>
-        <option value="\x18\x18">Restart</option>
+        <option value="\\x03">List parameters</option>
+        <option value="\\x18\\x18">Restart</option>
         <option value="$POGNS,Verbose=0">Quiet output</option>
         <option value="$POGNS,Verbose=1">Normal output</option>
         <option value="$POGNS,Defaults">Set defaults</option>
@@ -210,12 +210,12 @@
 
   el("btnReg").addEventListener("click", () => {
     const v = el("cmdReg").value.trim();
-    if(v) sendLine('$POGNS,Reg=${v}');
+    if(v) sendLine("$POGNS,Reg="+v);
   });
 
   el("btnPilot").addEventListener("click", () => {
     const v = el("cmdPilot").value.trim();
-    if(v) sendLine('$POGNS,Pilot=${v}');
+    if(v) sendLine("$POGNS,Pilot="+v);
   });
 
   el("btnSendCustom").addEventListener("click", () => {
