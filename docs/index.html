@@ -36,6 +36,18 @@
     <button id="btnConnect">Connect</button>
     <button id="btnDisconnect" disabled>Disconnect</button>
 
+<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+  <select id="cmdFreqPlan" disabled>
+    <option value="">Frequency plan</option>
+    <option value="$POGNS,FreqPlan=0">Auto</option>
+    <option value="$POGNS,FreqPlan=1">Europe/Africa</option>
+    <option value="$POGNS,FreqPlan=2">US/Canada</option>
+    <option value="$POGNS,FreqPlan=3">South America/Australia</option>
+    <option value="$POGNS,FreqPlan=4">New Zealand</option>
+  </select>
+  <button id="btnFreqPlan" disabled>Send</button>
+</div>
+
     <button id="btnCmd1" disabled>Europe/Africa</button>
     <button id="btnCmd2" disabled>USA/Canada</button>
     <button id="btnCmd3" disabled>Australia/South America</button>
@@ -75,6 +87,8 @@
 
     el("btnConnect").disabled = true;
     el("btnDisconnect").disabled = false;
+    el("cmdFreqPlan").disabled = false;
+    el("btnFreqPlan").disabled = false;
     el("btnCmd1").disabled = false;
     el("btnCmd2").disabled = false;
     el("btnCmd3").disabled = false;
@@ -97,6 +111,8 @@
 
     el("btnConnect").disabled = false;
     el("btnDisconnect").disabled = true;
+    el("cmdFreqPlan").disabled = true;
+    el("btnFreqPlan").disabled = true;
     el("btnCmd1").disabled = true;
     el("btnCmd2").disabled = true;
     el("btnCmd3").disabled = true;
@@ -136,6 +152,10 @@
   el("btnConnect").addEventListener("click", connect);
   el("btnDisconnect").addEventListener("click", disconnect);
 
+  el("btnFreqPlan").addEventListener("click", async () => {
+    const v = el("cmdFreqPlan").value;
+    if (v) await sendLine(v);
+  });
   el("btnCmd1").addEventListener("click", () => sendLine("$POGNS,FreqPlan=1"));
   el("btnCmd2").addEventListener("click", () => sendLine("$POGNS,FreqPlan=2"));
   el("btnCmd3").addEventListener("click", () => sendLine("$POGNS,FreqPlan=3"));
