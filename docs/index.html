@@ -30,6 +30,125 @@
   <p>If upload fails, you may need to enter bootloader mode by holding USER/BOOT button and pressing RESET or doing power-up.
      After the upload is complete, you need to press RESET again to exit bootloader mode and run the uploaded code</p>
 
+<!-- Command panel -->
+<section style="margin-top:16px; padding:12px; border:1px solid #ccc; border-radius:8px;">
+  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    <button id="btnConnect">Connect</button>
+    <button id="btnDisconnect" disabled>Disconnect</button>
+
+    <button id="btnCmd1" disabled>Europe/Africa</button>
+    <button id="btnCmd2" disabled>USA/Canada</button>
+    <button id="btnCmd3" disabled>Australia/South America</button>
+    <button id="btnCmd4" disabled>New Zealand</button>
+
+    <input id="customCmd" type="text" placeholder="Type command..." style="flex:1; min-width:220px;">
+    <button id="btnSendCustom" disabled>Send</button>
+  </div>
+
+  <pre id="log" style="margin-top:10px; height:220px; overflow:auto; background:#111; color:#eee; padding:10px; border-radius:6px;"></pre>
+</section>
+
+<script>
+(() => {
+  let port = null;
+  let reader = null;
+  let keepReading = false;
+  const baudRate = 115200; // set to your firmware console baud
+
+  const el = (id) => document.getElementById(id);
+  const logEl = el("log");
+
+  function appendLog(s) {
+    logEl.textContent += s;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  async function connect() {
+    if (!("serial" in navigator)) {
+      alert("Web Serial not supported. Use Chrome/Edge.");
+      return;
+    }
+
+    // Ask user to pick the ESP serial port
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate });
+
+    el("btnConnect").disabled = true;
+    el("btnDisconnect").disabled = false;
+    el("btnCmd1").disabled = false;
+    el("btnCmd2").disabled = false;
+    el("btnCmd3").disabled = false;
+    el("btnCmd4").disabled = false;
+    el("btnSendCustom").disabled = false;
+
+    keepReading = true;
+    readLoop().catch(e => appendLog(`\n[read error] ${e}\n`));
+    appendLog("[connected]\n");
+  }
+
+  async function disconnect() {
+    keepReading = false;
+
+    try { if (reader) await reader.cancel(); } catch {}
+    reader = null;
+
+    try { if (port) await port.close(); } catch {}
+    port = null;
+
+    el("btnConnect").disabled = false;
+    el("btnDisconnect").disabled = true;
+    el("btnCmd1").disabled = true;
+    el("btnCmd2").disabled = true;
+    el("btnCmd3").disabled = true;
+    el("btnCmd4").disabled = true;
+    el("btnSendCustom").disabled = true;
+
+    appendLog("[disconnected]\n");
+  }
+
+  async function readLoop() {
+    const decoder = new TextDecoder();
+    while (port && port.readable && keepReading) {
+      reader = port.readable.getReader();
+      try {
+        while (keepReading) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) appendLog(decoder.decode(value, { stream: true }));
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+  }
+
+  async function sendLine(line) {
+    if (!port || !port.writable) return;
+    const encoder = new TextEncoder();
+    const writer = port.writable.getWriter();
+    try {
+      await writer.write(encoder.encode(line + "\r\n"));
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  el("btnConnect").addEventListener("click", connect);
+  el("btnDisconnect").addEventListener("click", disconnect);
+
+  el("btnCmd1").addEventListener("click", () => sendLine("$POGNS,FreqPlan=1"));
+  el("btnCmd2").addEventListener("click", () => sendLine("$POGNS,FreqPlan=2"));
+  el("btnCmd3").addEventListener("click", () => sendLine("$POGNS,FreqPlan=3"));
+  el("btnCmd4").addEventListener("click", () => sendLine("$POGNS,FreqPlan=4"));
+
+  el("btnSendCustom").addEventListener("click", () => {
+    const v = el("customCmd").value.trim();
+    if (v) sendLine(v);
+  });
+
+})();
+</script>
+
   <script>
     const sel = document.getElementById("variant");
     const btn = document.getElementById("install");
@@ -37,6 +156,7 @@
       btn.setAttribute("manifest", `manifests/manifest-${sel.value}.json`);
     });
   </script>
+
 </body>
 </html>
 
