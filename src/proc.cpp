@@ -962,7 +962,7 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
-      else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1)
+      else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=4)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
