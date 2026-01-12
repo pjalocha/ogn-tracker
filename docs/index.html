@@ -48,7 +48,6 @@
         <option value="$POGNS,FreqPlan=4">New Zealand</option>
         <option value="$POGNS,FreqPlan=5">Israel</option>
       </select>
-      <!-- <button id="btnFreqPlan" disabled>Send</button> -->
     </div>
 
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -71,19 +70,25 @@
         <option value="$POGNS,AcftType=14">Ground vehicle</option>
         <option value="$POGNS,AcftType=15">Static object</option>
       </select>
-      <!-- <button id="btnAcftType" disabled>Send</button> -->
     </div>
-
-    <!-- <button id="btnCmd1" disabled>Europe/Africa</button> -->
-    <!-- <button id="btnCmd2" disabled>USA/Canada</button> -->
-    <!-- <button id="btnCmd3" disabled>Australia/South America</button> -->
-    <!-- <button id="btnCmd4" disabled>New Zealand</button> -->
 
     <input id="cmdReg" type="text" placeholder="Call-sign" style="flex:1; min-width:220px;">
     <button id="btnReg" disabled>OK</button>
 
     <input id="cmdPilot" type="text" placeholder="Pilot-name" style="flex:1; min-width:220px;">
     <button id="btnPilot" disabled>OK</button>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <select id="cmdControls" disabled>
+        <option value="">Controls</option>
+        <option value="$POGNS">Parameters NMEA</option>
+        <option value="\x03">List parameters</option>
+        <option value="\x18\x18">Restart</option>
+        <option value="$POGNS,Verbose=0">Quiet output</option>
+        <option value="$POGNS,Verbose=1">Normal output</option>
+        <option value="$POGNS,Defaults">Set defaults</option>
+      </select>
+    </div>
 
     <input id="customCmd" type="text" placeholder="Type command..." style="flex:1; min-width:220px;">
     <button id="btnSendCustom" disabled>OK</button>
@@ -120,13 +125,10 @@
     el("btnConnect").disabled = true;
     el("btnDisconnect").disabled = false;
     el("cmdFreqPlan").disabled = false;
-    // el("btnFreqPlan").disabled = false;
     el("cmdAcftType").disabled = false;
-    // el("btnAcftType").disabled = false;
-    // el("btnCmd1").disabled = false;
-    // el("btnCmd2").disabled = false;
-    // el("btnCmd3").disabled = false;
-    // el("btnCmd4").disabled = false;
+    el("cmdControls").disabled = false;
+    el("btnReg").disabled = false;
+    el("btnPilot").disabled = false;
     el("btnSendCustom").disabled = false;
 
     keepReading = true;
@@ -146,13 +148,10 @@
     el("btnConnect").disabled = false;
     el("btnDisconnect").disabled = true;
     el("cmdFreqPlan").disabled = true;
-    // el("btnFreqPlan").disabled = true;
     el("cmdAcftType").disabled = true;
-    // el("btnAcftType").disabled = true;
-    // el("btnCmd1").disabled = true;
-    // el("btnCmd2").disabled = true;
-    // el("btnCmd3").disabled = true;
-    // el("btnCmd4").disabled = true;
+    el("cmdControls").disabled = true;
+    el("btnReg").disabled = true;
+    el("btnPilot").disabled = true;
     el("btnSendCustom").disabled = true;
 
     appendLog("[disconnected]\n");
@@ -192,28 +191,22 @@
     const v = el("cmdFreqPlan").value;
     if (!v) return;
     await sendLine(v);
-    // el("cmdFreqPlan").value = "";   // reset to placeholder
+    el("cmdFreqPlan").value = "";   // reset to placeholder
   });
 
   el("cmdAcftType").addEventListener("change", async () => {
     const v = el("cmdAcftType").value;
     if (!v) return;
     await sendLine(v);
-    // el("cmdAcftType").value = "";   // reset to placeholder
+    el("cmdAcftType").value = "";   // reset to placeholder
   });
 
-  // el("btnFreqPlan").addEventListener("click", async () => {
-  //   const v = el("cmdFreqPlan").value;
-  //   if (v) await sendLine(v);
-  // });
-  // el("btnAcftType").addEventListener("click", async () => {
-  //   const v = el("cmdAcftType").value;
-  //   if (v) await sendLine(v);
-  // });
-  // el("btnCmd1").addEventListener("click", () => sendLine("$POGNS,FreqPlan=1"));
-  // el("btnCmd2").addEventListener("click", () => sendLine("$POGNS,FreqPlan=2"));
-  // el("btnCmd3").addEventListener("click", () => sendLine("$POGNS,FreqPlan=3"));
-  // el("btnCmd4").addEventListener("click", () => sendLine("$POGNS,FreqPlan=4"));
+  el("cmdControls").addEventListener("change", async () => {
+    const v = el("cmdControls").value;
+    if (!v) return;
+    await sendLine(v);
+    el("cmdControls").value = "";   // reset to placeholder
+  });
 
   el("btnReg").addEventListener("click", () => {
     const v = el("cmdReg").value.trim();
