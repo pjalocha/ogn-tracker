@@ -941,10 +941,10 @@ void vTaskPROC(void* pvParameters)
       Position->Sent=1;
 #ifdef WITH_ADSL
       XorShift32(Random.RX);
-      ADSL_Packet *AdslPacket=0;                                               // keep the pointer to the 
+      ADSL_Packet *AdslPacket=0;                                               // keep the pointer to the
       { static uint8_t TxBackOff=0;
         if(TxBackOff) TxBackOff--;
-        else if(Radio_FreqPlan.Plan<=1)                                         // ADS-L only in Europe/Africa
+        else if(Radio_FreqPlan.Plan<=1 || Radio_FreqPlan.Plan==4)              // ADS-L only in Europe/Africa or NZ
         { AdslPacket = ADSL_TxFIFO.getWrite();
           AdslPacket->Init();
           AdslPacket->setAddress (Parameters.Address);

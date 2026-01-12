@@ -9,6 +9,9 @@
 
 #include "timesync.h"
 
+// #define DEBUG_RX    // print debug info for received packets
+// #define DEBUG_SLOT  // print debug info when the TX/RX slot starts
+
 // =======================================================================================================
 
  FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
@@ -359,7 +362,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   }
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
-#ifdef DEBUG_PRINT
+#ifdef DEBUG_RX
     if(SysID==Radio_SysID_LDR && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.printf("RadioRx: Sys:%02X [%d%c]/%d #%d %+4.1fdBm ",
          SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
@@ -375,7 +378,7 @@ static int Radio_Receive(uint8_t PktLen, int Manch, uint8_t SysID, uint8_t Chann
   uint8_t ManchErr=RxPkt->ErrCount();
   if(SysID>=8 || ManchErr>=16) return 0;
   LED_OGN_RX(10);
-#ifdef DEBUG_PRINT
+#ifdef DEBUG_RX
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("RadioRx: %5.3fs [#%d:%d:%2d:%c%d] %+4.1fdBm ",
              1e-3*millis(), Channel, SysID, PktLen, Manch?'M':'_', ManchErr, -0.5*RxPkt->RSSI);
@@ -430,7 +433,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   bool SameChan = TxChannel==RxChannel;
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
-#ifdef DEBUG_PRINT
+#ifdef DEBUG_SLOT
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("Radio_Slot: %dms, %s, Tx:%s:%d:%5.1fMHz:%1.0fdBm, Rx:%s:%d:%5.1fMHz\n",
               msTimeLen, TxPacket?"RX/TX":"RX/--",
@@ -957,6 +960,7 @@ void Radio_Task(void *Parms)
                else { AdslPacket2=AdslPacket1; }
 
     bool EU = Radio_FreqPlan.Plan<=1;
+    bool NZ = Radio_FreqPlan.Plan==4;
 
     uint32_t Hash = TimeRef.UTC;
     XorShift32(Hash);
@@ -974,11 +978,11 @@ void Radio_Task(void *Parms)
     uint8_t TxChan=0;
     uint8_t FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 0);
     uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);
-    if(EU)
+    if(EU || NZ)
     { TxChan = Hash%3;
            if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
-      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
-      else           { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR; RxProt=Radio_SysID_LDR; }
+      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
+      else    { if(EU) TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
     }
     else
     { Odd = Count1s(Hash)&1;
@@ -988,10 +992,11 @@ void Radio_Task(void *Parms)
     }
 
     msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
+    if(msTime>=1000) msTime-=1000;
     uint32_t SlotLen = 800-msTime;
-         if(SlotLen<250) SlotLen=250;
-    else if(SlotLen>480) SlotLen=480;
-
+         if(SlotLen>800) SlotLen=800;
+    else if(SlotLen<200) SlotLen=200;
+    // Serial.printf("Slot #0: %3d:%3d\n", msTime, SlotLen);
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
     msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
@@ -1018,11 +1023,11 @@ void Radio_Task(void *Parms)
     TxPkt = 0;
     FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 0);
     OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1);
-    if(EU)
+    if(EU || NZ)
     { if(TxChan==2) TxChan=0;
-           if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
-      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
-      else           { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR; RxProt=Radio_SysID_LDR; }
+           if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
+      else if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
+      else    { if(EU) TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
     }
     else
     { Odd = !Odd;
@@ -1031,9 +1036,9 @@ void Radio_Task(void *Parms)
          else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
     }
 
-         if(SlotLen<250) SlotLen=250;
-    else if(SlotLen>480) SlotLen=480;
-
+         if(SlotLen<100) SlotLen=100;
+    else if(SlotLen>400) SlotLen=400;
+    // Serial.printf("Slot #1: %3d:%3d\n", msTime, SlotLen);
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
 #ifdef WITH_SX1276

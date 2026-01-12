@@ -17,7 +17,7 @@ class FreqPlan
    { Plan=NewPlan;
           if(Plan==2) { BaseFreq=902200000; ChanSepar=400000; Channels=65; } // USA
      else if(Plan==3) { BaseFreq=917000000; ChanSepar=400000; Channels=24; } // Australia and South America
-     else if(Plan==4) { BaseFreq=869250000; ChanSepar=200000; Channels= 1; } // New Zeeland
+     else if(Plan==4) { BaseFreq=869225000; ChanSepar=200000; Channels= 1; } // New Zeeland
      else if(Plan==5) { BaseFreq=916200000; ChanSepar=200000; Channels= 1; } // Israel
      else if(Plan==6) { BaseFreq=433200000; ChanSepar=200000; Channels= 8; } // Europe/Africa 434MHz
      else             { BaseFreq=868200000; ChanSepar=200000; Channels= 2; } // Europe/Africa 868MHz
@@ -30,7 +30,7 @@ class FreqPlan
    uint32_t getCenterFreq(void) { return BaseFreq + ChanSepar/2*(Channels-1); } // get the center frequency for the given frequency plan
 
    static const char *getPlanName(uint8_t Plan)
-   { static const char *Name[7] = { "Default", "EU/Africa", "USA/Canada", "Australia/Chile", "New Zeeland", "Israel", "EU/Africa 434MHz" } ;
+   { static const char *Name[7] = { "Default", "EU/Africa", "US/CA", "AU/Chile", "NZ", "Israel", "EU/Africa 434MHz" } ;
      if(Plan>=7) return 0;
      return Name[Plan]; }
 
