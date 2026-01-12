@@ -567,7 +567,8 @@ static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t 
   Radio.explicitHeader();
   Radio.setCRC(true);
 #ifdef WITH_SX1262
-  Radio.setSyncWord(Sync, 0x44);
+  Radio.setSyncWord((Sync&0xF0)|0x04, (Sync<<4)|0x04);
+  // Radio.setSyncWord(Sync, 0x44);
 #endif
 #ifdef WITH_SX1276
   Radio.setSyncWord(Sync);
@@ -736,10 +737,10 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
     Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
-  Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_125_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
+  // Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_125_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
   //          Preamble length, CRC-type,                                                Payload (max) size, Header-Type,
-  Radio.setPacketParams(8, TX?RADIOLIB_SX126X_LORA_CRC_ON:RADIOLIB_SX126X_LORA_CRC_OFF, 64, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT,
-                           TX?RADIOLIB_SX126X_LORA_IQ_STANDARD:RADIOLIB_SX126X_LORA_IQ_INVERTED);  // InvertIQ
+  // Radio.setPacketParams(8, TX?RADIOLIB_SX126X_LORA_CRC_ON:RADIOLIB_SX126X_LORA_CRC_OFF, 64, RADIOLIB_SX126X_LORA_HEADER_EXPLICIT,
+  //                          TX?RADIOLIB_SX126X_LORA_IQ_STANDARD:RADIOLIB_SX126X_LORA_IQ_INVERTED);  // InvertIQ
 #endif
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_LORA)
@@ -759,12 +760,10 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
   Radio.setPreambleLength(8);
   Radio.setCRC(TX);                            // uplink with CRC, downlink without CRC
 
-  const float BaseFreq = 867.1;
+  const float BaseFreq = 867.1;                //
   const float ChanStep =   0.2;
-  Radio_setFrequency(BaseFreq+ChanStep*Chan);          // set frequency
-  if(TX) Radio_setTxPower(TxPower);
-
-}
+  Radio_setFrequency(BaseFreq+ChanStep*Chan);  // set frequency
+  if(TX) Radio_setTxPower(TxPower); }
 
 #endif
 
