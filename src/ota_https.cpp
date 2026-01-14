@@ -1,4 +1,4 @@
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
 #ifdef WITH_WIFI
 
 #include "main.h"
@@ -8,7 +8,7 @@
 #include "log.h"
 #include "gps.h"
 
-#include "ota_cert.h"
+#include "ssl_root_ca.h"
 #include "esp_check.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
@@ -25,6 +25,11 @@ static uint16_t APs = 0;
 static const int MaxLineLen = 1024;
 static char Line[MaxLineLen]; // for printing and buffering
 
+extern "C" bool verifyRollbackLater()
+{
+  return true;
+}
+
 static void AP_Print(void (*Output)(char)) // print lists of AP's
 {
   for (uint16_t Idx = 0; Idx < APs; Idx++)
@@ -35,6 +40,27 @@ static void AP_Print(void (*Output)(char)) // print lists of AP's
     uint8_t Len = 3 + AP_Print(Line + 3, AP + Idx);
     Format_String(Output, Line);
   }
+}
+
+void url_strip_to_path(char *url)
+{
+  char *last_slash;
+
+  if (url == NULL)
+    return;
+
+  /* Remove query string or fragment if present */
+  url[strcspn(url, "?#")] = '\0';
+
+  /* Find the last slash */
+  last_slash = strrchr(url, '/');
+
+  if (last_slash == NULL)
+    return;
+
+  /* If the slash is not the final character, truncate after it */
+  if (*(last_slash + 1) != '\0')
+    *(last_slash + 1) = '\0';
 }
 
 static esp_err_t validate_image_header(esp_app_desc_t *new_app_info)
@@ -62,12 +88,115 @@ static esp_err_t _http_client_init_cb(esp_http_client_handle_t http_client)
   return err;
 }
 
-static void DownloadInstallFirwmare(void)
+static void DownloadTrackerSettings(void)
+{
+  //
+  // Download and write parameters for specific tracker
+  // filename is "settings_a1b2c3.txt"
+  //    a1b1c3 is tracker ID (lowercase)
+  // file should be located in FirmwareURL directory
+  // file syntax is Name=Value
+  //
+
+  esp_err_t err;
+
+#define SETTINGS_FILE_MAX_SIZE 4096
+  char *SettingsURL = (char *)malloc(160);
+
+  strcpy(SettingsURL, Parameters.FirmwareURL);
+
+  url_strip_to_path(SettingsURL);
+  char _setFileName[30];
+  sprintf(_setFileName, "settings_%06x.txt", Parameters.Address);
+  strcat(SettingsURL, _setFileName);
+
+  esp_http_client_config_t config = {
+      .url = SettingsURL,
+      .cert_pem = CACERTPEM,
+      .timeout_ms = 10000,
+      .keep_alive_enable = false,
+  };
+
+  esp_http_client_handle_t Client = esp_http_client_init(&config);
+  err = esp_http_client_open(Client, 0);
+
+  char *buffer = (char *)malloc(SETTINGS_FILE_MAX_SIZE + 1);
+  int content_length = esp_http_client_fetch_headers(Client);
+
+  if (content_length <= 0)
+  {
+    free(buffer);
+    free(SettingsURL);
+    esp_http_client_close(Client);
+    esp_http_client_cleanup(Client);
+    return;
+  }
+
+  int total_read = 0;
+  while (total_read < SETTINGS_FILE_MAX_SIZE)
+  {
+    int r = esp_http_client_read(Client, buffer + total_read, SETTINGS_FILE_MAX_SIZE - total_read);
+
+    if (r < 0)
+    {
+      buffer[0] = '\0'; // ERROR
+    }
+    if (r == 0)
+    {
+      break; // EOF
+    }
+
+    total_read += r;
+  }
+
+  buffer[total_read] = '\0';
+
+  /* Split into lines */
+  char *saveptr;
+  char *line = strtok_r(buffer, "\n", &saveptr);
+
+  while (line)
+  {
+    /* Strip trailing CR if present */
+    size_t len = strlen(line);
+    if (len > 0 && line[len - 1] == '\r')
+    {
+      line[len - 1] = '\0';
+    }
+
+    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    Format_String(CONS_UART_Write, line);
+    Format_String(CONS_UART_Write, "\n");
+    xSemaphoreGive(CONS_Mutex);
+
+    Parameters.ReadLine(line);
+    line = strtok_r(NULL, "\n", &saveptr);
+  }
+
+  Parameters.WriteToNVS();
+  free(buffer);
+  free(SettingsURL);
+  esp_http_client_close(Client);
+  esp_http_client_cleanup(Client);
+}
+
+static void DownloadInstallFirmware(void)
 {
   esp_err_t err;
   esp_err_t ota_finish_err = ESP_OK;
+  nvs_handle_t _nvsHandle;
 
-  char FirmwareSerialURL[160];
+  char _rx_buffer[32] = {0};
+
+  //
+  // Check firmware serial on server
+  //
+  // file is same as firmware, but with ".serial" added
+  // should contain an u32 number incremented with each new serial
+  // suggested format is: 2025102701 <- date YMD and daily serial number
+
+  char *FirmwareSerialURL = (char *)malloc(160);
+  // char FirmwareSerialURL[160] = {0};
   strcpy(FirmwareSerialURL, Parameters.FirmwareURL);
   strcat(FirmwareSerialURL, ".serial");
 
@@ -75,7 +204,7 @@ static void DownloadInstallFirwmare(void)
       .url = FirmwareSerialURL,
       .cert_pem = CACERTPEM,
       .timeout_ms = 60000,
-      .buffer_size = 4096,
+      .buffer_size = 8192,
       .keep_alive_enable = true,
   };
 
@@ -88,6 +217,7 @@ static void DownloadInstallFirwmare(void)
     Format_String(CONS_UART_Write, "OTA http connection open failed\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
+    free(FirmwareSerialURL);
     esp_http_client_close(Client);
     esp_http_client_cleanup(Client);
     return;
@@ -100,15 +230,19 @@ static void DownloadInstallFirwmare(void)
     Format_String(CONS_UART_Write, "OTA firmware serial headers fetch failed\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
+    free(FirmwareSerialURL);
     esp_http_client_close(Client);
     esp_http_client_cleanup(Client);
     return;
   }
-  vTaskDelay(1); // give over tasks a chance
+  vTaskDelay(20); // give other tasks a chance
 
-  char _rx_buffer[32] = {0};
   int read_len = esp_http_client_read(Client, _rx_buffer, sizeof(_rx_buffer) - 1);
   _rx_buffer[sizeof(_rx_buffer) - 1] = '\0';
+
+  free(FirmwareSerialURL);
+  esp_http_client_close(Client);
+  esp_http_client_cleanup(Client);
 
   esp_https_ota_handle_t https_ota_handle = NULL;
   esp_app_desc_t app_desc = {};
@@ -138,16 +272,14 @@ static void DownloadInstallFirwmare(void)
   {
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "OTA firmware serial retrieval is wrong\n");
+    Format_String(CONS_UART_Write, "OTA firmware serial retrieval went wrong\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
-    esp_http_client_close(Client);
-    esp_http_client_cleanup(Client);
+    xSemaphoreGive(WIFI_Mutex);
     vTaskDelete(NULL);
   }
-  vTaskDelay(1); // give over tasks a chance
+  vTaskDelay(50); // give other tasks a chance
 
-  nvs_handle_t _nvsHandle;
   nvs_open("ota", NVS_READONLY, &_nvsHandle);
   nvs_get_u32(_nvsHandle, "serial", &nvs_firmwareSerial);
   nvs_close(_nvsHandle);
@@ -162,14 +294,21 @@ static void DownloadInstallFirwmare(void)
 
   if (nvs_firmwareSerial >= receivedSerialNumber)
   {
-    esp_http_client_close(Client);
-    esp_http_client_cleanup(Client);
+    xSemaphoreGive(WIFI_Mutex);
     vTaskDelete(NULL);
+    return;
   }
 
+  //
   // proceed with Firmware download
+  //
+
+  vTaskPrioritySet(NULL, 10);         // increase even more
 
   config.url = Parameters.FirmwareURL;
+  config.buffer_size = 8192;
+  config.timeout_ms = 60000;
+
   esp_https_ota_config_t ota_config = {
       .http_config = &config,
       .http_client_init_cb = _http_client_init_cb, // Register a callback to be invoked after esp_http_client is initialized
@@ -184,10 +323,11 @@ static void DownloadInstallFirwmare(void)
     xSemaphoreGive(CONS_Mutex);
 #endif
     esp_https_ota_abort(https_ota_handle);
-    goto ota_end;
+    xSemaphoreGive(WIFI_Mutex);
+    return;
   }
 
-  vTaskDelay(1); // give over tasks a chance
+  vTaskDelay(20); // give other tasks a chance
 
   err = esp_https_ota_get_img_desc(https_ota_handle, &app_desc);
   if (err != ESP_OK)
@@ -198,7 +338,9 @@ static void DownloadInstallFirwmare(void)
     xSemaphoreGive(CONS_Mutex);
 #endif
     esp_https_ota_abort(https_ota_handle);
-    goto ota_end;
+    xSemaphoreGive(WIFI_Mutex);
+    vTaskDelete(NULL);
+    return;
   }
   err = validate_image_header(&app_desc);
   if (err != ESP_OK)
@@ -209,7 +351,9 @@ static void DownloadInstallFirwmare(void)
     xSemaphoreGive(CONS_Mutex);
 #endif
     esp_https_ota_abort(https_ota_handle);
-    goto ota_end;
+    xSemaphoreGive(WIFI_Mutex);
+    vTaskDelete(NULL);
+    return;
   }
 
   while (1)
@@ -225,12 +369,12 @@ static void DownloadInstallFirwmare(void)
     const size_t len = esp_https_ota_get_image_len_read(https_ota_handle);
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "Image bytes read: ");
+    Format_String(CONS_UART_Write, "OTA bytes read: ");
     Format_UnsDec(CONS_UART_Write, (uint32_t)len);
     Format_String(CONS_UART_Write, "\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
-    vTaskDelay(1); // give over tasks a chance
+    vTaskDelay(20); // give other tasks a chance
   }
 
   if (esp_https_ota_is_complete_data_received(https_ota_handle) != true)
@@ -245,32 +389,23 @@ static void DownloadInstallFirwmare(void)
   else
   {
     ota_finish_err = esp_https_ota_finish(https_ota_handle);
-    vTaskDelay(1); // give over tasks a chance
-
     if ((err == ESP_OK) && (ota_finish_err == ESP_OK))
     {
-      // write serial number to NVS
+      // write candidate serial number to NVS
+      // if OTA fails and firmware is rolled back, this will prevent from downloading same failed again
       nvs_open("ota", NVS_READWRITE, &_nvsHandle);
-      nvs_firmwareSerial = nvs_set_u32(_nvsHandle, "serial", receivedSerialNumber);
+      nvs_set_u32(_nvsHandle, "serial", receivedSerialNumber);
       nvs_commit(_nvsHandle);
       nvs_close(_nvsHandle);
 
-      // write serial number to POGNT Parameters so it gets broadcasted
-      char _serial[16] = {0};
-      sprintf(_serial, "OTA-%d", (receivedSerialNumber));
-      _serial[15] = '\0';
-      strcpy(Parameters.Soft, _serial);
       Parameters.WriteToNVS();
 
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      // docelowo zmienić na sekundę
       Format_String(CONS_UART_Write, "ESP_HTTPS_OTA upgrade successful. Rebooting in 3 seconds...\n");
       xSemaphoreGive(CONS_Mutex);
 #endif
-      esp_http_client_close(Client);
-      esp_http_client_cleanup(Client);
-      vTaskDelay(3000 / portTICK_PERIOD_MS);
+      vTaskDelay(3000);
       esp_restart();
     }
     else
@@ -291,7 +426,11 @@ static void DownloadInstallFirwmare(void)
       xSemaphoreGive(CONS_Mutex);
 #endif
       esp_https_ota_abort(https_ota_handle);
-      goto ota_end;
+      esp_http_client_close(Client);
+      esp_http_client_cleanup(Client);
+      xSemaphoreGive(WIFI_Mutex);
+      vTaskDelete(NULL);
+      return;
     }
   }
 
@@ -300,34 +439,43 @@ static void DownloadInstallFirwmare(void)
   Format_String(CONS_UART_Write, "ESP_HTTPS_OTA upgrade failed\n");
   xSemaphoreGive(CONS_Mutex);
 #endif
-ota_end:
   esp_http_client_close(Client);
   esp_http_client_cleanup(Client);
+
+  xSemaphoreGive(WIFI_Mutex);
   vTaskDelete(NULL);
 }
 
 extern "C" void vTaskOTA(void *pvParameters)
 {
-  vTaskDelay(30000);              // initial delay
-
+  vTaskDelay(15000);
   for (;;)
   {
-    if (Parameters.FirmwareURL[0] == 0)
-      continue;
     if (Flight.inFlight())
     {
       vTaskDelete(NULL);
     };
 
+    if (Parameters.FirmwareURL[0] == 0)
+    {
+      vTaskDelay(30000);
+      continue;
+    }
+
+    xSemaphoreTake(WIFI_Mutex, portMAX_DELAY);
+    vTaskDelay(3000);
+
     esp_err_t Err = WIFI_Start(); // start WiFi in station-mode
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "WIFI_Start() => ");
     if (Err >= ESP_ERR_WIFI_BASE)
+    {
       Err -= ESP_ERR_WIFI_BASE;
-    Format_SignDec(CONS_UART_Write, Err);
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
+      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      Format_String(CONS_UART_Write, "OTA WIFI_Start() error => ");
+      Format_SignDec(CONS_UART_Write, Err);
+      Format_String(CONS_UART_Write, "\n");
+      xSemaphoreGive(CONS_Mutex);
+    }
 #endif
 
     vTaskDelay(1000);
@@ -335,7 +483,7 @@ extern "C" void vTaskOTA(void *pvParameters)
     Err = WIFI_PassiveScan(AP, APs); // perform a passive scan: find Access Points around
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "WIFI_PassiveScan() => ");
+    Format_String(CONS_UART_Write, "OTA WIFI_PassiveScan() => ");
     if (Err >= ESP_ERR_WIFI_BASE)
       Err -= ESP_ERR_WIFI_BASE;
     Format_SignDec(CONS_UART_Write, Err);
@@ -370,7 +518,7 @@ extern "C" void vTaskOTA(void *pvParameters)
         }
         CONS_UART_Write(':');
         CONS_UART_Write(' ');
-        Format_String(CONS_UART_Write, "WIFI_Connect() => ");
+        Format_String(CONS_UART_Write, "OTA WIFI_Connect() => ");
         if (Err >= ESP_ERR_WIFI_BASE)
           Err -= ESP_ERR_WIFI_BASE;
         Format_SignDec(CONS_UART_Write, Err);
@@ -402,13 +550,15 @@ extern "C" void vTaskOTA(void *pvParameters)
         Format_String(CONS_UART_Write, "\n");
         xSemaphoreGive(CONS_Mutex);
 #endif
-        if (WIFI_IP.ip.addr == 0)
+        if (WIFI_IP.ip.addr == 0) // if getting local IP failed then give up and try another AP
         {
           WIFI_Disconnect();
           continue;
-        } // if getting local IP failed then give up and try another AP
+        }
 
         // here we decide that previous OTA-received firmware works and can be retained
+        // our test condition is successful WIFI connection
+        // this also implies ca. 20 seconds of tracker uptime (vTask delays)
         const esp_partition_t *running = esp_ota_get_running_partition();
         esp_ota_img_states_t ota_state;
         if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK)
@@ -417,9 +567,23 @@ extern "C" void vTaskOTA(void *pvParameters)
           {
             if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK)
             {
+              // NOTE: serial number in NVS is already bumped to prevent redownloading failed firmwares
+              nvs_handle_t _nvsHandle;
+              uint32_t NVSserial;
+              nvs_open("ota", NVS_READONLY, &_nvsHandle);
+              nvs_get_u32(_nvsHandle, "serial", &NVSserial);
+              nvs_close(_nvsHandle);
+
+              // write new serial number to "Soft" parameter so it gets broadcasted
+              char _soft[16] = {0};
+              sprintf(_soft, "ota%d", (NVSserial));
+              _soft[15] = '\0';
+              strcpy(Parameters.Soft, _soft);
+              Parameters.WriteToNVS();
+
 #ifdef DEBUG_PRINT
               xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-              Format_String(CONS_UART_Write, "App is valid, rollback cancelled successfully\n");
+              Format_String(CONS_UART_Write, "New APP firmware is valid, rollback cancelled.\n");
               xSemaphoreGive(CONS_Mutex);
 #endif
             }
@@ -434,29 +598,34 @@ extern "C" void vTaskOTA(void *pvParameters)
           }
           else
           {
-            esp_wifi_set_ps(WIFI_PS_NONE);
-            DownloadInstallFirwmare();
+            vTaskPrioritySet(NULL, 5);
+            esp_wifi_set_ps(WIFI_PS_NONE); // disable WIFI powersaving
+            DownloadTrackerSettings();
+            DownloadInstallFirmware();
+            vTaskPrioritySet(NULL, 0);
             WIFI_setPowerSave(1);
           }
         }
-        vTaskDelay(2000);
+        vTaskDelay(1000);
         WIFI_Disconnect();
         WIFI_IP.ip.addr = 0;
-        vTaskDelay(2000);
+        vTaskDelay(1000);
       }
     }
 
-    vTaskDelay(2000);
+    vTaskDelay(1000);
     Err = WIFI_Stop();
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "WIFI_Stop() => ");
+    Format_String(CONS_UART_Write, "OTA WIFI_Stop() => ");
     if (Err >= ESP_ERR_WIFI_BASE)
       Err -= ESP_ERR_WIFI_BASE;
     Format_SignDec(CONS_UART_Write, Err);
     Format_String(CONS_UART_Write, "\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
+
+    xSemaphoreGive(WIFI_Mutex);
     vTaskDelay(300000); // wait 5 mins
   }
 };

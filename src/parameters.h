@@ -167,7 +167,7 @@ uint16_t StratuxPort;
 #ifdef WITH_UPLOAD
    char UploadURL[128];           // URL to upload log files
 #endif
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
    char FirmwareURL[128];           // URL to upload log files
 #endif
 
@@ -362,7 +362,7 @@ uint16_t StratuxPort;
 #ifdef WITH_UPLOAD
    UploadURL[0] = 0;
 #endif
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
    FirmwareURL[0] = 0;
 #endif
   }
@@ -910,9 +910,9 @@ uint16_t StratuxPort;
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
 #endif
 #ifdef WITH_WIFI
-    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 64)>=0;
-#ifdef WITH_OTA
-    if(strcmp(Name, "FirmwareURL")==0) return Read_String(FirmwareURL, Value, 64)>=0;
+    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 160)>=0;
+#ifdef WITH_OTA_HTTPS
+    if(strcmp(Name, "FirmwareURL")==0) return Read_String(FirmwareURL, Value, 160)>=0;
 #endif
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
@@ -1072,7 +1072,7 @@ uint16_t StratuxPort;
 #ifdef WITH_UPLOAD
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
     strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
     return 10+InfoParmNum; }
@@ -1147,7 +1147,7 @@ uint16_t StratuxPort;
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
     strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
     strcpy(Line, "Firmware built on "); strcat(Line, __DATE__); strcat(Line, " "); strcat(Line, __TIME__); strcat(Line, "\n"); Format_String(Output, Line);

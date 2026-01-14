@@ -36,8 +36,8 @@
 #include "upload.h"
 #endif
 
-#ifdef WITH_OTA
-#include "ota.h"
+#ifdef WITH_OTA_HTTPS
+#include "ota_https.h"
 #endif
 
 #ifdef WITH_AP
@@ -133,6 +133,7 @@ static int NVS_Init(void)
 
 SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
 SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
+SemaphoreHandle_t WIFI_Mutex;                // Mut-Ex for the WIFI
 
 // =======================================================================================================
 
@@ -631,6 +632,7 @@ void setup()
 {
   CONS_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the writing to the console
   I2C_Mutex  = xSemaphoreCreateMutex();      // semaphore for sharing the I2C bus
+  WIFI_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the WIFI usage
 
   NVS_Init();                                // initialize storage in flash like for parameters
 #ifdef WITH_SPIFFS
@@ -665,11 +667,34 @@ void setup()
   strcpy(Parameters.Hard, HARD_NAME);
 #endif
 #ifdef SOFT_NAME
-  #ifdef WITH_OTA
-    if (Parameters.Soft[0] == 0)             // with OTA, firmware serial number stored as Parameters.Soft
+  #ifdef WITH_OTA_HTTPS
+    if (Parameters.Soft[0] == 0)             // with OTA, firmware serial number is stored as Parameters.Soft
   #endif
       strcpy(Parameters.Soft, SOFT_NAME);
 #endif
+
+// default Upload/OTA parameters
+#ifdef FIRMWARE_URL
+  if (Parameters.FirmwareURL[0] == 0)
+      strcpy(Parameters.FirmwareURL, FIRMWARE_URL);
+#endif
+
+#ifdef UPLOAD_URL
+  if (Parameters.UploadURL[0] == 0)
+      strcpy(Parameters.UploadURL, UPLOAD_URL);
+#endif
+
+#ifdef WIFINAME
+#ifdef WIFIPASS
+  if (Parameters.WIFIname[0][0] == 0 || Parameters.WIFIpass[0][0] == 0) {
+      strcpy(Parameters.WIFIname[0], WIFINAME);
+      strcpy(Parameters.WIFIpass[0], WIFIPASS);
+  }
+#endif
+#endif
+
+
+
 
 #if ARDUINO_USB_CDC_ON_BOOT==1
   Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
@@ -987,7 +1012,7 @@ void setup()
 #ifdef WITH_EPAPER
   xTaskCreate(EPD_Task    ,  "EPD" ,  4000, NULL, 0, NULL);  //
 #endif
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
   xTaskCreate(vTaskOTA    , "OTA"  ,  4000, NULL, 0, NULL);
 #endif
 
@@ -1235,7 +1260,7 @@ static int ProcessInput(void)
     if(Byte==CtrlX) ProcessCtrlX();                                // double Ctrl-X restarts the system
 #endif // of WITH_GPS_UBX_PASS
 
-#ifdef WITH_OTA
+#ifdef WITH_OTA_HTTPS
     if(Byte==CtrlP) print_ota_status();                            // print OTA partitions
 #endif
 

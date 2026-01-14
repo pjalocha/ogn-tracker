@@ -7,6 +7,10 @@
 #include "log.h"
 #include "gps.h"
 
+#include "ssl_root_ca.h"
+#include "esp_check.h"
+#include "esp_http_client.h"
+
 #define DEBUG_PRINT
 
 static wifi_ap_record_t AP[8];                        // lists of Access Points from the WiFi scan
@@ -24,8 +28,7 @@ static void AP_Print(void (*Output)(char))            // print lists of AP's
 
 // ----------------------------------------------------------------------------------------------
 
-#include "esp_http_client.h"
-
+/*
 static esp_err_t HTTP_event_handler(esp_http_client_event_t *evt)
 { switch (evt->event_id)
   { case HTTP_EVENT_ON_DATA:
@@ -35,8 +38,7 @@ static esp_err_t HTTP_event_handler(esp_http_client_event_t *evt)
       break;
   }
   return ESP_OK; }
-
-// static const char *UploadURL = "http://ogn3.glidernet.org:8084/upload";
+*/
 
 /*
 void send_chunk(esp_http_client_handle_t client, const char *data, size_t len)
@@ -55,18 +57,15 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
   int FileSize = ftell(File);
   rewind(File);
 
-  // esp_http_client_config_t Config =
-  // { .url = Parameters.UploadURL,
-  //   .event_handler = HTTP_event_handler };
-
   esp_http_client_config_t Config =
   { .url = Parameters.UploadURL,
+    .cert_pem = CACERTPEM,
     .method = HTTP_METHOD_POST,
     .event_handler = NULL
   };
 
   esp_http_client_handle_t Client = esp_http_client_init(&Config);
-  // esp_http_client_set_method(Client, HTTP_METHOD_POST);
+  
   esp_http_client_set_header(Client, "Content-Type", "application/octet-stream");
   esp_http_client_set_header(Client, "X-File-Name", RemoteFileName);
 
@@ -78,10 +77,11 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
 
   int SendSize=0;
   for( ; ; )
-  { int Read=fread(Line, 1, MaxLineLen, File); if(Read<=0) break;
+  { int Read=fread(Line, 1, MaxLineLen, File);
+    if(Read<=0) break;
     SendSize+=Read;
     Err = esp_http_client_write(Client, Line, Read);
-    vTaskDelay(1);                // give over tasks a chance
+    vTaskDelay(100);                // give other tasks a chance
     if(Err<0) break; }
 
   fclose(File);
@@ -109,7 +109,7 @@ static int RemoteLogFileName(char *Name, uint32_t Time)
   Len+=FlashLog_ShortFileName(Name+Len, Time);
   return Len; }
 
-static int UploadOldestFile(bool Delete=0)                   // SP9WPN: tymczasowo Delete=0, potem przywrócić =1
+static int UploadOldestFile(bool Delete=1)
 { uint32_t Oldest=0;
   int Files=FlashLog_FindOldestFile(Oldest);
   if(Files==0 || Oldest==0) return 0;
@@ -175,10 +175,10 @@ static int UploadDialog(void)               // connect and talk to the server ex
 extern "C"
 void vTaskUPLOAD(void* pvParameters)
 {
-  vTaskDelay(10000);
+  vTaskDelay(5000);
 
   for( ; ; )
-  { vTaskDelay(60000);
+  { vTaskDelay(30000);
     if(Parameters.UploadURL[0]==0) continue;                         // don't upload if URL not defined
     if(Flight.inFlight()) continue;                                  // don't unload if airborne
     if(FlashLog_isOpen()) continue;                                  // don't upload if a log file is being written
@@ -187,14 +187,20 @@ void vTaskUPLOAD(void* pvParameters)
     int Files=FlashLog_FindOldestFile(Oldest);
     if(Files==0 || Oldest==0) continue;                              // don't attempt to upload if no log files
 
-    esp_err_t Err=WIFI_Start();                                      // start WiFi in station-mode
+    xSemaphoreTake(WIFI_Mutex, portMAX_DELAY);
+    vTaskDelay(3000);
+
+    esp_err_t Err = WIFI_Start(); // start WiFi in station-mode
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "WIFI_Start() => ");
-    if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
-    Format_SignDec(CONS_UART_Write, Err);
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
+    if (Err >= ESP_ERR_WIFI_BASE)
+    {
+      Err -= ESP_ERR_WIFI_BASE;
+      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      Format_String(CONS_UART_Write, "UPLOAD WIFI_Start() error => ");
+      Format_SignDec(CONS_UART_Write, Err);
+      Format_String(CONS_UART_Write, "\n");
+      xSemaphoreGive(CONS_Mutex);
+    }
 #endif
 
     vTaskDelay(1000);
@@ -202,17 +208,19 @@ void vTaskUPLOAD(void* pvParameters)
     Err=WIFI_PassiveScan(AP, APs);                           // perform a passive scan: find Access Points around
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "WIFI_PassiveScan() => ");
-    if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
+    Format_String(CONS_UART_Write, "UPLOAD WIFI_PassiveScan() => ");
+    if(Err>=ESP_ERR_WIFI_BASE)
+      Err-=ESP_ERR_WIFI_BASE;
     Format_SignDec(CONS_UART_Write, Err);
     CONS_UART_Write('/');
     Format_UnsDec(CONS_UART_Write, APs);
     Format_String(CONS_UART_Write, "\n");
-    if(Err==ESP_OK) AP_Print(CONS_UART_Write);
+    if(Err==ESP_OK)
+      AP_Print(CONS_UART_Write);
     xSemaphoreGive(CONS_Mutex);
 #endif
 
-    if(Err==ESP_OK)                                           // if WiFi scan went well
+    if(Err == ESP_OK)                                           // if WiFi scan went well
     { for(uint16_t Idx=0; Idx<APs; Idx++)                     // loop over Access Points
       { const char *NetName  = (const char *)(AP[Idx].ssid);
         const char *NetPass = 0;
@@ -226,7 +234,7 @@ void vTaskUPLOAD(void* pvParameters)
         if(NetPass) { CONS_UART_Write('/'); Format_String(CONS_UART_Write, NetPass); }
         CONS_UART_Write(':');
         CONS_UART_Write(' ');
-        Format_String(CONS_UART_Write, "WIFI_Connect() => ");
+        Format_String(CONS_UART_Write, "UPLOAD WIFI_Connect() => ");
         if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
         Format_SignDec(CONS_UART_Write, Err);
         Format_String(CONS_UART_Write, "\n");
@@ -253,25 +261,29 @@ void vTaskUPLOAD(void* pvParameters)
 #endif
         if(WIFI_IP.ip.addr==0) { WIFI_Disconnect(); continue; }     // if getting local IP failed then give up and try another AP
 
+        vTaskPrioritySet(NULL, 5);
+        esp_wifi_set_ps(WIFI_PS_NONE); // disable WIFI powersaving
         Upload();
+        vTaskPrioritySet(NULL, 0);
+        WIFI_setPowerSave(1);
 
-        vTaskDelay(2000);
+        vTaskDelay(1000);
         WIFI_Disconnect(); WIFI_IP.ip.addr=0;
-        vTaskDelay(2000);
       }
     }
 
-    vTaskDelay(2000);
+    vTaskDelay(1000);
     Err=WIFI_Stop();
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "WIFI_Stop() => ");
+    Format_String(CONS_UART_Write, "UPLOAD WIFI_Stop() => ");
     if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
     Format_SignDec(CONS_UART_Write, Err);
     Format_String(CONS_UART_Write, "\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
 
+    xSemaphoreGive(WIFI_Mutex);
   }
 }
 
