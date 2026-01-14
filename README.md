@@ -113,6 +113,36 @@ The log is stored in internal flash: type **Ctrl-F** to list recorded files with
 The files are binary but can be downloaded as APRS with an **$POGNL** command (details come later)
 The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
 
+### HTTPS-OTA updates
+Tracker's firmware can be updated remotely (Over-The-Air) using WiFi connection. Firstly, tracker flash memory needs to be prepared
+differently for this - special partition layout is required. This needs to be done traditionally, using serial connection.
+Once done, a command should be sent via serial console:
+```
+$POGNS,FirmwareURL=https://example.com/ogn/firmware/my_firmware.bin,WIFIname=OurClub,WIFIpass=OurPass
+```
+In this example, tracker expects two files at https://example.com/ogn/firmware/:
++ my_firmware.bin
++ my_firmware.bin.serial
+The latter is a mandatory text file with firmware serial, suggested format is 2025102701 (YMD date and daily version number). Tracker checks this
+value against current serial to decide if new firmware has been published. If new number is higher, an OTA update is performed.
+
+OTA process has an auto-rollback feature which expects tracker to connect to a WiFi after first boot with new firmware (this usually happens
+within 30 seconds). If no such connection is made, previous firmware is restored and no future attempts will be made to download that failed serial again.
+It is then crucial to provide a reliable WiFi coverage during OTA process and shortly after.
+
+## Remote settings
+Additionally, an optional "settings_a1b2c3.txt" file can be placed in the same directory as firmware. This contains per-tracker configuration
+parameters which will be accepted as they would have been entered using $POGNS commands. "a1b2c3" is tracker's 24 bit address written in lowercase hex. Example content:
+```
+ID=ABC
+Reg=N123A
+Model=SZD-55
+AcftType=1
+```
+
+Please remember these files are publicly available on WWW, so do not put any passwords in them.
+
+
 ### Configure automatic upload of flight log files
 You need to setup the following elements:
 1. WiFi name to connect to internet and password: suppose they are "OurClub" and "OurPass"

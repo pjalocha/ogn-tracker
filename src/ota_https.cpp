@@ -191,9 +191,9 @@ static void DownloadInstallFirmware(void)
   //
   // Check firmware serial on server
   //
-  // file is same as firmware, but with ".serial" added
-  // should contain an u32 number incremented with each new serial
-  // suggested format is: 2025102701 <- date YMD and daily serial number
+  // filename is same as firmware's, but with ".serial" added
+  // should contain an u32 number incremented with each new release
+  // suggested format is: 2025102701 <- YMD date and daily version number
 
   char *FirmwareSerialURL = (char *)malloc(160);
   // char FirmwareSerialURL[160] = {0};
