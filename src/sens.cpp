@@ -106,7 +106,9 @@ static char Line[96];                       // line to prepare the barometer NME
 static uint8_t InitBaro(void)
 { Baro.Bus=BARO_I2C;
   uint8_t Err=Baro.CheckID();
+  // Serial.printf("Baro.CheckID() => Err:%d\n", Err);
   if(Err==0) Err=Baro.ReadCalib();
+  // Serial.printf("Baro.ReadCalib() => Err:%d\n", Err);
 #ifdef WITH_BMP180
   if(Err==0) Err=Baro.AcquireRawTemperature();
   if(Err==0) { Baro.CalcTemperature(); AverPress=0; AverCount=0; }
@@ -116,6 +118,7 @@ static uint8_t InitBaro(void)
   if(Err==0) { Baro.Calculate(); }
 #endif
   // if(Err) LED_BAT_On();
+  // Serial.printf("InitBaro() => Err:%d\n", Err);
   return Err==0 ? Baro.ADDR:0; }
 
 static void ProcBaro(void)
@@ -388,8 +391,9 @@ void vTaskSENS(void* pvParameters)
   while(1)
   {
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611)
-    if(PowerMode) ProcBaro();
-             else vTaskDelay(100);
+         if(Baro.ADDR==0) { vTaskDelay(1000); InitBaro(); }
+    else if(PowerMode) ProcBaro();
+                  else vTaskDelay(100);
 #else
     vTaskDelay(1000);
 #endif

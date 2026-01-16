@@ -80,16 +80,15 @@ class BMP280
   			// if it finds a BME280 it will use it without the humidity part
    { ADDR=0;
      Error=I2C_Read(Bus, ADDR0, REG_ID, ID);
-     if( (!Error) && ( (ID==0x58) || (ID==0x60) ) ) { ADDR=ADDR0; return 0; }
+     if( Error==0 && ( (ID==0x58) || (ID==0x60) ) ) { ADDR=ADDR0; return 0; }
      Error=I2C_Read(Bus, ADDR1, REG_ID, ID);
-     if( (!Error) && ( (ID==0x58) || (ID==0x60) ) ) { ADDR=ADDR1; return 0; }
-     return 1; } // 0 => no error and correct ID
+     if( Error==0 && ( (ID==0x58) || (ID==0x60) ) ) { ADDR=ADDR1; return 0; }
+     return Error; }  // 0 => no error and correct ID
 
   uint8_t hasHumidity(void) const { return ID==0x60; } // is this BME280 ? Can still be used as BMP280
 
   uint8_t ReadCalib(void) // read the calibration constants from the EEPROM
-  { Error=I2C_Read(Bus, ADDR, REG_CALIB, (uint8_t *)Calib, 2*13);
-    return Error; }
+  { return I2C_Read(Bus, ADDR, REG_CALIB, (uint8_t *)Calib, 2*13); }  // returns non-zero error code upon failure
 
   uint8_t ReadReady(void) // check if temperature and pressure conversion is done
   { uint8_t Status;

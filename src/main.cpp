@@ -238,25 +238,65 @@ static void USBMSC_Begin(void)
 
 // =======================================================================================================
 
-uint8_t I2C_Restart(uint8_t Bus)
-{ Wire.end(); Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); return 0; }
+static uint8_t I2C_Scan(TwoWire &Wire, const char *Title)
+{ Serial.printf(Title);
+  uint32_t Time=millis();
+  uint8_t I2Cdev=0;
+  for(uint8_t Addr=0x08; Addr<=0x77; Addr++)
+  { delay(1);
+    Wire.beginTransmission(Addr);
+    if(Wire.endTransmission()==0)
+    { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
+  }
+  Time=millis()-Time;
+  Serial.printf(" %d devices (%dms)\n", I2Cdev, Time);
+  return I2Cdev; }
 
-uint8_t I2C_Read (uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
-{ Wire.beginTransmission(Addr);
-  int Ret=Wire.write(Reg);
-  Wire.endTransmission(false);
-  Ret=Wire.requestFrom(Addr, Len);
+static uint8_t I2C_Read(TwoWire &Wire, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
+{ // Serial.printf("I2C_Read(%d, x%02X, x%02X, , [%d], %dms)\n", Bus, Addr, Reg, Len, Wait);
+  Wire.beginTransmission(Addr);
+  int Ret=Wire.write(Reg); if(Ret!=1) { Wire.endTransmission(true); return 0xD; }
+  Ret=Wire.endTransmission(false); if(Ret) return Ret;   // return non-zero on error
+  Ret=Wire.requestFrom(Addr, Len);                       // returns the number of bytes returned from the device
+  // if(Ret!=Len) Serial.printf("I2C_Read(, x%02X, x%02X, ...) %d=>%d\n", Addr, Reg, Len, Ret);
+  if(Ret==Len) Ret=0;
+          else Ret=0xE;
   for(uint8_t Idx=0; Idx<Len; Idx++)
-  { Data[Idx]=Wire.read(); }
-  return Ret!=Len; }
+  { int Byte=Wire.read(); if(Byte<0) { Ret=0xF; break; }
+    Data[Idx]=Byte; }
+  // Serial.printf("I2C_Read() => %d:%d [%d]\n", Ret, Idx, Len);
+  return Ret; }
+
+static uint8_t I2C_Write(TwoWire &Wire, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
+{ Wire.beginTransmission(Addr);
+  int Ret=Wire.write(Reg); if(Ret!=1) { Wire.endTransmission(true); return 0xD; }
+  uint8_t Idx=0;
+  for( ; Idx<Len; Idx++)
+  { Ret=Wire.write(Data[Idx]); if(Ret!=1) break; }
+  Ret=Wire.endTransmission();
+  return Ret; }
+
+uint8_t I2C_Read(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
+{ if(Bus!=0) return 0xB;
+  if(!xSemaphoreTake(I2C_Mutex, 100)) return 0xA;
+  uint8_t Ret=I2C_Read(Wire, Addr, Reg, Data, Len, Wait);
+  xSemaphoreGive(I2C_Mutex);
+  // Serial.printf("I2C_Read(%d, x%02X, x%02X, , [%d], ) => %d\n", Bus, Addr, Reg, Len, Ret);
+  return Ret; }
 
 uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
-{ Wire.beginTransmission(Addr);
-  int Ret=Wire.write(Reg);
-  for(uint8_t Idx=0; Idx<Len; Idx++)
-  { Ret=Wire.write(Data[Idx]); if(Ret!=1) break; }
-  Wire.endTransmission();
-  return Ret!=1; }
+{ if(Bus!=0) return 0xB;
+  if(!xSemaphoreTake(I2C_Mutex, 100)) return 0xA;
+  uint8_t Ret=I2C_Write(Wire, Addr, Reg, Data, Len, Wait);
+  xSemaphoreGive(I2C_Mutex);
+  return Ret; }
+
+uint8_t I2C_Restart(uint8_t Bus)
+{ if(Bus!=0) return 0xB;
+  if(!xSemaphoreTake(I2C_Mutex, 100)) return 0xA;
+  Wire.end(); Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000);
+  xSemaphoreGive(I2C_Mutex);
+  return 0; }
 
 // =======================================================================================================
 
@@ -683,6 +723,8 @@ static void LED_PCB_Init (void)    { }
 
 // =======================================================================================================
 
+// =======================================================================================================
+
 static char Line[128];
 static void PrintPOGNS(void);
 
@@ -739,7 +781,7 @@ void setup()
 #endif
 
 #if ARDUINO_USB_CDC_ON_BOOT==1
-  Serial.setTxTimeoutMs(0);                  // to prevent delays and blocking of threads which send data to the USB console
+  Serial.setTxTimeoutMs(10);                 // to prevent delays and blocking of threads which send data to the USB console
 #endif
 
   GPS_UART_Init();
@@ -807,28 +849,25 @@ void setup()
 
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
-  Wire.setTimeOut(20);                                  // [ms]
+  Wire.setTimeOut(10);                                  // [ms]
 #endif
 
 #ifdef WITH_THINKNODE_M5
   PCA_Init();
 #endif
 
-// #ifdef WITH_EPAPER
-//   EPD_Init();
-//   EPD_DrawID();
-// #endif
-
 #ifdef PMU_I2C_PinSCL
   static TwoWire PMU_I2C = TwoWire(1);
   PMU_I2C.begin(PMU_I2C_PinSDA, PMU_I2C_PinSCL, (uint32_t)400000);
-  PMU_I2C.setTimeOut(20);
+  PMU_I2C.setTimeOut(10);
+  // Serial.printf("Power/charge chip I2C bus initialized\n");
+  I2C_Scan(PMU_I2C, "PMU I2C bus:");
 #endif
 
 #ifdef WITH_AXP
-#ifdef PMU_I2C_PinSCL
+#ifdef PMU_I2C_PinSCL  // if a separate I2C bus for the PMU
   if(AXP.begin(PMU_I2C, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
-#else
+#else                  // if a single I2C bus
   if(AXP.begin(Wire, AXP192_SLAVE_ADDRESS)!=AXP_FAIL)
 #endif
   { HardwareStatus.AXP192=1; Serial.println("Power/charge chip AXP192 detected"); }
@@ -852,7 +891,7 @@ void setup()
     Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
               0.001f*AXP.getBattVoltage(), 0.001f*AXP.getBattChargeCurrent(), 0.001f*AXP.getBattDischargeCurrent());
   }
-#endif
+#endif  // WITH_AXP
 #ifdef WITH_XPOWERS
   if(PMU==0)
   {
@@ -898,23 +937,23 @@ void setup()
 #endif
 #ifdef WITH_TBEAMS3
     // GNSS RTC PowerVDD 3300mV
-    // PMU->setPowerChannelVoltage(XPOWERS_VBACKUP, 3300);
-    // PMU->enablePowerOutput(XPOWERS_VBACKUP);
-#ifdef WITH_BME280
+    PMU->setPowerChannelVoltage(XPOWERS_VBACKUP, 3300);
+    PMU->enablePowerOutput(XPOWERS_VBACKUP);
+// #ifdef WITH_BME280
     PMU->setPowerChannelVoltage(XPOWERS_ALDO1, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO1);
-#endif
-#ifdef WITH_OLED
+// #endif
+// #ifdef WITH_OLED
     PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO2);
-#endif
+// #endif
     // RF VDD 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO3, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO3);
     // GNSS VDD 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO4, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO4);
-#endif
+#endif //WITH_TBEAMS3
     // set charging LED flashing
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
   if(HardwareStatus.AXP192 || HardwareStatus.AXP210)
@@ -925,20 +964,13 @@ void setup()
     // Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
     //           0.001f*PMU->getBattVoltage(), 0.001f*PMU->getBattChargeCurrent(), 0.001f*PMU->getBattDischargeCurrent());
   }
-#endif
+#endif // WITH_XPOWERS
   if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202 && !HardwareStatus.AXP210)  // if none of the power controllers detected
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
 
-/*
-  Serial.printf("I2C scan:");
-  uint8_t I2Cdev=0;
-  for(uint8_t Addr=0x01; Addr<128; Addr++)
-  { Wire.beginTransmission(Addr);
-    if(Wire.endTransmission(Addr)==0) { Serial.printf(" 0x%02X", Addr); I2Cdev++; }
-                                 else { Wire.flush(); }
-  }
-  Serial.printf(" %d devices\n", I2Cdev);
-*/
+#ifdef I2C_PinSCL
+  I2C_Scan(Wire, "I2C bus:");
+#endif
 
   char Info[512];
   int InfoLen=0;
@@ -969,12 +1001,12 @@ void setup()
   WIFI_State.Flags=0;
   esp_err_t Err=WIFI_Init();
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, "WIFI_Init() => ");
-  if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
-  Format_SignDec(CONS_UART_Write, Err);
-  Format_String(CONS_UART_Write, "\n");
-  xSemaphoreGive(CONS_Mutex);
+  if(xSemaphoreTake(CONS_Mutex, 100))
+  { Format_String(CONS_UART_Write, "WIFI_Init() => ");
+    if(Err>=ESP_ERR_WIFI_BASE) Err-=ESP_ERR_WIFI_BASE;
+    Format_SignDec(CONS_UART_Write, Err);
+    Format_String(CONS_UART_Write, "\n");
+    xSemaphoreGive(CONS_Mutex); }
 #endif
 #endif
 
@@ -1009,19 +1041,6 @@ void setup()
 
 #ifdef WITH_BEEPER
   Beep_Init();
-  // Beep(800, 32);
-  // delay(200);
-  // Beep(1000, 32);
-  // delay(200);
-  // Beep(0);
-  // delay(200);
-  // Beep_Note(Play_Vol_1 | Play_Oct_0 | 0x05);
-  // delay(200);
-  // Beep_Note(Play_Vol_1 | Play_Oct_0 | 0x08);
-  // delay(200);
-  // Beep_Note(Play_Vol_0 | Play_Oct_0 | 0x00);
-  // delay(200);
-
   Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
   Play(Play_Vol_1 | Play_Oct_0 | 0x08, 250);
   Play(Play_Vol_0 | Play_Oct_0 | 0x00, 100);
@@ -1092,13 +1111,12 @@ static UBX_RxMsg  UBX;
 
 static void PrintParameters(void)                              // print parameters stored in Flash
 { Parameters.Print(Line);
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);                   // ask exclusivity on UART1
+  if(!xSemaphoreTake(CONS_Mutex, 100)) return;                 // ask exclusivity on UART1
   Format_String(CONS_UART_Write, Line);
-  xSemaphoreGive(CONS_Mutex);                                  // give back UART1 to other tasks
-}
+  xSemaphoreGive(CONS_Mutex); }                                // give back UART1 to other tasks
 
 static void PrintPOGNS(void)                                   // print parameters in the $POGNS form
-{ xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+{ if(!xSemaphoreTake(CONS_Mutex, 100))
   Parameters.WritePOGNS(Line);
   Format_String(CONS_UART_Write, Line);
   Parameters.WritePOGNS_Pilot(Line);
@@ -1115,8 +1133,7 @@ static void PrintPOGNS(void)                                   // print paramete
   Parameters.WritePOGNS_Stratux(Line);
   Format_String(CONS_UART_Write, Line);
 #endif
-  xSemaphoreGive(CONS_Mutex);                                          //
-  return; }
+  xSemaphoreGive(CONS_Mutex); }
 
 #ifdef WITH_CONFIG
 static void ReadParameters(void)  // read parameters requested by the user in the NMEA sent.
@@ -1231,7 +1248,7 @@ static void ProcessCtrlF(void)                                  // list log file
   xSemaphoreGive(CONS_Mutex); }
 
 static void ProcessCtrlC(void)                                  // print system state to the console
-{ xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+{ if(!xSemaphoreTake(CONS_Mutex, 50)) return;
   Parameters.Print(Line);
   Format_String(CONS_UART_Write, Line);
   Format_String(CONS_UART_Write, "GPS: ");
@@ -1357,7 +1374,11 @@ void loop()
     OLED.clearBuffer();
     OLED_DrawGPS(OLED.getU8g2(), GPS);
     OLED_DrawStatusBar(OLED.getU8g2(), GPS);
-    OLED.sendBuffer();
+    if(xSemaphoreTake(I2C_Mutex, 100))
+    { // uint32_t Time=millis();
+      OLED.sendBuffer();                // takes about 40 ms
+      // Time=millis()-Time; Serial.printf("OLED.sendBuffer():%ums\n", Time);
+      xSemaphoreGive(I2C_Mutex); }
 #endif
 #ifdef WITH_ST7735
     TFT_PageChange=1;

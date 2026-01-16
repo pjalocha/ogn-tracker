@@ -72,21 +72,21 @@
       </select>
     </div>
 
-    <input id="cmdReg" type="text" placeholder="Call-sign" style="flex:1; min-width:80px;">
+    <input id="cmdReg" type="text" placeholder="Call-sign" style="flex:1; min-width:60px;">
     <button id="btnReg" disabled>OK</button>
 
-    <input id="cmdPilot" type="text" placeholder="Pilot-name" style="flex:1; min-width:80px;">
+    <input id="cmdPilot" type="text" placeholder="Pilot-name" style="flex:1; min-width:60px;">
     <button id="btnPilot" disabled>OK</button>
 
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
       <select id="cmdControls" disabled>
         <option value="">Controls</option>
         <option value="$POGNS">Parameters NMEA</option>
-        <option value="\\x03">List parameters</option>
-        <option value="\\x18\\x18">Restart</option>
+        <option value="\x03">List parameters</option>
+        <option value="\x18\x18">Restart</option>
         <option value="$POGNS,Verbose=0">Quiet output</option>
         <option value="$POGNS,Verbose=1">Normal output</option>
-        <option value="$POGNS,Defaults">Set defaults</option>
+        <option value="$POGNS,Defaults=1">Set defaults</option>
       </select>
     </div>
 
@@ -170,6 +170,16 @@
       } finally {
         reader.releaseLock();
       }
+    }
+  }
+
+  async function sendRawBytes(bytes) {
+    if (!port || !port.writable) return;
+    const writer = port.writable.getWriter();
+    try {
+      await writer.write(bytes);
+    } finally {
+      writer.releaseLock();
     }
   }
 
