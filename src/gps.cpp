@@ -22,7 +22,7 @@
 // #define DEBUG_PRINT
 
 // #ifdef DEBUG_PRINT
-static char Line[128];
+static char Line[256];
 static void CONS_HexDump(char Byte) { Format_Hex(CONS_UART_Write, (uint8_t)Byte); }
 // #endif
 
@@ -479,7 +479,7 @@ static void GPS_BurstComplete(void)                                   // when GP
            else { GPS->Pressure*=2; GPS->StdAltitude=StdAlt2; }
   }
 #endif
-  GPS_Pos[GPS_PosIdx].PrintLine(Line);                                   // print out the GPS position in a single-line format
+  // GPS_Pos[GPS_PosIdx].PrintLine(Line);                                   // print out the GPS position in a single-line format
   // Serial.printf("GPS_BurstComplete: [%2d] Flags:%02X Err:%d\n%s",
   //          GPS_PosIdx, GPS_Status.Flags, GPS_Pos[GPS_PosIdx].NMEAerrors, Line);
 #ifdef DEBUG_PRINT

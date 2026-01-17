@@ -101,7 +101,7 @@ static LowPass2<int64_t,10,9,12> PressAver, // low pass (average) filter for pre
 
 static Delay<int32_t, 8>        PressDelay; // 4-second delay for long-term climb rate
 
-static char Line[96];                       // line to prepare the barometer NMEA sentence
+static char Line[128];                      // line to prepare the barometer NMEA sentence
 
 static uint8_t InitBaro(void)
 { Baro.Bus=BARO_I2C;
@@ -135,13 +135,11 @@ static void ProcBaro(void)
     TickType_t Start=xTaskGetTickCount();
     uint8_t Err=Baro.AcquireRawTemperature();                             // measure temperature
     if(Err==0) { Baro.CalcTemperature(); AverPress=0; AverCount=0; }      // clear the average
-/*
           else { PipeCount=0;
-	         I2C_Restart(Baro.Bus);
+	         // I2C_Restart(Baro.Bus);
                  vTaskDelay(20);
                  InitBaro(); // try to recover I2C bus and baro
 		 return; }
-*/
     TickType_t End=Start;
     for(uint8_t Idx=0; Idx<16; Idx++)
     { uint8_t Err=Baro.AcquireRawPressure();                              // take pressure measurement
@@ -167,11 +165,11 @@ static void ProcBaro(void)
     TickType_t End=xTaskGetTickCount();
     TickType_t MeasTick = Start + (End-Start)/2;
     if(Err==0) { Baro.Calculate(); }
-          else { PipeCount=0; return; }
+          else { PipeCount=0; InitBaro(); return; }
     AverPress = Baro.Pressure;
             Err=Baro.Acquire();
     if(Err==0) { Baro.Calculate(); }
-          else { PipeCount=0; return; }
+          else { PipeCount=0; InitBaro(); return; }
     AverPress += Baro.Pressure;
     AverPress/=2;                                                       // [0.25Pa]
 #endif
@@ -357,32 +355,32 @@ void vTaskSENS(void* pvParameters)
 
 #ifdef WITH_BMP180
   Format_String(CONS_UART_Write, " BMP180: ");
-  if(Detected) { Format_String(CONS_UART_Write, " @"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, " ?!");
+  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+         else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_BMP280
   Format_String(CONS_UART_Write, " BMP280: ");
-  if(Detected) { Format_String(CONS_UART_Write, " @"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, " ?!");
+  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+         else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_BME280
   Format_String(CONS_UART_Write, " BME280: ");
-  if(Detected) { Format_String(CONS_UART_Write, " @"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, " ?!");
+  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+         else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_MS5607
   Format_String(CONS_UART_Write, " MS5607: ");
-  if(Detected) { Format_String(CONS_UART_Write, " @"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, " ?!");
+  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+         else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_MS5611
   Format_String(CONS_UART_Write, " MS5611: ");
-  if(Detected) { Format_String(CONS_UART_Write, " @"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, " ?!");
+  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+         else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
   Format_String(CONS_UART_Write, "\n");
@@ -391,7 +389,7 @@ void vTaskSENS(void* pvParameters)
   while(1)
   {
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611)
-         if(Baro.ADDR==0) { vTaskDelay(1000); InitBaro(); }
+         if(Baro.ADDR==0) { vTaskDelay(500); InitBaro(); }
     else if(PowerMode) ProcBaro();
                   else vTaskDelay(100);
 #else

@@ -364,20 +364,20 @@ void vTaskLOG(void* pvParameters)
   FlashLog_FIFO.Clear();
 
 // #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, "TaskLOG() ");
+  if(xSemaphoreTake(CONS_Mutex, 200))
+  { Format_String(CONS_UART_Write, "TaskLOG() ");
 #ifdef WITH_SPIFFS
-  { size_t Total, Used;
-    if(SPIFFS_Info(Total, Used)==0)                            // get the SPIFFS usage summary
-    { Format_UnsDec(CONS_UART_Write, Used/1024);
-      Format_String(CONS_UART_Write, "kB used, ");
-      Format_UnsDec(CONS_UART_Write, Total/1024);
-      Format_String(CONS_UART_Write, "kB total, "); }
-  }
+    { size_t Total, Used;
+      if(SPIFFS_Info(Total, Used)==0)                            // get the SPIFFS usage summary
+      { Format_UnsDec(CONS_UART_Write, Used/1024);
+        Format_String(CONS_UART_Write, "kB used, ");
+        Format_UnsDec(CONS_UART_Write, Total/1024);
+        Format_String(CONS_UART_Write, "kB total, "); }
+    }
 #endif
-  Format_String(CONS_UART_Write, "\n");
-  xSemaphoreGive(CONS_Mutex);
-// #endif
+    Format_String(CONS_UART_Write, "\n");
+    xSemaphoreGive(CONS_Mutex); }
+// #endif // DEBUG_PRINT
 
 #ifdef WITH_SD
 #ifdef WITH_SPIFFS
@@ -390,6 +390,20 @@ void vTaskLOG(void* pvParameters)
   { vTaskDelay(1);
     bool Flying = Flight.inFlight();                              // if the aircraft flying ?
     size_t Packets = FlashLog_FIFO.Full();                        // how many packets in the queue ?
+#ifdef DEBUG_INFLIGHT
+    { static bool PrevFlying = 0;
+      if(Flying!=PrevFlying)
+      { if(xSemaphoreTake(CONS_Mutex, 500))
+        { // char *Addr = (char *)(&PrevFlying);
+          Serial.printf("vTaskLOG() Flying:%d/%d SPIFFS_Mounted:%d\n",
+                   Flying, PrevFlying, SPIFFS_Mounted);
+          // for(int Idx=(-20); Idx<=20; Idx++)
+          //   Serial.printf("%c", Addr[Idx]);
+          // Serial.printf("\n");
+          xSemaphoreGive(CONS_Mutex); }
+        PrevFlying=Flying; }
+    }
+#endif
     if(Flying && SPIFFS_Mounted)                                  // when flying
     {
 #ifdef WITH_SPIFFS
