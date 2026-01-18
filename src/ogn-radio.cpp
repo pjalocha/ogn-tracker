@@ -489,7 +489,7 @@ static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, uint8_t SysID, uint
 
 static void Radio_ConfigSysID(uint8_t SysID, uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uint8_t SyncLen)
 { bool Manch = SysID<4 || SysID>=8;                              // 0,1,2 are Manchester-encoded
-  if(RxMode==0 && SysID==Radio_SysID_LDR) PktLen+=7;                        // a hack for LDR !
+  // if(RxMode==0 && SysID==Radio_SysID_LDR) PktLen+=7;             // a hack for LDR !
   if(Manch) Radio_ConfigManchFSK(PktLen, RxMode, SYNC, SyncLen);
   else if(SysID==Radio_SysID_LDR) Radio_ConfigLDR(PktLen, RxMode, SYNC, SyncLen);
   else if(SysID==Radio_SysID_HDR) Radio_ConfigHDR(PktLen, RxMode, SYNC, SyncLen); }
@@ -503,16 +503,14 @@ static void Radio_TxSysID(uint8_t SysID, const uint8_t *Packet, uint8_t PktLen)
 // TX/RX slot for a Manchester-encoded protocol
 static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, const uint8_t *TxPacket, uint8_t TxSysID,
                       uint8_t RxChannel, uint8_t RxSysID, TimeSync &TimeRef)
-{ // bool TxManch = TxSysID<4;
-  // bool RxManch = RxSysID<4 || RxSysID>=8;
-  uint8_t TxPktLen;
+{ uint8_t TxPktLen;
   uint8_t RxPktLen;
   const uint8_t *TxSYNC;
   const uint8_t *RxSYNC;
   int TxSyncLen = FSK_RxPacket::SysSYNC(TxSYNC, TxPktLen, TxSysID); // get SYNC and packet length for the transmittion system
   int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID); // get SYNC and packet length for the reception system
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
-  if(RxSysID==Radio_SysID_LDR) RxPktLen+=7;                         // a hack
+  if(RxSysID==Radio_SysID_LDR) RxPktLen+=7;                         // a hack !
   bool SameChan = TxChannel==RxChannel;                             // same frequency channel
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
@@ -534,10 +532,9 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
 #endif
   Radio.startReceive();                                             // start receiving
   XorShift64(Random.Word);                                          // randomize
-  // if(!TxManch) TxPacket=0; // for debug
   if(TxPacket)                                                      // if there is packet to be sent out
   { int TxTime;
-    if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-200); }
+    if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-150); }
             else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
 // #ifdef WITH_LBT

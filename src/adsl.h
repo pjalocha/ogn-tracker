@@ -721,7 +721,8 @@ class ADSL_Packet
  0x800000, 0x400000, 0x200000, 0x100000, 0x080000, 0x040000, 0x020000, 0x010000,
  0x008000, 0x004000, 0x002000, 0x001000, 0x000800, 0x000400, 0x000200, 0x000100,
  0x000080, 0x000040, 0x000020, 0x000010, 0x000008, 0x000004, 0x000002, 0x000001 } ;
-      return Syndrome[Bit]; }
+      if(Bit<PacketBits) return Syndrome[Bit];
+      return 0; }
 
     static uint8_t FindCRCsyndrome(uint32_t Syndr)              // quick search for a single-bit CRC syndrome
     { const uint16_t PacketBytes = TxBytes-3;

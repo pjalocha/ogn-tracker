@@ -727,7 +727,8 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   }
   if(CRC8!=RxPkt->Data[24]) return;
   if(CRC==0)
-  { // Serial.printf("LDR: good ADS-L\n");
+  { // Serial.printf("LDR: %02ds+%dms #%d %+4.1fdBm %de\n",
+    //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
     DecodeRxADSL(RxPkt);
     return; }
   PAW_Packet::Whiten(RxPkt->Data, 24);
@@ -751,11 +752,14 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
     if(ErrBit!=0xFF)
     { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
       ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
-      CRC=0x000000; }
+      CRC^=ADSL_Packet::CRCsyndrome(ErrBit); }
   }
   if(CRC==0)
-  { // Serial.printf("HDR: good ADS-L\n");
+  { // Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de\n",
+    //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
     DecodeRxADSL(RxPkt); }
+  // else Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de !%06X!\n",
+  //            (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount(), CRC);
 }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
