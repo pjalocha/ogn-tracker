@@ -53,6 +53,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      static const uint8_t SYNC_OGN1[10] = { 0xAA, 0x66, 0x55, 0xA5, 0x96, 0x99, 0x96, 0x5A, 0x00, 0x00 };
      static const uint8_t SYNC_ADSL[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA9, 0x6A, 0x00, 0x00 };
      static const uint8_t SYNC_LDR [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18, 0x71, 0x00, 0x00 };
+     static const uint8_t SYNC_HDR [ 5] = { 0x2D, 0xD4, 0x18, 0x00, 0x00 };
      static const uint8_t SYNC_FLR_ADSL[4] = { 0x56, 0x66, 0x00, 0x00 } ; // catch FLARM and ADS-L SYNC in parallel
      static const uint8_t SYNC_OGN_ADSL[4] = { 0x99, 0x95, 0x00, 0x00 } ; // catch OGN and ADS-L SYNC in parallel
      SYNC = 0; PktLen=0;
@@ -60,6 +61,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      if(SysID==Radio_SysID_OGN)      { SYNC=SYNC_OGN1;     PktLen=26;   return 8; }
      if(SysID==Radio_SysID_ADSL)     { SYNC=SYNC_ADSL;     PktLen=24;   return 8; }
      if(SysID==Radio_SysID_LDR)      { SYNC=SYNC_LDR;      PktLen=24;   return 2; }
+     if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen=24;   return 3; } // fixed packet size for now
      if(SysID==Radio_SysID_FLR_ADSL) { SYNC=SYNC_FLR_ADSL; PktLen=26+3; return 2; }
      if(SysID==Radio_SysID_OGN_ADSL) { SYNC=SYNC_OGN_ADSL; PktLen=26+3; return 2; }
      return 0; }
