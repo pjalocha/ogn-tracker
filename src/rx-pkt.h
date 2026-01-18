@@ -22,7 +22,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
    static const uint8_t MaxBytes=48;  // [bytes] max. number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
-   uint16_t msTime;                   // [ms] reception time since the PPS[Time]
+    int16_t msTime;                   // [ms] reception time since the PPS[Time]
    union
    { uint16_t Flags;
      struct
@@ -138,8 +138,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
    { // uint8_t ManchErr = Count1s(RxPktErr, 26);
      Format_String(CONS_UART_Write, "FSK_RxPacket: ");
      Format_HHMMSS(CONS_UART_Write, Time);
-     CONS_UART_Write('+');
-     Format_UnsDec(CONS_UART_Write, msTime, 4, 3);
+     Format_SignDec(CONS_UART_Write, (int32_t)msTime, 4, 3);
      CONS_UART_Write(' '); Format_Hex(CONS_UART_Write, Channel);
      CONS_UART_Write('/');
      Format_SignDec(CONS_UART_Write, (int16_t)(-5*(int16_t)RSSI), 3, 1);
@@ -157,8 +156,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      // uint8_t ManchErr = Count1s(RxPktErr, 26);
      Len+=Format_String(Line+Len, "FSK_RxPacket: ");
      Len+=Format_HHMMSS(Line+Len, Time);
-     Line[Len++]='+';
-     Len+=Format_UnsDec(Line+Len, (uint32_t)msTime, 4, 3);
+     Len+=Format_SignDec(Line+Len, (int32_t)msTime, 4, 3);
      Line[Len++]=' '; Len+=Format_Hex(Line+Len, Channel);
      Line[Len++]='/';
      Len+=Format_SignDec(Line+Len, (int32_t)(-5*(int16_t)RSSI), 3, 1);

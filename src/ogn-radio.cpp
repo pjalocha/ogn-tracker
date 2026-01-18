@@ -409,8 +409,9 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
 #endif
   XorShift64(Random.Word);
   // RxPkt->PosTime = TimeRef.sysTime;                                      // [ms]
-  RxPkt->msTime = msTime-TimeRef.sysTime;                                // [ms] time since the reference PPS
+  RxPkt->msTime = (int32_t)(msTime-TimeRef.sysTime);                     // [ms] time since the reference PPS
   RxPkt->Time = TimeRef.UTC;                                             // [sec] UTC PPS
+  if(RxPkt->msTime<0) { RxPkt->msTime+1000; RxPkt->Time--; }
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
   if(Manch)                                                              // if Manchester encoding expected
   { Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
@@ -1029,7 +1030,7 @@ void Radio_Task(void *Parms)
 
     msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     if(msTime>=1000) msTime-=1000;
-    uint32_t SlotLen = 800-msTime;
+    uint32_t SlotLen = 900-msTime;                    // [ms] make the first slot longer, closer to ADS-L primary slot
          if(SlotLen>800) SlotLen=800;
     else if(SlotLen<200) SlotLen=200;
     // Serial.printf("Slot #0: %3d:%3d\n", msTime, SlotLen);
