@@ -197,7 +197,7 @@ template <class Type>
   return X; }
 
 #ifdef GPS_PinPPS
-static int getTelemSatPPS(ADSL_Packet &Packet)
+static bool getTelemSatPPS(ADSL_Packet &Packet)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
   Packet.setAddrTypeOGN(Parameters.AddrType);
@@ -223,10 +223,10 @@ static int getTelemSatPPS(ADSL_Packet &Packet)
   Packet.SatPPS.Data.PPSresid = Limit(IntSqrt(PPS_usPeriodRMS<<4), (uint32_t)0, (uint32_t)255);
   return 1; }
 #else
-static int getTelemSatPPS(ADSL_Packet &Packet) { return 0; }
+static bool getTelemSatPPS(ADSL_Packet &Packet) { return 0; }
 #endif
 
-static void getTelemSatSNR(ADSL_Packet &Packet)
+static bool getTelemSatSNR(ADSL_Packet &Packet)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
   Packet.setAddrTypeOGN(Parameters.AddrType);
@@ -240,7 +240,8 @@ static void getTelemSatSNR(ADSL_Packet &Packet)
   Packet.SatSNR.Data.Inbalance = 0;
   Packet.SatSNR.Data.PDOP = GPS_SatMon.PDOP;
   Packet.SatSNR.Data.HDOP = GPS_SatMon.HDOP;
-  Packet.SatSNR.Data.VDOP = GPS_SatMon.VDOP; }
+  Packet.SatSNR.Data.VDOP = GPS_SatMon.VDOP;
+  return GPS_SatMon.Size>0; }
 
 static bool getTelemInfo(ADSL_Packet &Packet)
 { Packet.Init(0x42);
@@ -264,7 +265,7 @@ static bool getTelemInfo(ADSL_Packet &Packet)
   { Packet.Info.Msg[Idx]=0; }
   return 1; }
 
-static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
+static bool getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
 { Packet.Init(0x42);
   Packet.setAddress    (Parameters.Address);
   Packet.setAddrTypeOGN(Parameters.AddrType);
@@ -284,7 +285,15 @@ static void getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   Packet.Telemetry.Battery.Capacity = Limit(BattCap, 0, 63);
   Packet.Telemetry.Radio.RxNoise = Limit(120+(int)floorf(Radio_BkgRSSI+0.5), 0, 63);
   Packet.Telemetry.Radio.RxRate  = EncodeUR2V4(floorf(Radio_PktRate*4+0.5f));
-  Packet.Telemetry.Radio.TxPower = Limit(Parameters.TxPower-10, 0, 15); }
+  Packet.Telemetry.Radio.TxPower = Limit(Parameters.TxPower-10, 0, 15);
+  return 1; }
+
+static bool getTelemetry(ADSL_Packet &Packet, const GPS_Position *GPS, uint8_t Type)
+{ if(Type==0) return getTelemStatus(Packet, GPS);
+  if(Type==1) return getTelemSatSNR(Packet);
+  if(Type==2) return getTelemInfo  (Packet);
+  if(Type==3) return getTelemSatPPS(Packet);
+  return 0; }
 
 static void ReadStatus(OGN_Packet &Packet)
 {
@@ -734,10 +743,26 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   RxPacket->Correct = 1;
   ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
 
+static void DecodeRxHDR(FSK_RxPacket *RxPkt)
+{ if(RxPkt->Bytes!=24 || RxPkt->Manchester) return;
+  uint32_t CRC = ADSL_Packet::checkPI(RxPkt->Data, 24);
+  if(CRC!=0)
+  { uint8_t ErrBit=ADSL_Packet::FindCRCsyndrome(CRC);
+    if(ErrBit!=0xFF)
+    { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
+      ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
+      CRC=0x000000; }
+  }
+  if(CRC==0)
+  { // Serial.printf("HDR: good ADS-L\n");
+    DecodeRxADSL(RxPkt); }
+}
+
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
   if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
   if(RxPkt->SysID==Radio_SysID_LDR ) return DecodeRxLDR (RxPkt);
+  if(RxPkt->SysID==Radio_SysID_HDR ) return DecodeRxHDR (RxPkt);
   if(RxPkt->SysID==Radio_SysID_FLR)
   { int CorrBits=Flarm_Packet::Correct(RxPkt->Data, RxPkt->Err, 4);
     uint16_t CRC=Flarm_Packet::checkCRC(RxPkt->Data, Flarm_Packet::Bytes);
@@ -1168,14 +1193,11 @@ void vTaskPROC(void* pvParameters)
       if(StatTxBackOff) StatTxBackOff--;
       else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
-             if(StatTxPkt==0) getTelemStatus(*Packet, Position);
-        else if(StatTxPkt==1) getTelemSatSNR(*Packet);
-        else if(StatTxPkt==2 && getTelemInfo(*Packet)) { }
-        else if(!getTelemSatPPS(*Packet)) getTelemSatSNR(*Packet);
         StatTxPkt++; if(StatTxPkt>=3) StatTxPkt=0;
-        Packet->Scramble();
-        Packet->setCRC();
-        ADSL_TxFIFO.Write();
+        if(getTelemetry(*Packet, Position, StatTxPkt))
+        { Packet->Scramble();
+          Packet->setCRC();
+          ADSL_TxFIFO.Write(); }
         StatTxBackOff = 10+Random.RX%5; }
     }
     while(ADSL_TxFIFO.Full()<2)                                  // any received ADS-L pasition to be relayed ?

@@ -6,6 +6,8 @@
 #include "ogn-radio.h"
 
 #include "manchester.h"
+#include "adsl-hop.h"
+#include "gps.h"
 
 #include "timesync.h"
 
@@ -317,6 +319,73 @@ static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit 
 
 // =======================================================================================================
 
+static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uint8_t SYNClen) // Radio setup for O-band ADS-L HDR
+{ int ErrState=0; int State=0;
+#ifdef WITH_SX1276
+  if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
+    State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
+#endif
+#ifdef WITH_SX1262
+  if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_GFSK)
+    State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
+#endif
+  if(State) ErrState=State;
+  State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
+  if(State) ErrState=State;
+  State=Radio.setBitRate(200.0);                                    // [kpbs] 100kbps bit rate but we transmit Manchester encoded thu$
+  if(State) ErrState=State;
+  State=Radio.setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
+  if(State) ErrState=State;
+#ifdef WITH_SX1262
+  State=Radio.setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
+  if(State) ErrState=State;
+#endif
+#ifdef WITH_SX1276
+  if(RxMode)
+  { State=Radio.setRxBandwidth(250.0);                                // [kHz]  bandwidth - single side
+    if(State) ErrState=State;
+    State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
+    if(State) ErrState=State;
+    State=Radio.setAFC(0);                                            // enable AFC
+    if(State) ErrState=State;
+    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+    if(State) ErrState=State; }
+#endif
+#ifdef WITH_SX1262
+  State=Radio.setPreambleLength(RxMode?0:16);                       // [bits] minimal preamble
+#endif
+#ifdef WITH_SX1276
+  State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
+#endif
+  if(State) ErrState=State;
+  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before M$
+  if(State) ErrState=State;
+  State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);                   //
+  if(State) ErrState=State;
+  State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
+  if(State) ErrState=State;
+  // State=Radio.variablePacketLengthMode();
+  State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
+  if(State) ErrState=State;
+#ifdef WITH_SX1276
+  State=Radio.disableAddressFiltering();                            // don't want any of such features
+  if(State) ErrState=State;
+  // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
+  State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polar$
+  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  if(State) ErrState=State;
+#endif
+#ifdef WITH_SX1262
+  State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
+  if(State) ErrState=State;
+#endif
+return ErrState; }
+
+static int Radio_TxHDR(const uint8_t *Packet, uint8_t Len)                // transmit a packet on the O-Band/HDR
+{ return Radio_TxFSK(Packet, Len); }
+
+// =======================================================================================================
+
 // check if there is a new packet received:
 static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef)
 { if(!Radio_IRQ()) return 0;                                             // use the IRQ line: not raised, then no received packet
@@ -422,12 +491,14 @@ static void Radio_ConfigSysID(uint8_t SysID, uint8_t PktLen, bool RxMode, const 
 { bool Manch = SysID<4 || SysID>=8;                              // 0,1,2 are Manchester-encoded
   if(RxMode==0 && SysID==Radio_SysID_LDR) PktLen+=7;                        // a hack for LDR !
   if(Manch) Radio_ConfigManchFSK(PktLen, RxMode, SYNC, SyncLen);
-       else Radio_ConfigLDR     (PktLen, RxMode, SYNC, SyncLen); }
+  else if(SysID==Radio_SysID_LDR) Radio_ConfigLDR(PktLen, RxMode, SYNC, SyncLen);
+  else if(SysID==Radio_SysID_HDR) Radio_ConfigHDR(PktLen, RxMode, SYNC, SyncLen); }
 
 static void Radio_TxSysID(uint8_t SysID, const uint8_t *Packet, uint8_t PktLen)
 { bool Manch = SysID<4;
-  if(Manch) Radio_TxManchFSK(Packet, PktLen);                        // transmit the packet
-       else Radio_TxLDR     (Packet, PktLen); }
+  if(Manch) Radio_TxManchFSK(Packet, PktLen);
+  else if(SysID==Radio_SysID_LDR) Radio_TxLDR(Packet, PktLen);
+  else if(SysID==Radio_SysID_HDR) Radio_TxHDR(Packet, PktLen); }
 
 // TX/RX slot for a Manchester-encoded protocol
 static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, const uint8_t *TxPacket, uint8_t TxSysID,
@@ -442,7 +513,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID); // get SYNC and packet length for the reception system
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   if(RxSysID==Radio_SysID_LDR) RxPktLen+=7;                         // a hack
-  bool SameChan = TxChannel==RxChannel;
+  bool SameChan = TxChannel==RxChannel;                             // same frequency channel
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
 #ifdef DEBUG_SLOT
@@ -454,11 +525,9 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     xSemaphoreGive(CONS_Mutex); }
 #endif
   int PktCount=0;
-  uint32_t msStart = millis();                                      // note then slot starts
+  uint32_t msStart = millis();                                      // [ms] note then slot starts
   Radio.standby();
-  Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);
-  // if(RxManch) Radio_ConfigManchFSK(RxPktLen, 1, RxSYNC, RxSyncLen); // configure for reception
-  //        else Radio_ConfigLDR     (RxPktLen, 1, RxSYNC, RxSyncLen);
+  Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);       // configure for reception
   Radio_setFrequency(RxFreq);                                       // set frequency
 #ifdef WITH_SX1276
   // Radio.setAFC(0);                                               // enable AFC
@@ -484,95 +553,23 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
       TxThres+=3; }
 // #endif
     Radio.standby();
-    Radio_ConfigSysID(TxSysID, TxPktLen, 0, TxSYNC, TxSyncLen);
-    // if(TxManch) Radio_ConfigManchFSK(TxPktLen, 0, TxSYNC, TxSyncLen); // configure for transmission
-    //        else Radio_ConfigLDR   (TxPktLen+7, 0, TxSYNC, TxSyncLen);
-    Radio_setTxPower(TxPower);
-    Radio_setFrequency(TxFreq);                         // set frequency
-    Radio_TxSysID(TxSysID, TxPacket, TxPktLen);
-    // if(TxManch) Radio_TxManchFSK(TxPacket, TxPktLen);                 // transmit the packet
-    //        else Radio_TxLDR     (TxPacket, TxPktLen);
+    Radio_ConfigSysID(TxSysID, TxPktLen, 0, TxSYNC, TxSyncLen);        // configure for transmission
+    Radio_setTxPower(TxPower);                                         // set Tx power
+    Radio_setFrequency(TxFreq);                                        // set frequency
+    Radio_TxSysID(TxSysID, TxPacket, TxPktLen);                        // transmit packet
     Radio_TxCount[TxSysID]++;
     Radio.standby();
-    Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);
-    // if(RxManch) Radio_ConfigManchFSK(RxPktLen, 1, RxSYNC, RxSyncLen); // configure for reception
-    //        else Radio_ConfigLDR     (RxPktLen, 1, RxSYNC, RxSyncLen);
-    Radio_setFrequency(RxFreq);                          // set frequency
+    Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);        // configure for reception
+    Radio_setFrequency(RxFreq);                                        //
 #ifdef WITH_SX1276
     // Radio.setAFC(0);                                                // enable AFC
 #endif
     Radio.startReceive(); }                                            // start receiving again
   uint32_t msTime = millis()-msStart;                                  // keep receiving till the end of slot
-  if(msTime<msTimeLen) PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, RxSysID, RxChannel, TimeRef);
+  if(msTime<msTimeLen)
+    PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, RxSysID, RxChannel, TimeRef);
   Radio.standby();
   return PktCount; }
-
-// =======================================================================================================
-
-static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uint8_t SYNClen) // Radio setup for O-band ADS-L HDR
-{ int ErrState=0; int State=0;
-#ifdef WITH_SX1276
-  if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
-    State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
-#endif
-#ifdef WITH_SX1262
-  if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_GFSK)
-    State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
-#endif
-  if(State) ErrState=State;
-  State=Radio.setDataShaping(RADIOLIB_SHAPING_0_5);                 // [BT]   FSK modulation shaping
-  if(State) ErrState=State;
-  State=Radio.setBitRate(200.0);                                    // [kpbs] 100kbps bit rate but we transmit Manchester encoded thu$
-  if(State) ErrState=State;
-  State=Radio.setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
-  if(State) ErrState=State;
-#ifdef WITH_SX1262
-  State=Radio.setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
-  if(State) ErrState=State;
-#endif
-#ifdef WITH_SX1276
-  if(RxMode)
-  { State=Radio.setRxBandwidth(250.0);                                // [kHz]  bandwidth - single side
-    if(State) ErrState=State;
-    State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
-    if(State) ErrState=State;
-    State=Radio.setAFC(0);                                            // enable AFC
-    if(State) ErrState=State;
-    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
-    if(State) ErrState=State; }
-#endif
-#ifdef WITH_SX1262
-  State=Radio.setPreambleLength(RxMode?0:16);                       // [bits] minimal preamble
-#endif
-#ifdef WITH_SX1276
-  State=Radio.setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
-#endif
-  if(State) ErrState=State;
-  State=Radio.setSyncWord((uint8_t *)SYNC, SYNClen);                // SYNC sequence: 8 bytes which is equivalent to 4 bytes before M$
-  if(State) ErrState=State;
-  State=Radio.setEncoding(RADIOLIB_ENCODING_NRZ);                   //
-  if(State) ErrState=State;
-  State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
-  if(State) ErrState=State;
-  // State=Radio.variablePacketLengthMode();
-  State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
-  if(State) ErrState=State;
-#ifdef WITH_SX1276
-  State=Radio.disableAddressFiltering();                            // don't want any of such features
-  if(State) ErrState=State;
-  // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
-  State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polar$
-  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
-  if(State) ErrState=State;
-#endif
-#ifdef WITH_SX1262
-  State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
-  if(State) ErrState=State;
-#endif
-return ErrState; }
-
-static int Radio_TxHDR(uint8_t *Packet, uint8_t Len)                // transmit a packet on the O-Band/HDR
-{ return Radio_TxFSK(Packet, Len); }
 
 // =======================================================================================================
 
@@ -1002,21 +999,29 @@ void Radio_Task(void *Parms)
     // XorShift32(Hash);
     // Hash *= 48271;
 
-    const uint8_t *OGN_Pkt  = OgnPacket1  ? OgnPacket1->Byte()      : 0;
-    const uint8_t *ADSL_Pkt = AdslPacket1 ? &(AdslPacket1->Version) : 0;
-    int8_t  TxPwr = Parameters.TxPower;
-    uint8_t TxProt = Radio_SysID_OGN;
-    uint8_t RxProt = Radio_SysID_OGN_ADSL;
+    const uint8_t *OGN_Pkt  = OgnPacket1  ? OgnPacket1->Byte()      : 0;  // OGN packet to be sent
+    const uint8_t *ADSL_Pkt = AdslPacket1 ? &(AdslPacket1->Version) : 0;  // ADS-L packet to be sent
+    int8_t  TxPwr = Parameters.TxPower;                                   //
+    uint8_t TxProt = Radio_SysID_OGN;                                     // Tx protocol
+    uint8_t RxProt = Radio_SysID_OGN_ADSL;                                // Rx protocol
     const uint8_t *TxPkt = 0;
     bool    Odd=0;
     uint8_t TxChan=0;
-    uint8_t FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 0);
-    uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);
-    if(EU || NZ)
+    uint8_t FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 0);     // what would be FLARM channel now
+    uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);     // what would be OGN channel now
+    if(EU)
+    { int Alt = (GPS_Altitude+GPS_GeoidSepar+5)/10;   // [m] HAE
+      TxChan = ADSL_HopChannel(TimeRef.UTC, Alt);
+           if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
+      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
+      else if(TxChan==2)  { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
+      else                { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_HDR;  RxProt=Radio_SysID_HDR; TxChan=2; }
+    }
+    else if(NZ)
     { TxChan = Radio_FreqPlan.HopChan1(TimeRef.UTC);
            if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
       else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
-      else    { if(EU) TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
+      else    { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
     }
     else
     { Odd = Count1s(TimeRef.UTC);

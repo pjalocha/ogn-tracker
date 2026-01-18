@@ -23,6 +23,8 @@ uint32_t getUniqueAddress(void);
 #define VERSION "0.1.12"
 #endif
 
+#define SOFT_NAME "d1801" // signal development version
+
 #ifndef SOFT_NAME
 #define SOFT_NAME "OGNv" VERSION
 #endif
