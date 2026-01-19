@@ -161,8 +161,8 @@ uint16_t StratuxPort;
    char *getWIFIname(uint8_t Idx) { return Idx<WIFIsets ? WIFIname[Idx]:0; }
    char *getWIFIpass(uint8_t Idx) { return Idx<WIFIsets ? WIFIpass[Idx]:0; }
 
-   char WIFIname[WIFIsets][32];  // WiFi networks name/pass to connect to for log upload or APRS server
-   char WIFIpass[WIFIsets][64];
+   char WIFIname[WIFIsets][WIFInameLen];  // WiFi networks name/pass to connect to for log upload or APRS server
+   char WIFIpass[WIFIsets][WIFIpassLen];
 #endif
 #ifdef WITH_UPLOAD
    char UploadURL[128];           // URL to upload log files
@@ -909,11 +909,11 @@ uint16_t StratuxPort;
     if( (memcmp(Name, "WIFIpass", 8)==0) && (strlen(Name)==9) )
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
 #endif
-#ifdef WITH_WIFI
-    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 160)>=0;
-#ifdef WITH_OTA_HTTPS
-    if(strcmp(Name, "FirmwareURL")==0) return Read_String(FirmwareURL, Value, 160)>=0;
+#ifdef WITH_UPLOAD
+    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 128)>=0;
 #endif
+#ifdef WITH_OTA_HTTPS
+    if(strcmp(Name, "FirmwareURL")==0) return Read_String(FirmwareURL, Value, 128)>=0;
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
@@ -943,7 +943,7 @@ uint16_t StratuxPort;
   { char Line[180];                                                              // line buffer
     size_t Lines=0;                                                             // count interpreted lines
     for( ; ; )                                                                  // loop over lines
-    { if(fgets(Line, 180, File)==0) break;                                       // break on EOF or other trouble reading the file
+    { if(fgets(Line, 179, File)==0) break;                                       // break on EOF or other trouble reading the file
       if(strchr(Line, '\n')==0) break;                                          // if no NL then break, line was too long
       if(ReadLine(Line)) Lines++; }                                             // interprete the line, count if positive
     return Lines; }                                                             // return number of interpreted lines
@@ -1068,13 +1068,13 @@ uint16_t StratuxPort;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
-#endif
 #ifdef WITH_UPLOAD
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
 #ifdef WITH_OTA_HTTPS
     strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
+#endif // WITH_WIFI
     return 10+InfoParmNum; }
 
   int WriteToFile(const char *Name = "/spiffs/TRACKER.CFG")

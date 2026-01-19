@@ -30,15 +30,15 @@
 
 #ifdef WITH_WIFI
 #include "wifi.h"
-#endif
 
-#ifdef WITH_UPLOAD
-#include "upload.h"
-#endif
+  #ifdef WITH_UPLOAD
+  #include "upload.h"
+  #endif
 
-#ifdef WITH_OTA_HTTPS
-#include "ota_https.h"
-#endif
+  #ifdef WITH_OTA_HTTPS
+  #include "ota_https.h"
+  #endif
+#endif // WITH_WIFI
 
 #ifdef WITH_AP
 #include "ap.h"
@@ -415,7 +415,10 @@ static void Button_Single(Button2 Butt) // callback when a single press on the b
     TFT_PageOFF=0;
   else
     TFT_NextPage();
+
+  #ifdef WITH_TFT_DIM
   TFT_PageActive=millis();
+  #endif
 #endif
 }
 
@@ -673,27 +676,21 @@ void setup()
       strcpy(Parameters.Soft, SOFT_NAME);
 #endif
 
-// default Upload/OTA parameters
-#ifdef FIRMWARE_URL
-  if (Parameters.FirmwareURL[0] == 0)
-      strcpy(Parameters.FirmwareURL, FIRMWARE_URL);
-#endif
+// ovewrite Parameters with any entries from local files
+Parameters.ReadFromFile("/spiffs/TRACKER.CFG");
+Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
-#ifdef UPLOAD_URL
-  if (Parameters.UploadURL[0] == 0)
-      strcpy(Parameters.UploadURL, UPLOAD_URL);
-#endif
-
-#ifdef WIFINAME
-#ifdef WIFIPASS
-  if (Parameters.WIFIname[0][0] == 0 || Parameters.WIFIpass[0][0] == 0) {
-      strcpy(Parameters.WIFIname[0], WIFINAME);
-      strcpy(Parameters.WIFIpass[0], WIFIPASS);
+// last resort WIFI/OTA parameters in case configuration is lost
+#ifdef WITH_WIFI
+#ifdef WITH_OTA_HTTPS
+  if (Parameters.WIFIname[0][0] == 0) {
+    strcpy(Parameters.WIFIname[0], "OGN-OTA-WIFI");
+    strcpy(Parameters.WIFIpass[0], "OpenGliderNetwork");
   }
+  if (Parameters.FirmwareURL[0] == 0)
+    strcpy(Parameters.UploadURL, "http://192.168.142.10/firmware.bin");
 #endif
 #endif
-
-
 
 
 #if ARDUINO_USB_CDC_ON_BOOT==1
@@ -996,24 +993,24 @@ void setup()
 #ifdef WITH_LOG
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
 #endif
-  xTaskCreate(vTaskGPS    ,  "GPS"  ,  4000, NULL, 1, NULL);  // read data from GPS
+  xTaskCreate(vTaskGPS    ,  "GPS"  ,  5000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
-  xTaskCreate(vTaskSENS   ,  "SENS" ,  4000, NULL, 1, NULL);  // read data from pressure sensor
+  xTaskCreate(vTaskSENS   ,  "SENS" ,  5000, NULL, 1, NULL);  // read data from pressure sensor
 #endif
-  xTaskCreate(vTaskPROC   ,  "PROC" ,  4000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(Radio_Task  ,  "RF"   ,  4000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(vTaskPROC   ,  "PROC" ,  5000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
+  xTaskCreate(Radio_Task  ,  "RF"   ,  5000, NULL, 1, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
-    xTaskCreate(vTaskAP,  "AP",  4000, NULL, 0, NULL);
+    xTaskCreate(vTaskAP,  "AP",  5000, NULL, 0, NULL);
 #endif
 #ifdef WITH_UPLOAD
-  xTaskCreate(vTaskUPLOAD, "UPLOAD",  4000, NULL, 0, NULL);
+  xTaskCreate(vTaskUPLOAD, "UPLOAD",  5000, NULL, 0, NULL);
 #endif
 #ifdef WITH_EPAPER
-  xTaskCreate(EPD_Task    ,  "EPD" ,  4000, NULL, 0, NULL);  //
+  xTaskCreate(EPD_Task    ,  "EPD" ,  5000, NULL, 0, NULL);  //
 #endif
 #ifdef WITH_OTA_HTTPS
-  xTaskCreate(vTaskOTA    , "OTA"  ,  4000, NULL, 0, NULL);
+  xTaskCreate(vTaskOTA    , "OTA"  ,  5000, NULL, 0, NULL);
 #endif
 
 }

@@ -1,6 +1,3 @@
-#ifdef WITH_OTA_HTTPS
-#ifdef WITH_WIFI
-
 #include "main.h"
 
 #include "socket.h"
@@ -13,6 +10,7 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "esp_rom_crc.h"
 
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -70,7 +68,7 @@ static esp_err_t validate_image_header(esp_app_desc_t *new_app_info)
 
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "Error reading new firmware header. Aborting update.\n");
+    Format_String(CONS_UART_Write, "OTA: error reading new firmware header. Aborting update.\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
 
@@ -83,32 +81,45 @@ static esp_err_t validate_image_header(esp_app_desc_t *new_app_info)
 static esp_err_t _http_client_init_cb(esp_http_client_handle_t http_client)
 {
   esp_err_t err = ESP_OK;
-  /* Uncomment to add custom headers to HTTP request */
-  // err = esp_http_client_set_header(http_client, "Custom-Header", "Value");
+
   return err;
 }
 
-static void DownloadTrackerSettings(void)
+static void DownloadTrackerSettings(char* local_name, char* remote_name_prefix)
 {
-  //
-  // Download and write parameters for specific tracker
-  // filename is "settings_a1b2c3.txt"
-  //    a1b1c3 is tracker ID (lowercase)
-  // file should be located in FirmwareURL directory
-  // file syntax is Name=Value
-  //
-
   esp_err_t err;
 
 #define SETTINGS_FILE_MAX_SIZE 4096
   char *SettingsURL = (char *)malloc(160);
+  char *buffer = (char *)malloc(SETTINGS_FILE_MAX_SIZE + 1);
+  uint32_t local_crc;
+  uint32_t remote_crc;
+  int16_t local_size = 0;
 
+  // check size and CRC of locally stored file
+  FILE *File = fopen(local_name, "r");
+
+  if (File != 0)
+  { // if failed to open, local_size will be 0
+    local_size = fread(buffer, 1, SETTINGS_FILE_MAX_SIZE, File);
+    fclose(File);
+
+    if (local_size < 0)
+      local_size = 0;
+    else
+      local_crc = esp_rom_crc32_le(0, (uint8_t *)buffer, local_size);
+  }
+  
+  // try do download remote file
   strcpy(SettingsURL, Parameters.FirmwareURL);
-
   url_strip_to_path(SettingsURL);
-  char _setFileName[30];
-  sprintf(_setFileName, "settings_%06x.txt", Parameters.Address);
+
+  strcat(SettingsURL, remote_name_prefix);         // "wifi" or "settings"
+  strcat(SettingsURL, "_");
+  char _setFileName[7] = {0};
+  Format_Hex(_setFileName, Parameters.Address, 6);
   strcat(SettingsURL, _setFileName);
+  strcat(SettingsURL, ".txt");
 
   esp_http_client_config_t config = {
       .url = SettingsURL,
@@ -120,10 +131,18 @@ static void DownloadTrackerSettings(void)
   esp_http_client_handle_t Client = esp_http_client_init(&config);
   err = esp_http_client_open(Client, 0);
 
-  char *buffer = (char *)malloc(SETTINGS_FILE_MAX_SIZE + 1);
+  // Custom HTTP headers
+  char _helper[32] = {0};
+  esp_http_client_set_header(Client, "X-OGNtracker-Soft", Parameters.Soft);
+  esp_http_client_set_header(Client, "X-OGNtracker-Hard", Parameters.Hard);
+  Format_Hex(_helper, Parameters.AcftID);
+  esp_http_client_set_header(Client, "X-OGNtracker-AcftID", _helper);
+  Format_Hex(_helper, getUniqueMAC());
+  esp_http_client_set_header(Client, "X-OGNtracker-Mac", _helper);
+
   int content_length = esp_http_client_fetch_headers(Client);
 
-  if (content_length <= 0)
+  if (content_length <= 0 || esp_http_client_get_status_code(Client) != 200)
   {
     free(buffer);
     free(SettingsURL);
@@ -138,47 +157,42 @@ static void DownloadTrackerSettings(void)
     int r = esp_http_client_read(Client, buffer + total_read, SETTINGS_FILE_MAX_SIZE - total_read);
 
     if (r < 0)
-    {
       buffer[0] = '\0'; // ERROR
-    }
+
     if (r == 0)
-    {
       break; // EOF
-    }
 
     total_read += r;
   }
 
   buffer[total_read] = '\0';
 
-  /* Split into lines */
-  char *saveptr;
-  char *line = strtok_r(buffer, "\n", &saveptr);
+  remote_crc = esp_rom_crc32_le(0, (uint8_t *)buffer, total_read);
+  
+  if (local_size != total_read || local_crc != remote_crc) {
 
-  while (line)
-  {
-    /* Strip trailing CR if present */
-    size_t len = strlen(line);
-    if (len > 0 && line[len - 1] == '\r')
+    // save to local storage then parse from it
+    File = fopen(local_name, "w");
+    if (File != 0)
     {
-      line[len - 1] = '\0';
+      uint8_t _written = fwrite(buffer, 1, total_read, File);
+      fclose(File);
+      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      Format_String(CONS_UART_Write, "OTA: new settings downloaded to ");
+      Format_String(CONS_UART_Write, local_name);
+      Format_String(CONS_UART_Write, "\n");
+      xSemaphoreGive(CONS_Mutex);
+
+      Parameters.ReadFromFile(local_name);
     }
-
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, line);
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
-
-    Parameters.ReadLine(line);
-    line = strtok_r(NULL, "\n", &saveptr);
   }
 
-  Parameters.WriteToNVS();
   free(buffer);
   free(SettingsURL);
   esp_http_client_close(Client);
   esp_http_client_cleanup(Client);
 }
+
 
 static void DownloadInstallFirmware(void)
 {
@@ -209,6 +223,15 @@ static void DownloadInstallFirmware(void)
   };
 
   esp_http_client_handle_t Client = esp_http_client_init(&config);
+
+  // Custom HTTP headers
+  char _helper[32] = {0};
+  esp_http_client_set_header(Client, "X-OGNtracker-Soft", Parameters.Soft);
+  esp_http_client_set_header(Client, "X-OGNtracker-Hard", Parameters.Hard);
+  Format_Hex(_helper, Parameters.AcftID);
+  esp_http_client_set_header(Client, "X-OGNtracker-AcftID", _helper);
+  Format_Hex(_helper, getUniqueMAC());
+  esp_http_client_set_header(Client, "X-OGNtracker-Mac", _helper);
 
   if (esp_http_client_open(Client, 0) != ESP_OK)
   {
@@ -319,7 +342,7 @@ static void DownloadInstallFirmware(void)
   {
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "ESP HTTPS OTA Begin failed\n");
+    Format_String(CONS_UART_Write, "OTA Begin failed\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
     esp_https_ota_abort(https_ota_handle);
@@ -332,11 +355,9 @@ static void DownloadInstallFirmware(void)
   err = esp_https_ota_get_img_desc(https_ota_handle, &app_desc);
   if (err != ESP_OK)
   {
-#ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "esp_https_ota_get_img_desc failed\n");
+    Format_String(CONS_UART_Write, "OTA: esp_https_ota_get_img_desc() failed, aborting\n");
     xSemaphoreGive(CONS_Mutex);
-#endif
     esp_https_ota_abort(https_ota_handle);
     xSemaphoreGive(WIFI_Mutex);
     vTaskDelete(NULL);
@@ -345,11 +366,10 @@ static void DownloadInstallFirmware(void)
   err = validate_image_header(&app_desc);
   if (err != ESP_OK)
   {
-#ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "image header verification failed\n");
+    Format_String(CONS_UART_Write, "OTA: image header verification failed, aborting.\n");
     xSemaphoreGive(CONS_Mutex);
-#endif
+
     esp_https_ota_abort(https_ota_handle);
     xSemaphoreGive(WIFI_Mutex);
     vTaskDelete(NULL);
@@ -363,9 +383,6 @@ static void DownloadInstallFirmware(void)
     {
       break;
     }
-    // esp_https_ota_perform returns after every read operation which gives user the ability to
-    // monitor the status of OTA upgrade by calling esp_https_ota_get_image_len_read, which gives length of image
-    // data read so far.
     const size_t len = esp_https_ota_get_image_len_read(https_ota_handle);
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
@@ -379,12 +396,9 @@ static void DownloadInstallFirmware(void)
 
   if (esp_https_ota_is_complete_data_received(https_ota_handle) != true)
   {
-// the OTA image was not completely received and user can customise the response to this situation.
-#ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "Complete data was not received.\n");
+    Format_String(CONS_UART_Write, "OTA: complete data was not received.\n");
     xSemaphoreGive(CONS_Mutex);
-#endif
   }
   else
   {
@@ -400,11 +414,9 @@ static void DownloadInstallFirmware(void)
 
       Parameters.WriteToNVS();
 
-#ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, "ESP_HTTPS_OTA upgrade successful. Rebooting in 3 seconds...\n");
+      Format_String(CONS_UART_Write, "OTA upgrade successful. Rebooting in 3 seconds...\n");
       xSemaphoreGive(CONS_Mutex);
-#endif
       vTaskDelay(3000);
       esp_restart();
     }
@@ -412,19 +424,16 @@ static void DownloadInstallFirmware(void)
     {
       if (ota_finish_err == ESP_ERR_OTA_VALIDATE_FAILED)
       {
-#ifdef DEBUG_PRINT
         xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-        Format_String(CONS_UART_Write, "Image validation failed, image is corrupted\n");
+        Format_String(CONS_UART_Write, "OTA image validation failed, image is corrupted\n");
         xSemaphoreGive(CONS_Mutex);
-#endif
       }
-#ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, "ESP_HTTPS_OTA upgrade failed (0x");
+      Format_String(CONS_UART_Write, "OTA upgrade failed (0x");
       Format_Hex(CONS_UART_Write, (uint8_t)ota_finish_err);
       Format_String(CONS_UART_Write, ")\n");
       xSemaphoreGive(CONS_Mutex);
-#endif
+
       esp_https_ota_abort(https_ota_handle);
       esp_http_client_close(Client);
       esp_http_client_cleanup(Client);
@@ -434,11 +443,10 @@ static void DownloadInstallFirmware(void)
     }
   }
 
-#ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, "ESP_HTTPS_OTA upgrade failed\n");
+  Format_String(CONS_UART_Write, "OTA upgrade failed\n");
   xSemaphoreGive(CONS_Mutex);
-#endif
+
   esp_http_client_close(Client);
   esp_http_client_cleanup(Client);
 
@@ -448,7 +456,7 @@ static void DownloadInstallFirmware(void)
 
 extern "C" void vTaskOTA(void *pvParameters)
 {
-  vTaskDelay(15000);
+  vTaskDelay(5000); // sp9wpn: docelowo 15000
   for (;;)
   {
     if (Flight.inFlight())
@@ -530,7 +538,7 @@ extern "C" void vTaskOTA(void *pvParameters)
 
         WIFI_IP.ip.addr = 0;
         WIFI_IP.gw.addr = 0;
-        for (uint8_t Idx = 0; Idx < 10; Idx++)
+        for (uint8_t Idx = 0; Idx < 20; Idx++)
         { // wait to obtain local IP from DHCP
           vTaskDelay(1000);
           // if(WIFI_State.isConnected==1) break;
@@ -581,26 +589,23 @@ extern "C" void vTaskOTA(void *pvParameters)
               strcpy(Parameters.Soft, _soft);
               Parameters.WriteToNVS();
 
-#ifdef DEBUG_PRINT
               xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-              Format_String(CONS_UART_Write, "New APP firmware is valid, rollback cancelled.\n");
+              Format_String(CONS_UART_Write, "OTA: new APP firmware is valid, rollback cancelled.\n");
               xSemaphoreGive(CONS_Mutex);
-#endif
             }
             else
             {
-#ifdef DEBUG_PRINT
               xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-              Format_String(CONS_UART_Write, "Failed to cancel rollback\n");
+              Format_String(CONS_UART_Write, "OTA: failed to cancel rollback\n");
               xSemaphoreGive(CONS_Mutex);
-#endif
             }
           }
           else
           {
             vTaskPrioritySet(NULL, 5);
             esp_wifi_set_ps(WIFI_PS_NONE); // disable WIFI powersaving
-            DownloadTrackerSettings();
+            DownloadTrackerSettings("/spiffs/WIFI.CFG","wifi");
+            DownloadTrackerSettings("/spiffs/TRACKER.CFG","settings");
             DownloadInstallFirmware();
             vTaskPrioritySet(NULL, 0);
             WIFI_setPowerSave(1);
@@ -626,7 +631,7 @@ extern "C" void vTaskOTA(void *pvParameters)
 #endif
 
     xSemaphoreGive(WIFI_Mutex);
-    vTaskDelay(300000); // wait 5 mins
+    vTaskDelay(30000); // wait 1 min  sp9wpn: zmienić na 60000
   }
 };
 
@@ -718,6 +723,3 @@ void print_ota_status()
   Format_String(CONS_UART_Write, "------------------------\n");
   xSemaphoreGive(CONS_Mutex);
 }
-
-#endif // WITH_WIFI
-#endif // WITH_OTA

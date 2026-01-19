@@ -66,8 +66,17 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
 
   esp_http_client_handle_t Client = esp_http_client_init(&Config);
   
+  // Custom HTTP headers
   esp_http_client_set_header(Client, "Content-Type", "application/octet-stream");
   esp_http_client_set_header(Client, "X-File-Name", RemoteFileName);
+
+  char _helper[32] = {0};
+  esp_http_client_set_header(Client, "X-OGNtracker-Soft", Parameters.Soft);
+  esp_http_client_set_header(Client, "X-OGNtracker-Hard", Parameters.Hard);
+  Format_Hex(_helper, Parameters.AcftID);
+  esp_http_client_set_header(Client, "X-OGNtracker-AcftID", _helper);
+  Format_Hex(_helper, getUniqueMAC());
+  esp_http_client_set_header(Client, "X-OGNtracker-Mac", _helper);
 
   esp_err_t Err = esp_http_client_open(Client, FileSize); // start the HTTP request: -1 means chunked transfer
   if(Err!=ESP_OK)
@@ -243,7 +252,7 @@ void vTaskUPLOAD(void* pvParameters)
         if(Err) continue;                                     // if connection failed then give up ad move on to the next AP
 
         WIFI_IP.ip.addr = 0; WIFI_IP.gw.addr=0;
-        for(uint8_t Idx=0; Idx<10; Idx++)                     // wait to obtain local IP from DHCP
+        for(uint8_t Idx=0; Idx<20; Idx++)                     // wait to obtain local IP from DHCP
         { vTaskDelay(1000);
           // if(WIFI_State.isConnected==1) break;
           if(WIFI_getLocalIP())

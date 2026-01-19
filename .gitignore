@@ -3,6 +3,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+data/TRACKER.CFG
+data/WIFI.CFG
 platformio.ini
 .vscode/settings.json
 CMakeLists.txt

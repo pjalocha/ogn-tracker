@@ -101,7 +101,7 @@ static LowPass2<int64_t,10,9,12> PressAver, // low pass (average) filter for pre
 
 static Delay<int32_t, 8>        PressDelay; // 4-second delay for long-term climb rate
 
-static char Line[96];                       // line to prepare the barometer NMEA sentence
+static char Line[128];                       // line to prepare the barometer NMEA sentence
 
 static uint8_t InitBaro(void)
 { Baro.Bus=BARO_I2C;
@@ -164,11 +164,11 @@ static void ProcBaro(void)
     TickType_t End=xTaskGetTickCount();
     TickType_t MeasTick = Start + (End-Start)/2;
     if(Err==0) { Baro.Calculate(); }
-          else { PipeCount=0; return; }
+          else { PipeCount=0; InitBaro(); return; }
     AverPress = Baro.Pressure;
             Err=Baro.Acquire();
     if(Err==0) { Baro.Calculate(); }
-          else { PipeCount=0; return; }
+          else { PipeCount=0; InitBaro(); return; }
     AverPress += Baro.Pressure;
     AverPress/=2;                                                       // [0.25Pa]
 #endif

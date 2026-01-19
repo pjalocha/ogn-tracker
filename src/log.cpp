@@ -363,20 +363,20 @@ void vTaskLOG(void* pvParameters)
   FlashLog_FIFO.Clear();
 
 // #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, "TaskLOG() ");
+  if(xSemaphoreTake(CONS_Mutex, 200))
+  { Format_String(CONS_UART_Write, "TaskLOG() ");
 #ifdef WITH_SPIFFS
-  { size_t Total, Used;
-    if(SPIFFS_Info(Total, Used)==0)                            // get the SPIFFS usage summary
-    { Format_UnsDec(CONS_UART_Write, Used/1024);
-      Format_String(CONS_UART_Write, "kB used, ");
-      Format_UnsDec(CONS_UART_Write, Total/1024);
-      Format_String(CONS_UART_Write, "kB total, "); }
-  }
+    { size_t Total, Used;
+      if(SPIFFS_Info(Total, Used)==0)                            // get the SPIFFS usage summary
+      { Format_UnsDec(CONS_UART_Write, Used/1024);
+        Format_String(CONS_UART_Write, "kB used, ");
+        Format_UnsDec(CONS_UART_Write, Total/1024);
+        Format_String(CONS_UART_Write, "kB total, "); }
+    }
 #endif
-  Format_String(CONS_UART_Write, "\n");
-  xSemaphoreGive(CONS_Mutex);
-// #endif
+    Format_String(CONS_UART_Write, "\n");
+    xSemaphoreGive(CONS_Mutex); }
+// #endif // DEBUG_PRINT
 
 #ifdef WITH_SD
 #ifdef WITH_SPIFFS

@@ -139,6 +139,7 @@ class BMP180
             X3 = ((X1+X2)+2)>>2;
    uint32_t B4 = ((uint32_t)AC4*(uint32_t)(X3+32768))>>15;
    uint32_t B7 = (RawPress-B3)*((uint32_t)50000>>MEAS_OSS);
+    if (B4 == 0) { Pressure = 0 ; return; }     // just a precaution
     if(B7&0x8000000) { Pressure = (B7/B4)<<1; }
                 else { Pressure = (B7<<1)/B4; }
             X1 = (Pressure>>8)*(Pressure>>8);

@@ -110,10 +110,22 @@ Note "0x" in front of a hexadecimal number
 The OGN-Tracker detects take-off and landing and records the position/altitude/speed/climb points every few seconds.
 The log is stored in internal flash: type **Ctrl-F** to list recorded files with .TLG extension.
 
-The files are binary but can be downloaded as APRS with an **$POGNL** command (details come later)
-The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
+The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method:
 
-### HTTPS-OTA updates
+### Configure automatic upload of flight log files
+You need to setup the following elements:
+1. WiFi name to connect to internet and password: suppose they are "OurClub" and "OurPass"
+2. Upload URL which accepts files uploaded with POST method
+
+You send the following to the serial console:
+```
+$POGNS,UploadURL=http://ogn3.glidernet.org:8084/upload,WIFIname=OurClub,WIFIpass=OurPass
+```
+The given upload URL is a real test server which accepts files, but you can run your own.
+The python scrypt for the test server you can find in **utils** directory of the project
+
+
+## Over-the-Air (OTA) updates
 Tracker's firmware can be updated remotely (Over-The-Air) using WiFi connection. Firstly, tracker flash memory needs to be prepared
 differently for this - special partition layout is required. This needs to be done traditionally, using serial connection.
 Once done, a command should be sent via serial console:
@@ -130,29 +142,27 @@ OTA process has an auto-rollback feature which expects tracker to connect to a W
 within 30 seconds). If no such connection is made, previous firmware is restored and no future attempts will be made to download that failed serial again.
 It is then crucial to provide a reliable WiFi coverage during OTA process and shortly after.
 
-## Remote settings
-Additionally, an optional "settings_a1b2c3.txt" file can be placed in the same directory as firmware. This contains per-tracker configuration
-parameters which will be accepted as they would have been entered using $POGNS commands. "a1b2c3" is tracker's 24 bit address written in lowercase hex. Example content:
+### Local settings files
+If you place **TRACKER.CFG** or **WIFI.CFG** in project's **data/** directory they will be placed in tracker's local filesystem and read during each startup.
+While any parameter can be defined in any of these two files, it is recommended to separate security-sensitive WIFI/OTA data from general tracker config.
+Be aware that configuration made by serial console (and stored in NVS memory) will be erased in some OTA scenarios, so keeping these files is recommended if using OTA.
+
+Example content of **TRACKER.CFG**:
 ```
 ID=ABC
-Reg=N123A
-Model=SZD-55
 AcftType=1
+Model=SZD-55
 ```
 
-Please remember these files are publicly available on WWW, so do not put any passwords in them.
-
-
-### Configure automatic upload of flight log files
-You need to setup the following elements:
-1. WiFi name to connect to internet and password: suppose they are "OurClub" and "OurPass"
-2. Upload URL which accepts files uploaded with POST method
-
-You send the following to the serial console:
+Example content of **WIFI.CFG**:
 ```
-$POGNS,UploadURL=http://ogn3.glidernet.org:8084/upload,WIFIname=OurClub,WIFIpass=OurPass
+WIFIname=OurClub
+WIFIpass=OurPass
+FirmwareURL=https://example.com/ogn/firmware/my_firmware.bin
 ```
-The given upload URL is a real test server which accepts files, but you can run your own.
-The python scrypt for the test server you can find in **utils** directory of the project
+
+### Remote setting files
+Additionally, optional **settings_A1B2C3.txt** and **wifi_A1B2C3.txt** files ("A1B2C3" is tracker's 24 bit address written in uppercase hex) can be placed in the same directory as firmware. If found, they will be downloaded to local filesystem as **TRACKER.CFG** and **WIFI.CFG** respectively.
+Please remember these files are publicly available on WWW, be careful when passing any keys/passwords there.
 
 
