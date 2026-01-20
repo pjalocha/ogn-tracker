@@ -194,7 +194,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
 { uint32_t usTxTime=Radio.getTimeOnAir(Len);                             // [usec]
   Radio_TxCredit-=usTxTime/1000;
   // uint32_t Time=millis();
-  int State=Radio.transmit( Packet, Len);                                 // transmit // Wojtek: poprawiłem błąd kompilacji (niezgodność typów), nie wiem czy dobrze
+  int State=Radio.transmit((const uint8_t *)Packet, Len);                                 // transmit
   LED_OGN_TX(20);
   // Time = millis()-Time;
   // Serial.printf("Radio_TxManchFSK(, %d=>%d) (%d) %dms\n", Len, TxLen, State, Time);  // for debug
