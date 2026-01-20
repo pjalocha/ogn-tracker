@@ -161,11 +161,14 @@ uint16_t StratuxPort;
    char *getWIFIname(uint8_t Idx) { return Idx<WIFIsets ? WIFIname[Idx]:0; }
    char *getWIFIpass(uint8_t Idx) { return Idx<WIFIsets ? WIFIpass[Idx]:0; }
 
-   char WIFIname[WIFIsets][32];  // WiFi networks name/pass to connect to for log upload or APRS server
-   char WIFIpass[WIFIsets][64];
+   char WIFIname[WIFIsets][WIFInameLen];  // WiFi networks name/pass to connect to for log upload or APRS server
+   char WIFIpass[WIFIsets][WIFIpassLen];
 #endif
 #ifdef WITH_UPLOAD
-   char UploadURL[64];           // URL to upload log files
+   char UploadURL[128];           // URL to upload log files
+#endif
+#ifdef WITH_OTA_HTTPS
+   char FirmwareURL[128];           // URL to upload log files
 #endif
 
 #ifdef WITH_ENCRYPT
@@ -358,6 +361,9 @@ uint16_t StratuxPort;
 #endif
 #ifdef WITH_UPLOAD
    UploadURL[0] = 0;
+#endif
+#ifdef WITH_OTA_HTTPS
+   FirmwareURL[0] = 0;
 #endif
   }
 
@@ -903,8 +909,11 @@ uint16_t StratuxPort;
     if( (memcmp(Name, "WIFIpass", 8)==0) && (strlen(Name)==9) )
     { int Idx=Name[8]-'0'; if( (Idx>=0) && (Idx<WIFIsets) ) return Read_String(WIFIpass[Idx], Value, WIFIpassLen)>=0; }
 #endif
-#ifdef WITH_WIFI
-    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 64)>=0;
+#ifdef WITH_UPLOAD
+    if(strcmp(Name, "UploadURL")==0) return Read_String(UploadURL, Value, 128)>=0;
+#endif
+#ifdef WITH_OTA_HTTPS
+    if(strcmp(Name, "FirmwareURL")==0) return Read_String(FirmwareURL, Value, 128)>=0;
 #endif
     if(strcmp(Name, "SaveToFlash")==0)
     { int32_t Save=0; if(Read_Int(Save, Value)<=0) return 0;
@@ -931,10 +940,10 @@ uint16_t StratuxPort;
     return OK; }
 
   int ReadFromFile(FILE *File)
-  { char Line[80];                                                              // line buffer
+  { char Line[180];                                                              // line buffer
     size_t Lines=0;                                                             // count interpreted lines
     for( ; ; )                                                                  // loop over lines
-    { if(fgets(Line, 80, File)==0) break;                                       // break on EOF or other trouble reading the file
+    { if(fgets(Line, 179, File)==0) break;                                       // break on EOF or other trouble reading the file
       if(strchr(Line, '\n')==0) break;                                          // if no NL then break, line was too long
       if(ReadLine(Line)) Lines++; }                                             // interprete the line, count if positive
     return Lines; }                                                             // return number of interpreted lines
@@ -997,7 +1006,7 @@ uint16_t StratuxPort;
     return Len; }
 
   int WriteToFile(FILE *File)
-  { char Line[80];
+  { char Line[180];
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -1059,10 +1068,13 @@ uint16_t StratuxPort;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
-#endif
 #ifdef WITH_UPLOAD
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
 #endif
+#ifdef WITH_OTA_HTTPS
+    strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); if(fputs(Line, File)==EOF) return EOF;
+#endif
+#endif // WITH_WIFI
     return 10+InfoParmNum; }
 
   int WriteToFile(const char *Name = "/spiffs/TRACKER.CFG")
@@ -1071,7 +1083,7 @@ uint16_t StratuxPort;
     fclose(File); return Lines; }
 
   void Write(void (*Output)(char))
-  { char Line[80];
+  { char Line[180];
     Write_Hex    (Line, "Address"   ,          Address ,       6); strcat(Line, " # [24-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); Format_String(Output, Line);
@@ -1099,7 +1111,7 @@ uint16_t StratuxPort;
     // Write_Hex    (Line, "EncryptKey[3]",       EncryptKey[3] , 8); strcat(Line, " # [32-bit]\n"); Format_String(Output, Line);
 #endif
     Write_Hex    (Line, "Verbose"  ,      (uint32_t)Verbose,   2); strcat(Line, " #  [ 0..3]\n"); Format_String(Output, Line);
-    Write_Hex    (Line, "GNSS"     ,      (uint32_t)GNSS    ,  2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "GNSS"     ,      (uint32_t)GNSS,      2); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "PageMask" ,      (uint32_t)PageMask,  4); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "InitialPage" ,   (uint32_t)InitialPage ); strcat(Line, " #  [     ]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "PPSdelay" ,      (uint32_t)PPSdelay    ); strcat(Line, " #  [   ms]\n"); Format_String(Output, Line);
@@ -1133,10 +1145,12 @@ uint16_t StratuxPort;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
-#endif
-#ifdef WITH_WIFI
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
 #endif
+#ifdef WITH_OTA_HTTPS
+    strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
+#endif
+    strcpy(Line, "Firmware built on "); strcat(Line, __DATE__); strcat(Line, " "); strcat(Line, __TIME__); strcat(Line, "\n"); Format_String(Output, Line);
   }
 
 } /* __attribute__((packed)) */ ;

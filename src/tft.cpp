@@ -123,7 +123,7 @@ int TFT_DrawID(bool WithAP)
   uint8_t Len=Format_String(Line, "#");
   Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
   Len+=Format_Hex(Line+Len, (uint32_t)ID);
-  Len+=Format_String(Line+Len, " v"VERSION);
+  Len+=Format_String(Line+Len, " v" VERSION);
   Line[Len]=0;
   TFT.setFont(0);
   TFT.setTextSize(1);

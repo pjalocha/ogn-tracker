@@ -1,0 +1,14 @@
+# Espressif ESP32 Partition Table
+# Name,     Type,   SubType,    Offset,     Size,       Flags
+# for parameter storage
+nvs,        data,   nvs,        0x9000,     0x6000,
+phy_init,   data,   phy,        ,           0x1000,
+# OTA
+# PlatformIO wants firmware upload target to be at 0x010000
+ota_0,      app,    ota_0,      0x10000,    1536K,
+ota_1,      app,    ota_1,      ,           1536K,
+otadata,    data,   ota,        ,           0x2000,
+# SPIFFS in Flash
+intlog,     data,   fat,        ,           0x4de000,
+# for core dumps: 64 KB
+coredump,   data,   coredump,   ,           0x10000,

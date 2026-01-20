@@ -78,6 +78,7 @@ extern FlashParameters Parameters;
 
 extern SemaphoreHandle_t CONS_Mutex;
 extern SemaphoreHandle_t I2C_Mutex;
+extern SemaphoreHandle_t WIFI_Mutex;
 
 extern uint8_t PowerMode;                 // 0=sleep/minimal power, 1=comprimize, 2=full power
 
@@ -145,6 +146,7 @@ void GPS_DISABLE(void);
 #endif
 
 uint16_t BatterySense(int Samples=4); // [mV]
+uint16_t BatterySenseRaw(int Samples=4); // [mV]
 
 #ifdef WITH_SPIFFS
 int  SPIFFS_Register(void);
