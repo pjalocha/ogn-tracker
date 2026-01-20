@@ -291,7 +291,7 @@ void OGN_LED_Flash(void)
 
 #ifdef WITH_ST7735
 
-const  uint8_t  TFT_Pages      = 8;       // six LCD pages
+const  uint8_t  TFT_Pages      = 8;       // eight LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF

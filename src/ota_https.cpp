@@ -456,7 +456,7 @@ static void DownloadInstallFirmware(void)
 
 extern "C" void vTaskOTA(void *pvParameters)
 {
-  vTaskDelay(5000); // sp9wpn: docelowo 15000
+  vTaskDelay(15000);
   for (;;)
   {
     if (Flight.inFlight())
@@ -631,7 +631,7 @@ extern "C" void vTaskOTA(void *pvParameters)
 #endif
 
     xSemaphoreGive(WIFI_Mutex);
-    vTaskDelay(30000); // wait 1 min  sp9wpn: zmienić na 60000
+    vTaskDelay(60000); // wait 1 min
   }
 };
 
