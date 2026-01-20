@@ -165,7 +165,7 @@ WIFIpass=OurPass
 FirmwareURL=https://example.com/ogn/firmware/my_firmware.bin
 ```
 
-### Remote setting files
+### Remote settings files
 Additionally, optional **settings_A1B2C3.txt** and **wifi_A1B2C3.txt** files ("A1B2C3" is tracker's 24 bit address written in uppercase hex) can be placed in the same directory as firmware. If found, they will be downloaded to local filesystem as **TRACKER.CFG** and **WIFI.CFG** respectively.
 Please remember these files are publicly available on WWW, be careful when passing any keys/passwords there.
 
