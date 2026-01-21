@@ -210,7 +210,6 @@ static void DownloadInstallFirmware(void)
   // suggested format is: 2025102701 <- YMD date and daily version number
 
   char *FirmwareSerialURL = (char *)malloc(160);
-  // char FirmwareSerialURL[160] = {0};
   strcpy(FirmwareSerialURL, Parameters.FirmwareURL);
   strcat(FirmwareSerialURL, ".serial");
 
@@ -246,11 +245,11 @@ static void DownloadInstallFirmware(void)
     return;
   }
 
-  if (esp_http_client_fetch_headers(Client) < 1)
+  if (esp_http_client_fetch_headers(Client) < 0 || esp_http_client_get_status_code(Client) != 200)
   {
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "OTA firmware serial headers fetch failed\n");
+    Format_String(CONS_UART_Write, "OTA firmware serial fetch failed (headers)\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
     free(FirmwareSerialURL);
@@ -275,22 +274,16 @@ static void DownloadInstallFirmware(void)
   {
     char *endptr = NULL;
     receivedSerialNumber = strtol(_rx_buffer, &endptr, 10);
-#ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "OTA firmware serial received: ");
-    Format_UnsDec(CONS_UART_Write, receivedSerialNumber);
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
-#endif
   }
   else
   {
 #ifdef DEBUG_PRINT
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "OTA firmware serial retrieval failed\n");
+    Format_String(CONS_UART_Write, "OTA firmware serial fetch failed\n");
     xSemaphoreGive(CONS_Mutex);
 #endif
   };
+
   if (receivedSerialNumber == 0)
   {
 #ifdef DEBUG_PRINT
@@ -300,6 +293,14 @@ static void DownloadInstallFirmware(void)
 #endif
     xSemaphoreGive(WIFI_Mutex);
     vTaskDelete(NULL);
+  } else {
+#ifdef DEBUG_PRINT
+    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    Format_String(CONS_UART_Write, "OTA firmware serial received: ");
+    Format_UnsDec(CONS_UART_Write, receivedSerialNumber);
+    Format_String(CONS_UART_Write, "\n");
+    xSemaphoreGive(CONS_Mutex);
+#endif
   }
   vTaskDelay(50); // give other tasks a chance
 

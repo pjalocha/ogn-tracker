@@ -455,6 +455,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   // if(!TxManch) TxPacket=0; // for debug
   if(TxPacket)                                                      // if there is packet to be sent out
   { int TxTime;
+    if (msTimeLen == 50 || msTimeLen == 200) msTimeLen++;           // FIXME: dirty fix against div by zero
     if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-200); }
             else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     PktCount+=Radio_Receive(TxTime, RxPktLen, RxManch, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
