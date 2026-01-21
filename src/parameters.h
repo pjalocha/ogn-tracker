@@ -940,11 +940,15 @@ uint16_t StratuxPort;
     return OK; }
 
   int ReadFromFile(FILE *File)
-  { char Line[180];                                                              // line buffer
+  { char Line[181];                                                              // line buffer
     size_t Lines=0;                                                             // count interpreted lines
     for( ; ; )                                                                  // loop over lines
-    { if(fgets(Line, 179, File)==0) break;                                       // break on EOF or other trouble reading the file
-      if(strchr(Line, '\n')==0) break;                                          // if no NL then break, line was too long
+    { if(fgets(Line, 179, File)==0) break;                                      // break on EOF or other trouble reading the file
+      if(strchr(Line, '\n')==0) {
+        strcat(Line,"\n");                                                      // try to add missing newline
+        Line[179] = '\n';                                                       // truncate oversized line
+        Line[180] = 0;
+      }
       if(ReadLine(Line)) Lines++; }                                             // interprete the line, count if positive
     return Lines; }                                                             // return number of interpreted lines
 

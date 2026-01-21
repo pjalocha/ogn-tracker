@@ -804,7 +804,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     strcpy(Parameters.WIFIpass[0], "OpenGliderNetwork");
   }
   if (Parameters.FirmwareURL[0] == 0)
-    strcpy(Parameters.UploadURL, "http://192.168.142.10/firmware.bin");
+    strcpy(Parameters.FirmwareURL, "http://192.168.142.10/firmware.bin");
 #endif
 #endif
 
