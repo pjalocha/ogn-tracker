@@ -9,12 +9,12 @@
 #include "bitcount.h"
 #include "format.h"
 
-class ADSL_Packet
+class __attribute__((aligned(4))) ADSL_Packet
 { public:
 
    const static uint8_t TxBytes = 27; // including SYNC, Length, actual packet content (1+20 bytes) and 3-byte CRC
    const static uint8_t SYNC1 = 0x72; // two SYNC bytes - Lemgth byte can be considered the 3rd SYNC byte as it is fixed
-   const static uint8_t SYNC2 = 0x4B;
+   const static uint8_t SYNC2 = 0x4B; // for HDR the two SYNC bytes are different: 0x2D 0xD4
 
    uint8_t SYNC[2];          // two bytes for correct alignment: can contain the last two SYNC bytes
    uint8_t Length;           // [bytes] packet length = 24 = 0x18 (excluding length but including the 24-bit CRC)

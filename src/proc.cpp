@@ -1114,7 +1114,7 @@ void vTaskPROC(void* pvParameters)
 #endif // WITH_APRS
 #ifdef WITH_LOG
         FlashLog(&PosPacket, PosTime);
-#endif // WITH_APRS
+#endif // WITH_LOG
         PrevLoggedPacket = PosPacket.Packet;
       }
     } else // if GPS position is not complete, contains no valid position, etc.
