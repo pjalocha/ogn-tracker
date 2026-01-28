@@ -29,7 +29,7 @@
 #define Radio_PinEnable 46 // power-enable for sx1262 ?
 #define Radio_SckFreq 8000000
 
-#define Buzzer_Pin     9 // GPIO  3 = Beeper
+#define Buzzer_Pin     9 // GPIO  9 = Beeper
 #define Buzzer_Channel 0 // LED controller channel
 
 // Two I2C busses
