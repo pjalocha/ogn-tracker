@@ -6,8 +6,9 @@
 #ifdef WITH_BEEPER
 
 void Beep_Init(void)
-{ ledcSetup(Buzzer_Channel, 800, 8);           // channel, frequency, resolution
-  ledcAttachPin(Buzzer_Pin, Buzzer_Channel); }
+{ ledcSetup(Buzzer_Channel, 800, 8);      // channel, frequency, resolution
+  pinMode(Buzzer_Pin, OUTPUT);
+  digitalWrite(Buzzer_Pin, LOW); }
 
 // void Beep_Stop(void)                   // explicit stop and put the pin down
 // { ledcWrite(Buzzer_Channel, 0);        // duty 0
@@ -15,9 +16,15 @@ void Beep_Init(void)
 //   digitalWrite(Buzzer_Pin, LOW); }     // force pin low
 
 void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl) // [Hz, 1/256] play sound with given frequency and duty (=volume)
-{ ledcWriteTone(Buzzer_Channel, Freq);
-  ledcWrite(Buzzer_Channel, Duty);
-  if(Freq==0) digitalWrite(Buzzer_Pin, LOW); }
+{ if(Freq==0)
+  { ledcDetachPin(Buzzer_Pin);
+    pinMode(Buzzer_Pin, OUTPUT);
+    digitalWrite(Buzzer_Pin, LOW); }
+  else
+  { ledcAttachPin(Buzzer_Pin, Buzzer_Channel); }
+    ledcWriteTone(Buzzer_Channel, Freq);
+    ledcWrite(Buzzer_Channel, Duty);
+}
 
 // Frequencies for notes of the highest octave: C,     C#,    D,     D#,    E,     F,     F#,    G,     G#,    A,     A#,    B
 // Freq[i] = 32*523.25*2**(i/12)            i = 0,     1,     2,     3,     4,     5,     6,     7,     8,     9,     A,     B
