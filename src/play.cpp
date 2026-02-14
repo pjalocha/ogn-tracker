@@ -5,15 +5,23 @@
 
 #ifdef WITH_BEEPER
 
+#define WITH_BEEPER_GEN
+
+#ifdef WITH_BEEPER_GEN   // if buzzer with internal generator is used
+
+void Beep_Init(void)
+{ pinMode(Buzzer_Pin, OUTPUT);
+  digitalWrite(Buzzer_Pin, LOW); }
+
+void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl)
+{ digitalWrite(Buzzer_Pin, Freq>0); }
+
+#else
+
 void Beep_Init(void)
 { ledcSetup(Buzzer_Channel, 800, 8);      // channel, frequency, resolution
   pinMode(Buzzer_Pin, OUTPUT);
   digitalWrite(Buzzer_Pin, LOW); }
-
-// void Beep_Stop(void)                   // explicit stop and put the pin down
-// { ledcWrite(Buzzer_Channel, 0);        // duty 0
-//   ledcWriteTone(Buzzer_Channel, 0);    // stop tone (disable frequency)
-//   digitalWrite(Buzzer_Pin, LOW); }     // force pin low
 
 void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl) // [Hz, 1/256] play sound with given frequency and duty (=volume)
 { if(Freq==0)
@@ -25,6 +33,8 @@ void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl) // [Hz, 1/256] play s
     ledcWriteTone(Buzzer_Channel, Freq);
     ledcWrite(Buzzer_Channel, Duty);
 }
+
+#endif
 
 // Frequencies for notes of the highest octave: C,     C#,    D,     D#,    E,     F,     F#,    G,     G#,    A,     A#,    B
 // Freq[i] = 32*523.25*2**(i/12)            i = 0,     1,     2,     3,     4,     5,     6,     7,     8,     9,     A,     B
