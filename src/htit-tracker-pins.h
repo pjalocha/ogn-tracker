@@ -34,6 +34,11 @@
 #define Radio_PinBusy 13 // Busy: only for SX1262
 #define Radio_SckFreq 8000000
 
+#define Buzzer_Pin     6 // GPIO  6 = Beeper
+#define Buzzer_Channel 0 // LED controller channel
+
+#define Flasher_Pin    7 // flashing LED for collision alert: HIGH active
+
 // I2C is not defined by manufacturer, using custom pins
 #define I2C_PinSDA 45
 #define I2C_PinSCL 46

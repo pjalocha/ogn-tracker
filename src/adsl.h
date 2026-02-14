@@ -9,12 +9,12 @@
 #include "bitcount.h"
 #include "format.h"
 
-class ADSL_Packet
+class __attribute__((aligned(4))) ADSL_Packet
 { public:
 
    const static uint8_t TxBytes = 27; // including SYNC, Length, actual packet content (1+20 bytes) and 3-byte CRC
    const static uint8_t SYNC1 = 0x72; // two SYNC bytes - Lemgth byte can be considered the 3rd SYNC byte as it is fixed
-   const static uint8_t SYNC2 = 0x4B;
+   const static uint8_t SYNC2 = 0x4B; // for HDR the two SYNC bytes are different: 0x2D 0xD4
 
    uint8_t SYNC[2];          // two bytes for correct alignment: can contain the last two SYNC bytes
    uint8_t Length;           // [bytes] packet length = 24 = 0x18 (excluding length but including the 24-bit CRC)
@@ -721,7 +721,8 @@ class ADSL_Packet
  0x800000, 0x400000, 0x200000, 0x100000, 0x080000, 0x040000, 0x020000, 0x010000,
  0x008000, 0x004000, 0x002000, 0x001000, 0x000800, 0x000400, 0x000200, 0x000100,
  0x000080, 0x000040, 0x000020, 0x000010, 0x000008, 0x000004, 0x000002, 0x000001 } ;
-      return Syndrome[Bit]; }
+      if(Bit<PacketBits) return Syndrome[Bit];
+      return 0; }
 
     static uint8_t FindCRCsyndrome(uint32_t Syndr)              // quick search for a single-bit CRC syndrome
     { const uint16_t PacketBytes = TxBytes-3;

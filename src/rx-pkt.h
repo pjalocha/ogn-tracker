@@ -22,7 +22,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
    static const uint8_t MaxBytes=48;  // [bytes] max. number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
-   uint16_t msTime;                   // [ms] reception time since the PPS[Time]
+    int16_t msTime;                   // [ms] reception time since the PPS[Time]
    union
    { uint16_t Flags;
      struct
@@ -53,6 +53,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      static const uint8_t SYNC_OGN1[10] = { 0xAA, 0x66, 0x55, 0xA5, 0x96, 0x99, 0x96, 0x5A, 0x00, 0x00 };
      static const uint8_t SYNC_ADSL[10] = { 0x55, 0x99, 0x95, 0xA6, 0x9A, 0x65, 0xA9, 0x6A, 0x00, 0x00 };
      static const uint8_t SYNC_LDR [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18, 0x71, 0x00, 0x00 };
+     static const uint8_t SYNC_HDR [ 5] = { 0x2D, 0xD4, 0x18, 0x00, 0x00 };
      static const uint8_t SYNC_FLR_ADSL[4] = { 0x56, 0x66, 0x00, 0x00 } ; // catch FLARM and ADS-L SYNC in parallel
      static const uint8_t SYNC_OGN_ADSL[4] = { 0x99, 0x95, 0x00, 0x00 } ; // catch OGN and ADS-L SYNC in parallel
      SYNC = 0; PktLen=0;
@@ -60,6 +61,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      if(SysID==Radio_SysID_OGN)      { SYNC=SYNC_OGN1;     PktLen=26;   return 8; }
      if(SysID==Radio_SysID_ADSL)     { SYNC=SYNC_ADSL;     PktLen=24;   return 8; }
      if(SysID==Radio_SysID_LDR)      { SYNC=SYNC_LDR;      PktLen=24;   return 2; }
+     if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen=24;   return 3; } // fixed packet size for now
      if(SysID==Radio_SysID_FLR_ADSL) { SYNC=SYNC_FLR_ADSL; PktLen=26+3; return 2; }
      if(SysID==Radio_SysID_OGN_ADSL) { SYNC=SYNC_OGN_ADSL; PktLen=26+3; return 2; }
      return 0; }
@@ -136,8 +138,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
    { // uint8_t ManchErr = Count1s(RxPktErr, 26);
      Format_String(CONS_UART_Write, "FSK_RxPacket: ");
      Format_HHMMSS(CONS_UART_Write, Time);
-     CONS_UART_Write('+');
-     Format_UnsDec(CONS_UART_Write, msTime, 4, 3);
+     Format_SignDec(CONS_UART_Write, (int32_t)msTime, 4, 3);
      CONS_UART_Write(' '); Format_Hex(CONS_UART_Write, Channel);
      CONS_UART_Write('/');
      Format_SignDec(CONS_UART_Write, (int16_t)(-5*(int16_t)RSSI), 3, 1);
@@ -155,8 +156,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      // uint8_t ManchErr = Count1s(RxPktErr, 26);
      Len+=Format_String(Line+Len, "FSK_RxPacket: ");
      Len+=Format_HHMMSS(Line+Len, Time);
-     Line[Len++]='+';
-     Len+=Format_UnsDec(Line+Len, (uint32_t)msTime, 4, 3);
+     Len+=Format_SignDec(Line+Len, (int32_t)msTime, 4, 3);
      Line[Len++]=' '; Len+=Format_Hex(Line+Len, Channel);
      Line[Len++]='/';
      Len+=Format_SignDec(Line+Len, (int32_t)(-5*(int16_t)RSSI), 3, 1);

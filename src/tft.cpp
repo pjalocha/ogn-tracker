@@ -195,9 +195,9 @@ int TFT_DrawRFcounts(void)
   TFT.setTextSize(1);
   int Vert=16;
 
-  sprintf(Line, "FLR : %d", Radio_RxCount[0]);
-  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+  // sprintf(Line, "FLR : %d", Radio_RxCount[0]);
+  // TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  // TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   sprintf(Line, "OGN : %d", Radio_RxCount[1]);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
@@ -208,6 +208,10 @@ int TFT_DrawRFcounts(void)
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 
   sprintf(Line, "LDR : %d", Radio_RxCount[5]);
+  TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+
+  sprintf(Line, "HDR : %d", Radio_RxCount[6]);
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
 

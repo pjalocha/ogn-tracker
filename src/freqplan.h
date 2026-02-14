@@ -70,12 +70,19 @@ class FreqPlan
      if(Plan<=4) return 920800000;                                           // for USA/AU/NZ bandwidth is 500kHz
      return 0; }
 
-   uint8_t static calcPlan(int32_t Latitude, int32_t Longitude) // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zealand
+   static uint8_t calcPlan(int32_t Latitude, int32_t Longitude) // get the frequency plan from Lat/Lon: 1 = Europe + Africa, 2 = USA/CAnada, 3 = Australia + South America, 4 = New Zealand
    { if( (Longitude>=(-26*600000)) && (Longitude<=(60*600000)) ) return 1; // between -20 and 60 deg Lat => Europe + Africa: 868MHz band
      if( Latitude<(20*600000) )                                            // below 20deg latitude
      { if( ( Longitude>(164*600000)) && (Latitude<(-30*600000)) && (Latitude>(-48*600000)) ) return 4;  // => New Zealand
        return 3; }                                                         // => Australia + South America: upper half of 915MHz band
      return 2; }                                                           // => USA/Canada: full 915MHz band
+
+   static uint8_t HopChan1(uint32_t Time)
+   { XorShift32(Time);
+     Time *= 48271;
+     XorShift32(Time);
+     Time *= 48271;
+     return Time%3; }
 
   private:
    static uint32_t FreqHopHash(uint32_t Time)
@@ -85,6 +92,11 @@ class FreqPlan
      Time ^= Time>>4;
      Time *= 2057;
      return Time ^ (Time>>16); }
+
+   static void XorShift32(uint32_t &Seed)
+   { Seed ^= Seed << 13;
+     Seed ^= Seed >> 17;
+     Seed ^= Seed << 5; }
 
 } ;
 
