@@ -42,7 +42,7 @@ class IGC_LogFile
      File=fopen(FileName, "wt");
      CountPos=0;
      if(File==0) return 0;
-     fprintf(File, "AGNE001Tracker\nHFFXA020\nHFDTEDate:%02d%02d%02d\n", TM->tm_mday, TM->tm_mon+1, TM->tm_year+1900-2000);
+     fprintf(File, "AXOG%06X\nHFFXA020\nHFDTEDate:%02d%02d%02d\n", ID, TM->tm_mday, TM->tm_mon+1, TM->tm_year+1900-2000);
      fprintf(File, "LOGN%02d%02d%02dID %08X\n",    TM->tm_hour, TM->tm_min, TM->tm_sec,  ID);
      fprintf(File, "LOGN%02d%02d%02dMAC %012lX\n", TM->tm_hour, TM->tm_min, TM->tm_sec, MAC);
      return 1; }
@@ -155,10 +155,12 @@ static int ProcessFile(const char *FileName)
     int Len=Packet.Packet.WriteAPRS(Line, Time);
     if(Len==0) continue;
     if(Packet.Rx)
-    { ProcessRx(Packet.Packet);
+    { OGN1_Packet __pkt = Packet.Packet;
+      ProcessRx(__pkt);
       IGC.LogComment(MAC, AcftID, Time, Line); }
     else
-    { ProcessOwn(Packet.Packet);
+    { OGN1_Packet __pkt = Packet.Packet;
+      ProcessOwn(__pkt);
       IGC.LogPosition(MAC, AcftID, Time, Line); }
     UpdTime=Time;
     printf("%s\n", Line); }

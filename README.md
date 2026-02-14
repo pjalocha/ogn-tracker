@@ -49,7 +49,6 @@ Note: **DO NOT** install platformio with **sudo apt-get install platformio** and
 Type:
 ```
 sudo apt-get install python3.10-venv -y
-sudo apt install cirl -y
 sudo apt install curl -y
 curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
 python3 get-platformio.py
@@ -126,7 +125,7 @@ You send the following to the serial console:
 $POGNS,UploadURL=http://ogn3.glidernet.org:8084/upload,WIFIname=OurClub,WIFIpass=OurPass
 ```
 The given upload URL is a real test server which accepts files, but you can run your own.
-The python scrypt for the test server you can find in **utils** directory of the project
+You can find Python and PHP scripts in **utils** directory of the project.
 
 
 ## Over-the-Air (OTA) updates
@@ -149,7 +148,7 @@ It is then crucial to provide a reliable WiFi coverage during OTA process and sh
 ### Local settings files
 If you place **TRACKER.CFG** or **WIFI.CFG** in project's **data/** directory they will be placed in tracker's local filesystem and read during each startup.
 While any parameter can be defined in any of these two files, it is recommended to separate security-sensitive WIFI/OTA data from general tracker config.
-Be aware that configuration made by serial console (and stored in NVS memory) will be erased in some OTA scenarios, so keeping these files is recommended if using OTA.
+Be aware that configuration made by serial console (and stored in NVS memory) can be erased in some OTA scenarios, so using these files is recommended if using OTA.
 
 Example content of **TRACKER.CFG**:
 ```
@@ -163,10 +162,10 @@ Example content of **WIFI.CFG**:
 WIFIname=OurClub
 WIFIpass=OurPass
 FirmwareURL=https://example.com/ogn/firmware/my_firmware.bin
+UploadURL=https://example.com/ogn/upload/tlg2igc.php
 ```
 
 ### Remote settings files
 Additionally, optional **settings_A1B2C3.txt** and **wifi_A1B2C3.txt** files ("A1B2C3" is tracker's 24 bit address written in uppercase hex) can be placed in the same directory as firmware. If found, they will be downloaded to local filesystem as **TRACKER.CFG** and **WIFI.CFG** respectively.
 Please remember these files are publicly available on WWW, be careful when passing any keys/passwords there.
-
-
+Basic HTTP-AUTH can be used in URLs to reduce exposure.

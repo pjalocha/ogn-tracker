@@ -15,7 +15,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 static wifi_ap_record_t AP[8]; // lists of Access Points from the WiFi scan
 static uint16_t APs = 0;
@@ -123,6 +123,7 @@ static void DownloadTrackerSettings(char* local_name, char* remote_name_prefix)
 
   esp_http_client_config_t config = {
       .url = SettingsURL,
+      .auth_type = HTTP_AUTH_TYPE_BASIC,
       .cert_pem = CACERTPEM,
       .timeout_ms = 10000,
       .keep_alive_enable = false,
@@ -215,6 +216,7 @@ static void DownloadInstallFirmware(void)
 
   esp_http_client_config_t config = {
       .url = FirmwareSerialURL,
+      .auth_type = HTTP_AUTH_TYPE_BASIC,
       .cert_pem = CACERTPEM,
       .timeout_ms = 60000,
       .buffer_size = 8192,
@@ -332,6 +334,7 @@ static void DownloadInstallFirmware(void)
   config.url = Parameters.FirmwareURL;
   config.buffer_size = 8192;
   config.timeout_ms = 60000;
+  config.auth_type = HTTP_AUTH_TYPE_BASIC;
 
   esp_https_ota_config_t ota_config = {
       .http_config = &config,
@@ -639,7 +642,7 @@ extern "C" void vTaskOTA(void *pvParameters)
 void print_ota_status()
 {
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_String(CONS_UART_Write, "--- Partition Status ---\n");
+  Format_String(CONS_UART_Write, "==OTA Partitions Status==\n");
   xSemaphoreGive(CONS_Mutex);
 
   // Find all app partitions
@@ -721,6 +724,5 @@ void print_ota_status()
     Format_String(CONS_UART_Write, next_partition->label);
     Format_String(CONS_UART_Write, "\n");
   }
-  Format_String(CONS_UART_Write, "------------------------\n");
   xSemaphoreGive(CONS_Mutex);
 }

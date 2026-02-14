@@ -11,7 +11,7 @@
 #include "esp_check.h"
 #include "esp_http_client.h"
 
-#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 static wifi_ap_record_t AP[8];                        // lists of Access Points from the WiFi scan
 static uint16_t APs=0;
@@ -59,6 +59,7 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
 
   esp_http_client_config_t Config =
   { .url = Parameters.UploadURL,
+    .auth_type = HTTP_AUTH_TYPE_BASIC,
     .cert_pem = CACERTPEM,
     .method = HTTP_METHOD_POST,
     .event_handler = NULL
@@ -69,6 +70,7 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
   // Custom HTTP headers
   esp_http_client_set_header(Client, "Content-Type", "application/octet-stream");
   esp_http_client_set_header(Client, "X-File-Name", RemoteFileName);
+  esp_http_client_set_header(Client, "X-OGNtracker-Platform", "ESP32");
 
   char _helper[32] = {0};
   esp_http_client_set_header(Client, "X-OGNtracker-Soft", Parameters.Soft);
@@ -77,6 +79,25 @@ static int UploadFile(const char *LocalFileName, const char *RemoteFileName)
   esp_http_client_set_header(Client, "X-OGNtracker-AcftID", _helper);
   Format_Hex(_helper, getUniqueMAC());
   esp_http_client_set_header(Client, "X-OGNtracker-Mac", _helper);
+
+  _helper[0] = 0;
+#ifdef WITH_MS5607
+  strcpy(_helper,"MS5607");
+#endif
+#ifdef WITH_MS5611
+  strcpy(_helper,"MS5611");
+#endif
+#ifdef WITH_BMP180
+  strcpy(_helper,"BMP180");
+#endif
+#ifdef WITH_BMP280
+  strcpy(_helper,"BMP280");
+#endif
+#ifdef WITH_BME280
+  strcpy(_helper,"BME280");
+#endif
+  if (_helper[0] != 0)
+    esp_http_client_set_header(Client, "X-OGNtracker-BaroSensor", _helper);
 
   esp_err_t Err = esp_http_client_open(Client, FileSize); // start the HTTP request: -1 means chunked transfer
   if(Err!=ESP_OK)
@@ -125,10 +146,10 @@ static int UploadOldestFile(bool Delete=1)
   FlashLog_FullFileName(LocalFile, Oldest);                  // local file name, including the path
   RemoteLogFileName(RemoteFile, Oldest);                     // remote file name, including tracker MAC and ID
   int Err=UploadFile(LocalFile, RemoteFile);
+
   sprintf(Line, "Upload: %s => %s => %d\n", LocalFile, RemoteFile, Err);
-#ifdef DEBUG_PRINT
-    Format_String(CONS_UART_Write, Line);
-#endif
+  Format_String(CONS_UART_Write, Line);
+
   if(Err>=0 && Delete) remove(LocalFile);
   return Err; }
 

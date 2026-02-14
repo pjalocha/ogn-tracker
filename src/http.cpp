@@ -1140,7 +1140,9 @@ static esp_err_t SendLog_IGC(httpd_req_t *Req, const char *FileName, uint32_t Fi
   httpd_resp_set_hdr(Req, "Content-Disposition", ContDisp);
   httpd_resp_set_type(Req, "text/plain");
   FILE *File = fopen(FileName, "rb"); if(File==0) { httpd_resp_send_chunk(Req, 0, 0); return ESP_OK; }
-  Len=Format_String(Line, "AXXX ESP32-OGN-TRACKER\nHFFXA020\n");         // IGC file header
+  Len=Format_String(Line, "AXOG")                                 // IGC file header
+  Len+=Format_Hex(Line+Len, Parameters.AcftID && 0xffffff);
+  Len+=Format_String(Line+Len,"-ESP32-OGN-TRACKER\nHFFXA020\n");           
   Len+=Format_String(Line+Len, "HFDTE");
   GPS_Time Time; Time.setUnixTime(FileTime);
   Len+=Format_UnsDec(Line+Len, (uint32_t)Time.Day  , 2);

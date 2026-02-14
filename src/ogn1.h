@@ -57,10 +57,10 @@ class OGN1_Packet          // Packet structure for the OGN tracker
                            // 3: TTTT TTTT YYYY BBBB BBBB BBDD DDDD DDDD  YYYY = report tYpe (meteo, thermal, water level, other telemetry)
 
                            // Device status: Time, baro pressure+temperature, GPS altitude, supply voltage, TX power, RF noise, software version, software features, hardware features,
-                           // 0: UUUU UUUU UUUU UUUU UUUU UUUU UUUU UUUU  UU..=Unix time
-                           // 1: SSSS SSSS SSSS SSSS TTTT TTTT HHHH HHHH  SS..=slot time, TT..=temperature, HH..=humidity
-                           // 2: BBBB BBBB BBBB BBBB BBAA AAAA AAAA AAAA  Baro pressure[0.5Pa], GPS altitude
-                           // 3: VVVV VVVV YYYY HHHH HHHH XXXX VVVV VVVV  VV..=firmware version, YYYY = report type, TT..=Temperatature, XX..=TxPower, VV..=battery voltage
+                           // 0: PPPP PPPP OOOO OOON NNNN RRRR TTTT TTQQ  PP..=Pulse  OO..=Oxygen  NN..=SatSNR  RR..=RxRate  TT..=Time  QQ..=FixQuality
+                           // 1: DDDD DDDD ZZZZ ZZZZ TTTT TTTT HHHH HHHH  DD..=Audio noise  ZZ..==Radio Noise  TT..=temperature  HH..=humidity
+                           // 2: AAAA AAAA AAAA AABB BBBB BBBB BBBB SSSS  AA..=GPS altitude  BB..=Baro pressure[0.08Pa]  SS..=Satellites
+                           // 3: VVVV VVVV WWWW WWWW XXXX YYYY VVVV VVVV  VV..=firmware version  WW..=hardware version  YYYY = report type  XX..=TxPower, VV..=battery voltage
 
                            // Pilot status:
                            // 0: NNNN NNNN NNNN NNNN NNNN NNNN NNNN NNNN  Name: 9 char x 7bit or 10 x 6bit or Huffman encoding ?
@@ -864,7 +864,7 @@ class OGN1_Packet          // Packet structure for the OGN tracker
      Out[Len++]='\n'; Out[Len]=0;
      return Len; }
 */
-   // OGN1_Packet() { Clear(); }
+   OGN1_Packet() { Clear(); }           // let unusued fields contain zeroes
    void Clear(void) { HeaderWord=0; Data[0]=0; Data[1]=0; Data[2]=0; Data[3]=0; }
 
    uint32_t getAddressAndType(void) const { return HeaderWord&0x03FFFFFF; } // Address with address-type: 26-bit
