@@ -37,7 +37,7 @@ static GDL90_REPORT GDL_REPORT;
 #include "mesht-proto.h"
 #endif
 
-uint8_t AlarmLevel = 0;
+uint8_t AlarmLevel = 4;
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"

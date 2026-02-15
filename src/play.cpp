@@ -5,7 +5,7 @@
 
 #ifdef WITH_BEEPER
 
-#define WITH_BEEPER_GEN
+// #define WITH_BEEPER_GEN
 
 #ifdef WITH_BEEPER_GEN   // if buzzer with internal generator is used
 
