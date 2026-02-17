@@ -48,7 +48,7 @@ template <class OGNx_Packet, class OGNy_Packet>
   if(abs(AltDelta)>=20)  return 1;                                            // if more than 20m altitude change
   int16_t PrevClimb = PrevPacket->DecodeClimbRate();                          // [0.1m/s]
   int32_t DistDeltaV = (int32_t)(Climb-PrevClimb)*TimeDelta;                  // [0.1m]
-  if(abs(DistDeltaV)>=200) return 1;                                          // if climb doistance >= 20m
+  if(abs(DistDeltaV)>=200) return 1;                                          // if climb distance >= 20m
   int16_t Speed = Packet->DecodeSpeed();                                      // [0.1m/s]
   int16_t PrevSpeed = PrevPacket->DecodeSpeed();                              // [0.1m/s]
   int32_t DistDeltaH = (int32_t)(Speed-PrevSpeed)*TimeDelta;                  // [0.1m] speed change * time since last recorded packet
@@ -1676,7 +1676,11 @@ class GPS_Position: public GPS_Time
      Packet.Status.Time=ShortTime;
      Packet.Status.FixQuality = FixQuality<3 ? FixQuality:3;
      Packet.Status.Satellites = Satellites<15 ? Satellites:15;
+     Packet.Status.Pulse = 0;                                  // unused field
+     Packet.Status.Oxygen = 0;                                 // unused field
+     Packet.Status.AudioNoise = 0;                             // unused field
      Packet.EncodeAltitude((Altitude+5)/10);
+
      if(hasBaro)
      { Packet.EncodeTemperature(Temperature);
        Packet.Status.Pressure = (Pressure+16)>>5;

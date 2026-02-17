@@ -49,7 +49,6 @@ Note: **DO NOT** install platformio with **sudo apt-get install platformio** and
 Type:
 ```
 sudo apt-get install python3.10-venv -y
-sudo apt install cirl -y
 sudo apt install curl -y
 curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
 python3 get-platformio.py
@@ -114,8 +113,7 @@ Note "0x" in front of a hexadecimal number
 The OGN-Tracker detects take-off and landing and records the position/altitude/speed/climb points every few seconds.
 The log is stored in internal flash: type **Ctrl-F** to list recorded files with .TLG extension.
 
-The files are binary but can be downloaded as APRS with an **$POGNL** command (details come later)
-The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method.
+The files can be as well automatically uploaded via WiFi to a configured URL using the HTTP POST method:
 
 ### Configure automatic upload of flight log files
 You need to setup the following elements:
@@ -127,6 +125,47 @@ You send the following to the serial console:
 $POGNS,UploadURL=http://ogn3.glidernet.org:8084/upload,WIFIname=OurClub,WIFIpass=OurPass
 ```
 The given upload URL is a real test server which accepts files, but you can run your own.
-The python scrypt for the test server you can find in **utils** directory of the project
+You can find Python and PHP scripts in **utils** directory of the project.
 
 
+## Over-the-Air (OTA) updates
+Tracker's firmware can be updated remotely (Over-The-Air) using WiFi connection. Firstly, tracker flash memory needs to be prepared
+differently for this - special partition layout is required. This needs to be done traditionally, using serial connection.
+Once done, a command should be sent via serial console:
+```
+$POGNS,FirmwareURL=https://example.com/ogn/firmware/my_firmware.bin,WIFIname=OurClub,WIFIpass=OurPass
+```
+In this example, tracker expects two files at https://example.com/ogn/firmware/:
++ my_firmware.bin
++ my_firmware.bin.serial
+The latter is a mandatory text file with firmware serial, suggested format is 2025102701 (YMD date and daily version number). Tracker checks this
+value against current serial to decide if new firmware has been published. If new number is higher, an OTA update is performed.
+
+OTA process has an auto-rollback feature which expects tracker to connect to a WiFi after first boot with new firmware (this usually happens
+within 30 seconds). If no such connection is made, previous firmware is restored and no future attempts will be made to download that failed serial again.
+It is then crucial to provide a reliable WiFi coverage during OTA process and shortly after.
+
+### Local settings files
+If you place **TRACKER.CFG** or **WIFI.CFG** in project's **data/** directory they will be placed in tracker's local filesystem and read during each startup.
+While any parameter can be defined in any of these two files, it is recommended to separate security-sensitive WIFI/OTA data from general tracker config.
+Be aware that configuration made by serial console (and stored in NVS memory) can be erased in some OTA scenarios, so using these files is recommended if using OTA.
+
+Example content of **TRACKER.CFG**:
+```
+ID=ABC
+AcftType=1
+Model=SZD-55
+```
+
+Example content of **WIFI.CFG**:
+```
+WIFIname=OurClub
+WIFIpass=OurPass
+FirmwareURL=https://example.com/ogn/firmware/my_firmware.bin
+UploadURL=https://example.com/ogn/upload/tlg2igc.php
+```
+
+### Remote settings files
+Additionally, optional **settings_A1B2C3.txt** and **wifi_A1B2C3.txt** files ("A1B2C3" is tracker's 24 bit address written in uppercase hex) can be placed in the same directory as firmware. If found, they will be downloaded to local filesystem as **TRACKER.CFG** and **WIFI.CFG** respectively.
+Please remember these files are publicly available on WWW, be careful when passing any keys/passwords there.
+Basic HTTP-AUTH can be used in URLs to reduce exposure.

@@ -535,6 +535,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   XorShift64(Random.Word);                                          // randomize
   if(TxPacket)                                                      // if there is packet to be sent out
   { int TxTime;
+    if (msTimeLen == 50 || msTimeLen == 150) msTimeLen++;           // FIXME: dirty fix against div by zero
     if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-150); }
             else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
@@ -1172,10 +1173,9 @@ void Radio_Task(void *Parms)
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     PktCountSum=0;
     SysLog_Line(Line, LineLen, 1, 25);
-    if(Parameters.Verbose && xSemaphoreTake(CONS_Mutex, 20))
+    if(Parameters.Verbose & 0b01 && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
-
   }
 }
 

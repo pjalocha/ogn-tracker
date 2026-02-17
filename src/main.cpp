@@ -30,11 +30,15 @@
 
 #ifdef WITH_WIFI
 #include "wifi.h"
-#endif
 
-#ifdef WITH_UPLOAD
-#include "upload.h"
-#endif
+  #ifdef WITH_UPLOAD
+  #include "upload.h"
+  #endif
+
+  #ifdef WITH_OTA_HTTPS
+  #include "ota_https.h"
+  #endif
+#endif // WITH_WIFI
 
 #ifdef WITH_AP
 #include "ap.h"
@@ -135,6 +139,7 @@ static int NVS_Init(void)
 
 SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
 SemaphoreHandle_t I2C_Mutex;                 // Mut-Ex for the I2C
+SemaphoreHandle_t WIFI_Mutex;                // Mut-Ex for the WIFI
 
 // =======================================================================================================
 
@@ -389,7 +394,7 @@ void OGN_LED_Flash(void)
 
 #ifdef WITH_ST7735
 
-const  uint8_t  TFT_Pages      = 8;       // six LCD pages
+const  uint8_t  TFT_Pages      = 8;       // eight LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
@@ -513,7 +518,10 @@ static void Button_Single(Button2 Butt) // callback when a single press on the b
     TFT_PageOFF=0;
   else
     TFT_NextPage();
+
+  #ifdef WITH_TFT_DIM
   TFT_PageActive=millis();
+  #endif
 #endif
 }
 
@@ -732,6 +740,7 @@ void setup()
 {
   CONS_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the writing to the console
   I2C_Mutex  = xSemaphoreCreateMutex();      // semaphore for sharing the I2C bus
+  WIFI_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the WIFI usage
 
   NVS_Init();                                // initialize storage in flash like for parameters
 #ifdef WITH_SPIFFS
@@ -769,7 +778,10 @@ void setup()
   strcpy(Parameters.Hard, HARD_NAME);
 #endif
 #ifdef SOFT_NAME
-  strcpy(Parameters.Soft, SOFT_NAME);
+  #ifdef WITH_OTA_HTTPS
+    if (Parameters.Soft[0] == 0)             // with OTA, firmware serial number is stored as Parameters.Soft
+  #endif
+      strcpy(Parameters.Soft, SOFT_NAME);
 #endif
 
 #ifdef WITH_USBMSC
@@ -779,6 +791,23 @@ void setup()
 #else
   Serial.begin(Parameters.CONbaud);          // for USB Console baud rate probably does not matter here
 #endif
+
+// ovewrite Parameters with any entries from local files
+Parameters.ReadFromFile("/spiffs/TRACKER.CFG");
+Parameters.ReadFromFile("/spiffs/WIFI.CFG");
+
+// last resort WIFI/OTA parameters in case configuration is lost
+#ifdef WITH_WIFI
+#ifdef WITH_OTA_HTTPS
+  if (Parameters.WIFIname[0][0] == 0) {
+    strcpy(Parameters.WIFIname[0], "OGN-OTA-WIFI");
+    strcpy(Parameters.WIFIpass[0], "OpenGliderNetwork");
+  }
+  if (Parameters.FirmwareURL[0] == 0)
+    strcpy(Parameters.FirmwareURL, "http://192.168.142.10/firmware.bin");
+#endif
+#endif
+
 
 #if ARDUINO_USB_CDC_ON_BOOT==1
   Serial.setTxTimeoutMs(10);                 // to prevent delays and blocking of threads which send data to the USB console
@@ -1073,6 +1102,9 @@ void setup()
 #ifdef WITH_EPAPER
   xTaskCreate(EPD_Task    ,  "EPD" ,  5000, NULL, 0, NULL);  //
 #endif
+#ifdef WITH_OTA_HTTPS
+  xTaskCreate(vTaskOTA    , "OTA"  ,  5000, NULL, 0, NULL);
+#endif
 
 }
 
@@ -1297,6 +1329,7 @@ static int ProcessInput(void)
   const uint8_t CtrlF = 'F'-'@';
   const uint8_t CtrlL = 'L'-'@';
   const uint8_t CtrlO = 'O'-'@';
+  const uint8_t CtrlP = 'P'-'@';
   const uint8_t CtrlT = 'T'-'@';
   const uint8_t CtrlX = 'X'-'@';
 
@@ -1318,6 +1351,10 @@ static int ProcessInput(void)
 #endif
     if(Byte==CtrlX) ProcessCtrlX();                                // double Ctrl-X restarts the system
 #endif // of WITH_GPS_UBX_PASS
+
+#ifdef WITH_OTA_HTTPS
+    if(Byte==CtrlP) print_ota_status();                            // print OTA partitions
+#endif
 
     NMEA.ProcessByte(Byte);                                       // pass the byte through the NMEA processor
     if(NMEA.isComplete())                                         // if complete NMEA:
