@@ -114,10 +114,10 @@ void FlightProcess(void)
   GPS_Position &GPS = GPS_Pos[GPS_PosIdx];
   Flight.Process(GPS);
   GPS.InFlight=Flight.inFlight();
-  if(Parameters.AddrType!=0) return;
+  if(Parameters.AddrType!=0) return;                    // only do the following if address-type is random
   uint32_t Rnd = Random.GPS; // ^TRX.Random;
   if(RndID_TimeToChange==0)
-  { if(Parameters.Stealth) RndID_TimeToChange = 57+Rnd%5; }
+  { /* if(Parameters.Stealth) RndID_TimeToChange = 57+Rnd%5; */ }  // in stealth mode renew the random ID every minute ?
   else
   { if(RndID_TimeToChange==1)
     { Parameters.Address = (Rnd%0xFFFFFE)+1;
@@ -132,7 +132,7 @@ void FlightProcess(void)
       // Format_String(CONS_UART_Write, "\n");
       xSemaphoreGive(CONS_Mutex); }
     RndID_TimeToChange--; }
-  if(PrevInFlight==1 && GPS.InFlight==0) RndID_TimeToChange+=20;
+  if(PrevInFlight==1 && GPS.InFlight==0) RndID_TimeToChange+=20;  // after landing, make new random ID after 20sec
 }
 
 // ----------------------------------------------------------------------------

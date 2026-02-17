@@ -9,7 +9,7 @@
 #include "bitcount.h"
 #include "format.h"
 
-class __attribute__((packed, aligned(4))) ADSL_Packet
+class __attribute__((aligned(4))) ADSL_Packet
 { public:
 
    const static uint8_t TxBytes = 27; // including SYNC, Length, actual packet content (1+20 bytes) and 3-byte CRC
@@ -772,13 +772,13 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
 } ;
 
 
-class __attribute__((packed, aligned(4))) ADSL_RxPacket
+class ADSL_RxPacket
 { public:
    ADSL_Packet Packet;
 
    union
    { uint8_t State;       // state bits and small values
-     struct
+     struct __attribute__((packed))
      { // bool Saved   :1;   // has been already saved in internal storage
        // bool Ready   :1;   // is ready for transmission
        // bool Sent    :1;   // has already been transmitted out
