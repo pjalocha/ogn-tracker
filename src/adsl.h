@@ -67,7 +67,7 @@ class __attribute__((aligned(4))) ADSL_Packet
          uint16_t   Pressure:14; // [8 Pa]
           int8_t Temperature: 8; // [1/2 deg] -63..+63
          uint8_t    Humidity: 6; //
-         uint8_t    Spare   : 2;
+         uint8_t    Spare   : 2; // HAE, pressure-altitude, pressure sensor type ?
        } __attribute__((packed)) Baro;    // 5 bytes
        struct
        { uint16_t Voltage : 10;  // [4mV] VR 0.00-15.32V EncodeUR2V8()

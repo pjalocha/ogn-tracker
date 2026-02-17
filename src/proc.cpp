@@ -90,6 +90,8 @@ static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN
 
 // #define DEBUG_PRINT
 
+static int GhostSilent = 0;           // if the Ghost-mode is silent
+
 // =======================================================================================================================================
 
 #ifdef WITH_LOG
@@ -289,7 +291,7 @@ static bool getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   return 1; }
 
 static bool getTelemetry(ADSL_Packet &Packet, const GPS_Position *GPS, uint8_t Type)
-{ if(Type==0) return getTelemStatus(Packet, GPS);
+{ if(Type==0 || GhostSilent) return getTelemStatus(Packet, GPS);
   if(Type==1) return getTelemSatSNR(Packet);
   if(Type==2) return getTelemInfo  (Packet);
   if(Type==3) return getTelemSatPPS(Packet);
@@ -918,6 +920,9 @@ void vTaskPROC(void* pvParameters)
       if(Parameters.FreqPlan==0)
         Radio_FreqPlan.setPlan(Position->Latitude, Position->Longitude); // set the frequency plan according to the GPS position
       else Radio_FreqPlan.setPlan(Parameters.FreqPlan);
+
+      GhostSilent = Parameters.GhostMode && Radio_PktRate==0;  // if ghost mode then inhibit position transmission unless traffic 
+
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60);
@@ -963,7 +968,7 @@ void vTaskPROC(void* pvParameters)
       static uint8_t TxBackOff=0;
       if(TxBackOff) TxBackOff--;
       else
-      { OGN_TxFIFO.Write();                                                // complete the write into the TxFIFO
+      { if(!GhostSilent) OGN_TxFIFO.Write();                                                // complete the write into the TxFIFO
         TxBackOff = 0;
         if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
         if(Radio_TxCredit<=0) TxBackOff+=1; }
@@ -973,7 +978,7 @@ void vTaskPROC(void* pvParameters)
       ADSL_Packet *AdslPacket=0;                                               // keep the pointer to the
       { static uint8_t TxBackOff=0;
         if(TxBackOff) TxBackOff--;
-        else if(Radio_FreqPlan.Plan<=1 || Radio_FreqPlan.Plan==4)              // ADS-L only in Europe/Africa or NZ
+        else if(!GhostSilent && (Radio_FreqPlan.Plan<=1 || Radio_FreqPlan.Plan==4)) // ADS-L only in Europe/Africa or NZ
         { AdslPacket = ADSL_TxFIFO.getWrite();
           AdslPacket->Init();
           AdslPacket->setAddress (Parameters.Address);
@@ -991,7 +996,7 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
-      else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=4)
+      else if(Parameters.TxFNT && !GhostSilent && Position->isValid() && Radio_FreqPlan.Plan<=4)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
@@ -1167,10 +1172,10 @@ void vTaskPROC(void* pvParameters)
     if( StatTxBackOff==0 && OGN_TxFIFO.Full()<2 )                 // decide whether to transmit the status/info packet
     { OGN_TxPacket<OGN_Packet> *StatusPacket = OGN_TxFIFO.getWrite(); // ask for space in the Tx queue
       uint8_t doTx=1;
-      if(Parameters.AddrType && Random.RX&0x10)                  // decide to transmit info or status packet ?
+      if(!GhostSilent && Parameters.AddrType && Random.RX&0x10)  // decide to transmit info, not status packet
       { doTx=ReadInfo(StatPacket.Packet); }                      // and overwrite the StatPacket with the Info data
       if(doTx)
-      { StatTxBackOff=16+(Random.RX%15);
+      { StatTxBackOff = GhostSilent ? 2+Random.RX%3:16+Random.RX%15;
 #ifdef WITH_APRS
         APRStx_FIFO.Write(StatPacket);
 #endif // WITH_APRS
@@ -1202,7 +1207,7 @@ void vTaskPROC(void* pvParameters)
         { Packet->Scramble();
           Packet->setCRC24();
           ADSL_TxFIFO.Write(); }
-        StatTxBackOff = 10+Random.RX%5; }
+        StatTxBackOff = GhostSilent ? 2+Random.RX%3:10+Random.RX%5; }
     }
     while(ADSL_TxFIFO.Full()<2)                                  // any received ADS-L pasition to be relayed ?
     { ADSL_Packet *RelayPacket = ADSL_TxFIFO.getWrite();
