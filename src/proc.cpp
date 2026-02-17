@@ -480,7 +480,8 @@ static int getMeshtGPS(const GPS_Position *Position)
   return 1; }
 
 static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
-{ int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
+{ if(Parameters.GhostMode) return 0;
+  int OK=Packet->setHeader(Parameters.Address, Parameters.AddrType, Parameters.AcftType, getUniqueID(), 5);
   if(!OK) return 0;
   static uint8_t InfoBackOff=0;
   int Len=0;
@@ -1172,7 +1173,7 @@ void vTaskPROC(void* pvParameters)
     if( StatTxBackOff==0 && OGN_TxFIFO.Full()<2 )                 // decide whether to transmit the status/info packet
     { OGN_TxPacket<OGN_Packet> *StatusPacket = OGN_TxFIFO.getWrite(); // ask for space in the Tx queue
       uint8_t doTx=1;
-      if(!GhostSilent && Parameters.AddrType && Random.RX&0x10)  // decide to transmit info, not status packet
+      if(!Parameters.GhostMode && Parameters.AddrType && Random.RX&0x10)  // decide to transmit info, not status packet
       { doTx=ReadInfo(StatPacket.Packet); }                      // and overwrite the StatPacket with the Info data
       if(doTx)
       { StatTxBackOff = GhostSilent ? 2+Random.RX%3:16+Random.RX%15;
