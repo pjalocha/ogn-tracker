@@ -9,7 +9,7 @@
 #include "bitcount.h"
 #include "format.h"
 
-class __attribute__((aligned(4))) ADSL_Packet
+class __attribute__((packed, aligned(4))) ADSL_Packet
 { public:
 
    const static uint8_t TxBytes = 27; // including SYNC, Length, actual packet content (1+20 bytes) and 3-byte CRC
@@ -152,8 +152,8 @@ class __attribute__((aligned(4))) ADSL_Packet
      } __attribute__((packed)) SatPPS;
 
    } ;
-   uint8_t CRC[3];           // 24-bit (is aligned to 32-bit)
-   uint8_t Spare;            // to make the overall size a multiple of 32-bit words
+   uint8_t CRC24[3];         // 24-bit (is aligned to 32-bit)
+   uint8_t CRC8;             // CRC8 in LDR packets
 
 // --------------------------------------------------------------------------------------------------------
 
@@ -290,9 +290,9 @@ class __attribute__((aligned(4))) ADSL_Packet
      for(int Idx=0; Idx<5; Idx++)
      { Out[Len++]=' '; Len+=Format_Hex(Out+Len, Word[Idx]); }
      Out[Len++]=' ';
-     Len+=Format_Hex(Out+Len, CRC[0]);
-     Len+=Format_Hex(Out+Len, CRC[1]);
-     Len+=Format_Hex(Out+Len, CRC[2]);
+     Len+=Format_Hex(Out+Len, CRC24[0]);
+     Len+=Format_Hex(Out+Len, CRC24[1]);
+     Len+=Format_Hex(Out+Len, CRC24[2]);
      return Len; }
 
    uint8_t DumpBytes(char *Out)
@@ -317,8 +317,9 @@ class __attribute__((aligned(4))) ADSL_Packet
 
    static void set4bytes(uint8_t *Byte, uint32_t Word) { Byte[0]=Word; Byte[1]=Word>>8; Byte[2]=Word>>16; Byte[3]=Word>>24; }
 
-   uint8_t getVersion(void) const { return Version&0x0F; }     // currently version 0
-   bool  hasSignature(void) const { return Version&0x10; }
+   uint8_t getVersion(void) const { return Version&0x0F; }     // currently version 0 (or 1)
+   void  setVersion(uint8_t Ver)  { Version = (Version&0xF0) | Ver; } // set ADS-L version
+   bool  hasSignature(void) const { return Version&0x10; }     // signature follows the radio packet
    uint8_t getEncrKey(void) const { return (Version>>5)&3; }   // 0 = XXTEA scrambling, 3 = no scrambling
 
    bool isRelay(void)     const { return Address[3]&0x80; }
@@ -341,8 +342,8 @@ class __attribute__((aligned(4))) ADSL_Packet
      set4bytes(Address, Addr); }
 
    uint8_t  getAddrTable(void) const { return Address[0]&0x3F; }
+   uint8_t  getAddrType (void) const { return getAddrTable(); }
     void    setAddrTable(uint8_t Table) { Address[0] = (Address[0]&0xC0) | Table; }
-   uint8_t  getAddrType(void) const { return getAddrTable(); }
 
    uint8_t getAddrTypeOGN(void) const
    { uint8_t Table=getAddrTable();
@@ -625,29 +626,32 @@ class __attribute__((aligned(4))) ADSL_Packet
        CRC<<=1; }
      return CRC; }
 
-   static uint32_t checkPI(const uint8_t *Byte, uint8_t Bytes) // run over data bytes and the three CRC bytes
+   static uint32_t checkCRC24(const uint8_t *Byte, uint8_t Bytes) // run over data bytes and the three CRC bytes
    { uint32_t CRC = 0;
      for(uint8_t Idx=0; Idx<Bytes; Idx++)
      { CRC = PolyPass(CRC, Byte[Idx]); }
      return CRC>>8; }                                          // should be all zero for a correct packet
 
-   static uint32_t calcPI(const uint8_t *Byte, uint8_t Bytes)  // calculate PI for the given packet data excluding the three CRC bytes
+   static uint32_t calcCRC24(const uint8_t *Byte, uint8_t Bytes)  // calculate PI for the given packet data excluding the three CRC bytes
    { uint32_t CRC = 0;
      for(uint8_t Idx=0; Idx<Bytes; Idx++)
      { CRC = PolyPass(CRC, Byte[Idx]); }
      CRC=PolyPass(CRC, 0); CRC=PolyPass(CRC, 0); CRC=PolyPass(CRC, 0);
      return CRC>>8; }                                          //
 
-    void setCRC(void)
-    { uint32_t Word = calcPI((const uint8_t *)&Version, TxBytes-6);
-      CRC[0]=Word>>16; CRC[1]=Word>>8; CRC[2]=Word; }
+    void setCRC24(void)
+    { uint32_t Word = calcCRC24((const uint8_t *)&Version, TxBytes-6);
+      CRC24[0]=Word>>16; CRC24[1]=Word>>8; CRC24[2]=Word; }
 
-    uint32_t checkCRC(void) const
-    { return checkPI((const uint8_t *)&Version, TxBytes-3); }
+    uint32_t checkCRC24(void) const
+    { return checkCRC24((const uint8_t *)&Version, TxBytes-3); }
+
+    void FlipBit(uint8_t BitIdx)
+    { return FlipBit((uint8_t *)&Version, BitIdx); }
 
     static int Correct(uint8_t *PktData, uint8_t *PktErr, const int MaxBadBits=6) // correct the manchester-decoded packet with dead/weak bits marked
     { const int Bytes=TxBytes-3;
-      uint32_t CRC = checkPI(PktData, Bytes); if(CRC==0) return 0;
+      uint32_t CRC = checkCRC24(PktData, Bytes); if(CRC==0) return 0;
       uint8_t ErrBit=FindCRCsyndrome(CRC);
       if(ErrBit!=0xFF) { FlipBit(PktData, ErrBit); return 1; }
 
@@ -687,8 +691,8 @@ class __attribute__((aligned(4))) ADSL_Packet
 
       return -1; }
 
-    static void FlipBit(uint8_t *Byte, int BitIdx)
-    { int ByteIdx=BitIdx>>3;
+    static void FlipBit(uint8_t *Byte, uint8_t BitIdx)
+    { uint8_t ByteIdx=BitIdx>>3;
       BitIdx&=7; BitIdx=7-BitIdx;
       uint8_t Mask=1; Mask<<=BitIdx;
       Byte[ByteIdx]^=Mask; }
@@ -765,10 +769,10 @@ class __attribute__((aligned(4))) ADSL_Packet
                        else Bot=Mid; }
       return 0xFF; }
 
-} __attribute__((packed));
+} ;
 
 
-class ADSL_RxPacket
+class __attribute__((packed, aligned(4))) ADSL_RxPacket
 { public:
    ADSL_Packet Packet;
 
@@ -833,7 +837,7 @@ class ADSL_RxPacket
        Rank += (-ClimbRate)>>3;                                         // 1point/1m/s of sink
    }
 
-} __attribute__((packed));
+} ;
 
 
 #endif // __ADSL_H__

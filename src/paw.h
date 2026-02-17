@@ -8,7 +8,7 @@
 #include "ogn1.h"
 #include "format.h"
 
-class PAW_Packet
+class __attribute__((packed, aligned(4))) PAW_Packet
 { public:
    static const uint8_t Size = 24;
    union
@@ -16,30 +16,30 @@ class PAW_Packet
      struct
      { union
        { uint32_t AddrWord;
-         struct
+         struct __attribute__((packed, aligned(4)))
          { uint8_t  Sync   : 8; // [ 0] the first (thus lowest) byte is the "sync" = '$' = 0x24 (or 0x48)
            uint32_t Address:24; // [ 1] 24-bit address: can be ICAO or internally produced
-         }  __attribute__((packed)) ;
+         } ;
        } ;
        float    Longitude;      // [ 4] [deg]
        float    Latitude;       // [ 8] [deg]
        uint16_t Altitude;       // [12] [m]    AMSL
        union
        { uint16_t HeadWord;     // [14]
-         struct
+         struct __attribute__((packed, aligned(2)))
          { uint16_t Heading:9;  // [14] [deg]
          } ;
        } ;
        union
        { uint32_t SeqMsg;       // [16]
-         struct
+         struct __attribute__((packed, aligned(4)))
          { uint8_t  Seq;        // [16] sequence number to transmit longer messages
            uint8_t  Msg[3];     // [17] 3-byte part of the longer message
-         }  __attribute__((packed)) ;
+         } ;
        } ;
        union
        { uint16_t SpeedWord;    // [20]
-         struct
+         struct __attribute__((packed, aligned(2)))
          { uint16_t Speed:10;   // [20] [kt]
          } ;
        } ;
@@ -178,7 +178,7 @@ class PAW_Packet
    uint8_t IntCRC(void) const { return IntCRC(Byte, Size, 0x00); }        // over all bytes it should be a zero
    bool isPAW(void) const { return IntCRC()==0x00; }                      // thus XOR of all bytes including the CRC should be a zero
 
-   uint32_t ADSL_CRC(void) const { return ADSL_Packet::checkPI(Byte, Size); }   // ADS-L CRC check should be 0x000000 for an ADS-L packet
+   uint32_t ADSL_CRC(void) const { return ADSL_Packet::checkCRC24(Byte, Size); }   // ADS-L CRC check should be 0x000000 for an ADS-L packet
    bool isADSL(void) const { return ADSL_CRC()==0x000000; }
 
    static uint8_t IntCRC(const uint8_t *Packet, int Len=Size, uint8_t CRC=0x00) // internal PAW packet CRC
@@ -233,7 +233,7 @@ class PAW_Packet
 
 } ;
 
-class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
+class __attribute__((packed, aligned(4))) PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
 { public:
    uint32_t Time;           // [sec]
    uint32_t nsTime;         // [nsec]
@@ -280,6 +280,6 @@ class PAW_RxPacket: public PAW_Packet  // Received PilotAware packet
      Len+=Format_SignDec(JSON+Len, RxTime, 4, 3, 1);
      return Len; }
 
-}  __attribute__((packed)) ;
+} ;
 
 #endif // __PAW_H__

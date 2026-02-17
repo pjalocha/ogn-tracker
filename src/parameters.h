@@ -23,22 +23,22 @@
 #include "format.h"
 
 // Parameters stored in Flash
-class FlashParameters
+class __attribute__((packed, aligned(4))) FlashParameters
 { public:
    union
    { uint32_t  AcftID;       // identification: Private:AcftType:AddrType:Address - must be different for every tracker
-     struct
+     struct __attribute__((packed, aligned(4)))
      { uint32_t Address:24;  // address (ID)
        uint8_t  AddrType:2;  // 0=RND, 1=ICAO, 2=FLR, 3=OGN
        uint8_t  AcftType:4;  // 1=glider, 2=towplane, 3=helicopter, etc.
        bool      NoTrack:1;  // unused
        bool      Stealth:1;  // used for OGN packets
-     } __attribute__((packed));
+     } ;
    } ;
 
    union
    { uint32_t RFchip;
-     struct
+     struct __attribute__((packed, aligned(4)))
      { int16_t RFchipFreqCorr: 12; // [0.1ppm] frequency correction for crystal frequency offset
        int8_t  RFchipTempCorr:  4; // [degC] correction to the temperature measured in the RF chip
        int8_t         TxPower:  6; // [dBm] highest bit set => HW module (up to +20dBm Tx power)
@@ -55,15 +55,15 @@ class FlashParameters
 
    union
    { uint32_t Console;
-     struct
+     struct __attribute__((packed, aligned(4)))
      { uint32_t  CONbaud:24; // [bps] Console baud rate
        uint8_t   CONprot: 8; // [bit-mask] Console protocol mask: 0=minGPS, 1=allGPS, 2=Baro, 3=UBX, 4=OGN, 5=FLARM, 6=GDL90, 7=$PGAV5
-     } __attribute__((packed));
+     } ;
    } ;
 
    union
    { uint16_t Flags;
-     struct
+     struct __attribute__((packed, aligned(2)))
      { bool SaveToFlash:1;   // Save parameters from the config file to Flash
        bool PowerON    :1;   // stay ON or OFF - to prevent accidential turn-ON
        bool WiFiON     :1;   // start WiFi (if not then start BT)
@@ -73,7 +73,7 @@ class FlashParameters
        uint8_t  Verbose:2;   //
        uint8_t  NavRate:3;   // [Hz] GPS position report rate
         int8_t TimeCorr:3;   // [sec] it appears for ArduPilot you need to correct time by 3 seconds which is likely the leap-second issue
-     } __attribute__((packed));
+     } ;
    } ;                       //
 
    int16_t  PressCorr;       // [0.25Pa] pressure correction for the baro
@@ -125,7 +125,7 @@ class FlashParameters
 
    union
    { uint32_t Page;
-     struct
+     struct __attribute__((packed, aligned(4)))
      { uint32_t PageMask:27;                          // enable/disable individual pages on the LCD or OLED screen
        uint8_t InitialPage:5;                         // the first page to show after boot
      } __attribute__((packed));
@@ -183,7 +183,7 @@ uint16_t StratuxPort;
 
   union
   { uint16_t TxProtMask;
-    struct
+    struct __attribute__((packed, aligned(2)))
     { bool TxFLR :1;         // #0 FLARM
       bool TxOGN :1;         // #1 OGN
       bool TxADSL:1;         // #2 ADS-L
@@ -194,12 +194,12 @@ uint16_t StratuxPort;
       bool TxODID:1;         // #7 Open-Drone-ID
       bool TxMSH :1;         // #8 Meshtastic
       // 7 bits spare
-    } __attribute__((packed));
+    } ;
   } ;
 
   union
   { uint16_t RxProtMask;
-    struct
+    struct __attribute__((packed, aligned(2)))
     { bool RxSpare:1;
       bool RxOGN:1;
       bool RxADSL:1;
@@ -792,7 +792,9 @@ uint16_t StratuxPort;
     { int32_t Corr=0; if(Read_Int(Corr, Value)<=0) return 0;
       TimeCorr=Corr; return 1; }
     if(strcmp(Name, "GeoidSepar")==0)
-    { return Read_Float1(GeoidSepar, Value)<=0; }
+    { int32_t Separ=0;
+      if(Read_Float1(Separ, Value)<=0) return 0;
+      GeoidSepar=Separ; return 1; }
     if(strcmp(Name, "manGeoidSepar")==0)
     { int32_t Man=0; if(Read_Int(Man, Value)<=0) return 0;
       manGeoidSepar=Man; return 1; }
@@ -1157,6 +1159,6 @@ uint16_t StratuxPort;
     strcpy(Line, "Firmware built on "); strcat(Line, __DATE__); strcat(Line, " "); strcat(Line, __TIME__); strcat(Line, "\n"); Format_String(Output, Line);
   }
 
-} /* __attribute__((packed)) */ ;
+} ;
 
 #endif // __PARAMETERS_H__

@@ -17,6 +17,8 @@
 
 // #define DEBUG_PRINT
 
+#ifdef WITH_OTA_HTTPS
+
 static wifi_ap_record_t AP[8]; // lists of Access Points from the WiFi scan
 static uint16_t APs = 0;
 
@@ -726,3 +728,5 @@ void print_ota_status()
   }
   xSemaphoreGive(CONS_Mutex);
 }
+
+#endif // WITH_OTA_HTTPS

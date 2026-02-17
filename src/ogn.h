@@ -65,7 +65,7 @@ template <class OGNx_Packet, class OGNy_Packet>
 // ---------------------------------------------------------------------------------------------------------------------
 
 template <class OGNx_Packet=OGN1_Packet>
- class OGN_TxPacket                                    // OGN packet with FEC code, ready for transmission
+ class __attribute__((packed, aligned(4))) OGN_TxPacket  // OGN packet with FEC code, ready for transmission
 { public:
    static const int     Words =  7;
    static const int     Bytes = 26;
@@ -130,17 +130,17 @@ template <class OGNx_Packet=OGN1_Packet>
      }
      return Bytes; }
 */
-} /* __attribute__((packed)) */ ;
+} ;
 
 // ---------------------------------------------------------------------------------------------------------------------
 
 template <class OGNx_Packet>
- class OGN_LogPacket                                       // OGN packet in an internal binary log file
+ class __attribute__((packed, aligned(4))) OGN_LogPacket       // OGN packet in an internal binary log file
 { public:
    static const int     Words =  6;
    static const int     Bytes = 24;
 
-   OGNx_Packet Packet;
+   OGNx_Packet Packet;         // 5 x uint32_t
    uint16_t   Time;            // [16sec] truncated time
    union
    { uint8_t Flags;
@@ -167,12 +167,12 @@ template <class OGNx_Packet>
      return Check^0xA5; }
    void setCheck(void) { Check=calcCheck(); }
    bool isCorrect(void) const { return calcCheck()==Check; }
-} __attribute__((packed)) ;
+} ;
 
 // ---------------------------------------------------------------------------------------------------------------------
 
 template <class OGNx_Packet=OGN1_Packet>
- class OGN_RxPacket                                        // OGN packet with FEC code and some reception info
+ class __attribute__((packed, aligned(4))) OGN_RxPacket      // OGN packet with FEC code and some reception info
 { public:
    static const int     Words =  7;
    static const int     Bytes = 26;
@@ -520,7 +520,7 @@ template <class OGNx_Packet=OGN1_Packet>
      { printf(" %02X", Packet.Byte()[Idx]); }
      printf(" (%d)\n", LDPC_Check(Packet.Byte())); }
 
-} /* __attribute__((packed)) */ ;
+} ;
 
 #ifdef WITH_PPM
 

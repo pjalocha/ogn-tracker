@@ -156,7 +156,7 @@ static bool GetRelayPacket(ADSL_Packet *Packet)           // prepare a packet to
   *Packet = ADSL_RelayQueue[Idx]->Packet;
   Packet->setRelay();
   Packet->Scramble();
-  Packet->setCRC();
+  Packet->setCRC24();
   ADSL_RelayQueue.decrRank(Idx);                           // reduce the rank of the packet selected for relay
   return 1; }
 
@@ -715,7 +715,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 
 static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=25 || RxPkt->Manchester) return;
-  uint32_t CRC = ADSL_Packet::checkPI(RxPkt->Data, 24);
+  uint32_t CRC = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
   uint8_t CRC8 = PAW_Packet::CRC8(RxPkt->Data, 24);
   if(CRC!=0 && CRC8!=RxPkt->Data[24])
   { uint8_t ErrBit=ADSL_Packet::FindCRCsyndrome(CRC);
@@ -746,7 +746,7 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 
 static void DecodeRxHDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=24 || RxPkt->Manchester) return;
-  uint32_t CRC = ADSL_Packet::checkPI(RxPkt->Data, 24);
+  uint32_t CRC = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
   if(CRC!=0)
   { uint8_t ErrBit=ADSL_Packet::FindCRCsyndrome(CRC);
     if(ErrBit!=0xFF)
@@ -982,7 +982,7 @@ void vTaskPROC(void* pvParameters)
           AdslPacket->setAcftTypeOGN(Parameters.AcftType);
           Position->Encode(*AdslPacket);                                       // encode position packet from the GPS
           AdslPacket->Scramble();
-          AdslPacket->setCRC();
+          AdslPacket->setCRC24();
           ADSL_TxFIFO.Write();
           if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);       // if stationary then don't transmit position every second
           if(Radio_TxCredit<=0) TxBackOff+=1; }
@@ -1200,7 +1200,7 @@ void vTaskPROC(void* pvParameters)
         StatTxPkt++; if(StatTxPkt>=3) StatTxPkt=0;
         if(getTelemetry(*Packet, Position, StatTxPkt))
         { Packet->Scramble();
-          Packet->setCRC();
+          Packet->setCRC24();
           ADSL_TxFIFO.Write(); }
         StatTxBackOff = 10+Random.RX%5; }
     }
