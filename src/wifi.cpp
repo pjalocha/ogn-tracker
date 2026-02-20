@@ -1,3 +1,5 @@
+#ifdef WITH_WIFI
+
 #include <string.h>
 #include "config.h"  //Added By Fab501
 #include "wifi.h"
@@ -210,3 +212,4 @@ uint8_t AP_Print(char *Out, wifi_ap_record_t *AP)                  // print numb
   return Len; }
 
 
+#endif // WITH_WIFI

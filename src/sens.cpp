@@ -246,7 +246,7 @@ static void ProcBaro(void)
     Len+=Format_UnsDec(Line+Len, (uint32_t)msTime/10, 2);
     // Len+=Format_UnsDec(Line+Len, Sec, 3, 1);                         // [sec] measurement time
     Line[Len++]=',';
-    Len+=Format_SignDec(Line+Len, Baro.Temperature, 2, 1);           // [degC] temperature
+    Len+=Format_SignDec(Line+Len, (int32_t)Baro.Temperature, 2, 1);  // [degC] temperature
     Line[Len++]=',';
     Len+=Format_UnsDec(Line+Len, (uint32_t)(10*Pressure+2)>>2, 2, 1); // [Pa] pressure
     Line[Len++]=',';
@@ -306,7 +306,7 @@ static void ProcBaro(void)
     Line[Len++]=',';
     Len+=Format_SignDec(Line+Len, ClimbRate);                        // [cm/s] climb rate
     Line[Len++]=',';
-    Len+=Format_SignDec(Line+Len, (Baro.Temperature+5)/10);          // [degC] temperature
+    Len+=Format_SignDec(Line+Len, (int32_t)(Baro.Temperature+5)/10); // [degC] temperature
     Line[Len++]=',';
     Len+=Format_UnsDec(Line+Len, (BatteryVoltage+128)>>8, 4, 3);     // [mV] Battery voltage
     // Len+=Format_String(Line+Len, "999");                          // [%] battery level

@@ -111,11 +111,11 @@ class LookOut_Target           // describes a flying aircrafts
      Len+=Format_String(NMEA+Len, "$PFLAA,");                      // sentence name and alarm-level (but no alarms for trackers)
      NMEA[Len++]='0'+WarnLevel;                                    // warning level
      NMEA[Len++]=',';
-     Len+=Format_SignDec(NMEA+Len, dX/2, 1, 0, 1);                          // [m] distance in Latitude
+     Len+=Format_SignDec(NMEA+Len, (int32_t)dX/2, 1, 0, 1);        // [m] distance in Latitude
      NMEA[Len++]=',';
-     Len+=Format_SignDec(NMEA+Len, dY/2, 1, 0, 1);                          // [m] distance in longitude
+     Len+=Format_SignDec(NMEA+Len, (int32_t)dY/2, 1, 0, 1);        // [m] distance in longitude
      NMEA[Len++]=',';
-     Len+=Format_SignDec(NMEA+Len, dZ/2, 1, 0, 1);                          // [m] relative altitude
+     Len+=Format_SignDec(NMEA+Len, (int32_t)dZ/2, 1, 0, 1);        // [m] relative altitude
      NMEA[Len++]=',';
      uint8_t AddrType = (ID>>24)&0x03F;
 // #ifdef WITH_SKYDEMON                                            // SkyDemon hack which accepts only 1 or 2

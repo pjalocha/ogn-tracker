@@ -108,7 +108,7 @@ class DataServer
    int Accept(void)                                // check for new clients
    { struct sockaddr_in6 source_addr;
      uint addr_len = sizeof(source_addr);
-     int New=accept(Link, (struct sockaddr *)&source_addr, &addr_len); // attempt to accept a new client
+     int New=accept(Link, (struct sockaddr *)&source_addr, (socklen_t *)&addr_len); // attempt to accept a new client
      if(New<0) return -1;                          // if nobody waiting then give up
      int Idx;
      for(Idx=0; Idx<MaxConn; Idx++)                // go through the list

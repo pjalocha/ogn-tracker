@@ -176,7 +176,11 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
   if(!SPIFFS_Mounted) return 0;
   if(Label==0) Label=SPIFFS_Label;
   FATFS *FS=0;
+#ifdef WITH_ESP32C3
+  DWORD FreeClusters;
+#else
   size_t FreeClusters;
+#endif
   int Ret = f_getfree("0:", &FreeClusters, &FS);
   // if(Ret=!FR_OK) return Ret;
   if(FS==0) return 0;
@@ -426,13 +430,12 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 // =======================================================================================================
 // ADC to sense battery voltage
 
+#ifdef BATT_ADC_CHANNEL
 static esp_adc_cal_characteristics_t *ADC_characs =
         (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-#ifdef BATT_ADC_CHANNEL
 static const adc1_channel_t ADC_Chan_Batt = BATT_ADC_CHANNEL;  // ADC1_CHANNEL_0 for GPIO 1 or ADC1_CHANNEL_3 for GPIO 4
-#else
-static const adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
-#endif
+// #else
+// static const adc1_channel_t ADC_Chan_Batt = ADC1_CHANNEL_7; // ADC channel #7 is GPIO35
 static const adc_atten_t ADC_atten = ADC_ATTEN_DB_11;
 static const adc_unit_t ADC_unit = ADC_UNIT_1;
 #define ADC_Vref 1100
@@ -448,6 +451,7 @@ static int ADC_Init(void)
   digitalWrite(ADC_BattSenseEna, LOW);
 #endif
   return 0; }
+#endif // BATT_ADC_CHANNEL
 
 #ifdef ADC_BattSenseEna
 static void BatterySenseEnable(bool ON=1) { digitalWrite(ADC_BattSenseEna, ON); }
@@ -465,12 +469,18 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
   digitalWrite(ADC_BattSenseEna, HIGH);
   delay(1);
 #endif
+
+#ifdef BATT_ADC_CHANNEL
   uint32_t RawVoltage=0;
   for( int Idx=0; Idx<Samples; Idx++)
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
   RawVoltage = (RawVoltage)/Samples;
 
   uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs);
+#else
+  uint16_t Volt=0;
+#endif // BATT_ADC_CHANNEL
+
 #ifdef BATT_ADC_RATIO
   Volt = Volt*BATT_ADC_RATIO;
 #else
@@ -994,13 +1004,16 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     //           0.001f*PMU->getBattVoltage(), 0.001f*PMU->getBattChargeCurrent(), 0.001f*PMU->getBattDischargeCurrent());
   }
 #endif // WITH_XPOWERS
+#ifdef BATT_ADC_CHANNEL
   if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202 && !HardwareStatus.AXP210)  // if none of the power controllers detected
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
+#endif
 
 #ifdef I2C_PinSCL
   I2C_Scan(Wire, "I2C bus:");
 #endif
 
+#ifndef WITH_ESP32C3   //  Crash-dump has different API for ESP32-C3
   char Info[512];
   int InfoLen=0;
   esp_core_dump_init();
@@ -1015,6 +1028,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     }
     free(DumpSummary); }
   if(InfoLen) Serial.println(Info);
+#endif
 
 #ifdef WITH_AP                    // with WiFi Access Point
 #ifdef WITH_AP_BUTTON
@@ -1114,6 +1128,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 // =======================================================================================================
 
+#if (configUSE_TRACE_FACILITY==1)
 void PrintTasks(void (*CONS_UART_Write)(char))
 { char Line[32];
 
@@ -1131,7 +1146,7 @@ void PrintTasks(void (*CONS_UART_Write)(char))
     uint8_t Len=Format_String(Line, Task->pcTaskName, configMAX_TASK_NAME_LEN, 0);
     // for( ; Len<=configMAX_TASK_NAME_LEN; )
     //   Line[Len++]=' ';
-    Len+=Format_UnsDec(Line+Len, Task->uxCurrentPriority, 2); Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, (uint32_t)(Task->uxCurrentPriority), 2); Line[Len++]=' ';
     // Line[Len++]='0'+Task->uxCurrentPriority; Line[Len++]=' ';
     Len+=Format_UnsDec(Line+Len, (uint32_t)(Task->usStackHighWaterMark), 3);
     Line[Len++]='\n'; Line[Len]=0;
@@ -1139,6 +1154,7 @@ void PrintTasks(void (*CONS_UART_Write)(char))
   }
   vPortFree( pxTaskStatusArray );
 }
+#endif
 
 static NMEA_RxMsg NMEA;
 #ifdef WITH_GPS_UBX_PASS
@@ -1274,9 +1290,9 @@ static void ProcessCtrlF(void)                                  // list log file
   Format_String(CONS_UART_Write, "SPIFFS: ");
   size_t Total, Used;
   if(SPIFFS_Info(Total, Used)==0)                            // get the SPIFFS usage summary
-  { Format_UnsDec(CONS_UART_Write, Used/1024);
+  { Format_UnsDec(CONS_UART_Write, (uint32_t)(Used/1024));
     Format_String(CONS_UART_Write, "kB used, ");
-    Format_UnsDec(CONS_UART_Write, Total/1024);
+    Format_UnsDec(CONS_UART_Write, (uint32_t)(Total/1024));
     Format_String(CONS_UART_Write, "kB total, "); }
   Format_UnsDec(CONS_UART_Write, Files);
   Format_String(CONS_UART_Write, " files\n");
