@@ -9,7 +9,7 @@
 #include "bitcount.h"
 #include "format.h"
 
-class __attribute__((aligned(4))) ADSL_Packet
+class __attribute__((packed, aligned(4))) ADSL_Packet
 { public:
 
    const static uint8_t TxBytes = 27; // including SYNC, Length, actual packet content (1+20 bytes) and 3-byte CRC
@@ -283,7 +283,7 @@ class __attribute__((aligned(4))) ADSL_Packet
        return Len; }
      return 0; }
 
-   uint8_t Dump(char *Out)
+   uint8_t Dump(char *Out, bool LDR=0)
    { uint8_t Len=0;
      Len+=Format_Hex(Out+Len, Length);
      Len+=Format_Hex(Out+Len, Version);
@@ -293,6 +293,7 @@ class __attribute__((aligned(4))) ADSL_Packet
      Len+=Format_Hex(Out+Len, CRC24[0]);
      Len+=Format_Hex(Out+Len, CRC24[1]);
      Len+=Format_Hex(Out+Len, CRC24[2]);
+     if(LDR) Len+=Format_Hex(Out+Len, CRC8);
      return Len; }
 
    uint8_t DumpBytes(char *Out)

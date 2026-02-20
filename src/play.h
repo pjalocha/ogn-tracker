@@ -18,6 +18,8 @@ void Beep_Note(uint8_t Note);
 
 void Play(uint8_t Note, uint8_t Len);
 
+void Play_Morse(char Char, uint8_t Note = Play_Vol_1|Play_Oct_1, uint8_t Len=75);
+
 uint8_t Play_isBusy(void);
 
 void Play_TimerCheck(uint8_t Ticks=1);

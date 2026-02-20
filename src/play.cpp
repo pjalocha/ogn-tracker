@@ -1,13 +1,16 @@
+
 #include "main.h"
 
 #include "play.h"
 #include <fifo.h>
 
+#include "morse.h"
+
 #ifdef WITH_BEEPER
 
 // #define WITH_BEEPER_GEN
 
-#ifdef WITH_BEEPER_GEN   // if buzzer with internal generator is used
+#ifdef WITH_BEEPER_GEN   // if buzzer with internal single-tone generator is used
 
 void Beep_Init(void)
 { pinMode(Buzzer_Pin, OUTPUT);
@@ -16,7 +19,7 @@ void Beep_Init(void)
 void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl)
 { digitalWrite(Buzzer_Pin, Freq>0); }
 
-#else
+#else                   // direct driven buzzer: multi-tone
 
 void Beep_Init(void)
 { ledcSetup(Buzzer_Channel, 800, 8);      // channel, frequency, resolution
@@ -62,12 +65,32 @@ void Beep_Note(uint8_t Note) // Note = VVOONNNN: VV = Volume, OO=Octave, NNNN=No
 static volatile uint8_t Play_Note=0;             // Note being played
 static volatile uint8_t Play_Counter=0;          // [ms] time counter
 
-static FIFO<uint16_t, 16> Play_FIFO;             // queue of notes to play
+static FIFO<uint16_t, 64> Play_FIFO;             // queue of notes to play
 
 void Play(uint8_t Note, uint8_t Len)             // [Note] [ms] put a new note to play in the queue
-{ uint16_t Word = Note; Word<<=8; Word|=Len; Play_FIFO.Write(Word); }
+{ Serial.printf("Play(0x%02X, %d)\n", Note, Len);
+  uint16_t Word = Note; Word<<=8; Word|=Len; Play_FIFO.Write(Word); }
 
 uint8_t Play_isBusy(void) { return Play_Counter; } // is a note being played right now ?
+
+void Play_Morse(char Char, uint8_t Note, uint8_t Len)
+{ if(Char<' ') return;
+  Char-=MORSE_ASCII_OFFSET;
+  if(Char>=sizeof(MorseTable)) return;
+  uint8_t Code=MorseTable[Char];
+  if(Code==MORSE_UNSUPPORTED) return;
+  if(Code==0x00) { Play(0x00, Len*2); return; }
+  for( ; ; )
+  { if(Code==MORSE_GUARDBIT) break;
+    if(Code&MORSE_DASH) Play(Note, Len*3);
+                   else Play(Note, Len);
+    Play(0x00, Len);
+    Code>>=1; }
+  Play(0x00, Len); }
+
+// void Play_Morse(const char *Msg, uint8_t Note, uint8_t Len)
+// {
+// }
 
 void Play_TimerCheck(uint8_t Ticks)              // every ms serve the note playing
 { uint8_t Counter=Play_Counter;

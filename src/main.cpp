@@ -1073,6 +1073,10 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
   Play(Play_Vol_1 | Play_Oct_0 | 0x08, 250);
   Play(Play_Vol_0 | Play_Oct_0 | 0x00, 100);
+  Play_Morse(' ');
+  Play_Morse('O');
+  Play_Morse('G');
+  Play_Morse('N');
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");

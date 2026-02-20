@@ -45,8 +45,8 @@ class __attribute__((packed, aligned(4))) FlashParameters
        bool      RFchipTypeHW:  1; // is this RFM69HW (Tx power up to +20dBm) ?
       uint8_t        FreqPlan:  3; // 0=default or force given frequency hopping plan
        bool         RelayMode:  1; // Static relay-mode: rarely transmit own position, priority to relays or other aircrafts
-       bool         GhostMode:  1; // don't transmit your position unless you hear others nearby
-       // 4 bits spare
+      uint8_t       GhostMode:  2; // don't transmit your position unless you hear others nearby
+       // 3 bits spare
      } ;
    } ;
 
@@ -763,8 +763,9 @@ uint16_t StratuxPort;
     { uint32_t Type=0; if(Read_Int(Type, Value)<=0) return 0;
       Stealth=Type; return 1; }
     if(strcmp(Name, "Ghost")==0)
-    { uint32_t Type=0; if(Read_Int(Type, Value)<=0) return 0;
-      GhostMode=Type; return 1; }
+    { uint32_t Mode=0; if(Read_Int(Mode, Value)<=0) return 0;
+      if(Mode>3) Mode=3;
+      GhostMode=Mode; return 1; }
     if(strcmp(Name, "AcftType")==0)
     { uint32_t Type=0; if(Read_Int(Type, Value)<=0) return 0;
       AcftType=Type; return 1; }
@@ -1022,7 +1023,7 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Bool   (Line, "Stealth"   ,          Stealth          ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
-    Write_Bool   (Line, "Ghost"     ,          GhostMode        ); strcat(Line, " #  [ bool]\n"); if(fputs(Line, File)==EOF) return EOF;
+    Write_Hex    (Line, "Ghost"     ,          GhostMode,      1); strcat(Line, " #  [2-bit]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_UnsDec (Line, "CONbaud"   ,          CONbaud          ); strcat(Line, " #  [  bps]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); if(fputs(Line, File)==EOF) return EOF;
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); if(fputs(Line, File)==EOF) return EOF;
@@ -1100,7 +1101,7 @@ uint16_t StratuxPort;
     Write_Hex    (Line, "AcftType"  ,          AcftType,       1); strcat(Line, " #  [4-bit]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "AddrType"  ,          AddrType,       1); strcat(Line, " #  [2-bit]\n"); Format_String(Output, Line);
     Write_Bool   (Line, "Stealth"   ,          Stealth          ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
-    Write_Bool   (Line, "Ghost"     ,          GhostMode        ); strcat(Line, " #  [ bool]\n"); Format_String(Output, Line);
+    Write_Hex    (Line, "Ghost"     ,          GhostMode,      1); strcat(Line, " #  [2-bit]\n"); Format_String(Output, Line);
     Write_UnsDec (Line, "CONbaud"   ,          CONbaud          ); strcat(Line, " #  [  bps]\n"); Format_String(Output, Line);
     Write_Hex    (Line, "CONprot"   ,          CONprot,        1); strcat(Line, " #  [ mask]\n"); Format_String(Output, Line);
     Write_SignDec(Line, "TxPower"   ,          TxPower          ); strcat(Line, " #  [  dBm]\n"); Format_String(Output, Line);
