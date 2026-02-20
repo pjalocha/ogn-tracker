@@ -57,6 +57,10 @@ uint32_t getUniqueAddress(void);
 #include "t-beam-v10-pins.h"
 #endif
 
+#ifdef WITH_ESP32C3
+#include "heltec-c3-pins.h"
+#endif
+
 #ifdef WITH_TBEAM12
 #include "t-beam-v12-pins.h"
 #endif
