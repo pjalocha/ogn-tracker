@@ -496,6 +496,7 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 #ifdef ADC_BattSenseEna
   digitalWrite(ADC_BattSenseEna, LOW);
 #endif
+  // Serial.printf("BatterySense(%d) => %d\n", Samples, Volt);
   return Volt; } // [mV]
 
 // =======================================================================================================
