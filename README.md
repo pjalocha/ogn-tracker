@@ -24,6 +24,10 @@ Programming can be done directly from the web page using the embedded ESP32 prog
 https://pjalocha.github.io/ogn-tracker/
 
 <img src="photos/ThinkNodeM5.jpeg" alt="ThinkNode-M5 ready for web-based programming" width="50%">
+<img src="photos/ROOK.jpg" alt="ROOK-based OGN-Tracker example build" width="50%">
+
+The **ROOK** case shown above fits very well the **HTIT-Tracker** from Heltec and offers another path to get a working OGN-Tracker.
+Compared to ready-to-use devices, this option requires a bit more work: you need to get the case/parts, the battery, make the required connections and put everything together.
 
 ### Antennas
 often ignored but they are essential for proper function of the tracker
