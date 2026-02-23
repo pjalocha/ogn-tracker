@@ -19,11 +19,11 @@ Optionally, you can add
 
 ### Modules
 The most popular is likely **TTGO T-Beam**: there are several variants with different radio chips and charge/power controllers
-There are some ready-to-use devices like ThinkNode-M5 which can be simply bought, programmed and there you have an OGN-Tracker ready which is visible to electronic conspicuity receivers.
+There are some ready-to-use devices like **ThinkNode-M5** which can be simply bought, programmed and there you have an OGN-Tracker ready which is visible to electronic conspicuity receivers.
 Programming can be done directly from the web page using the embedded ESP32 programmer:
 https://pjalocha.github.io/ogn-tracker/
 
-![ThinkNode-M5 ready for web-based programming](photos/ThinkNodeM5.jpeg)
+<img src="photos/ThinkNodeM5.jpeg" alt="ThinkNode-M5 ready for web-based programming" width="50%">
 
 ### Antennas
 often ignored but they are essential for proper function of the tracker
