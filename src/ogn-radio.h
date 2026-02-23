@@ -44,11 +44,11 @@ extern FIFO<ADSL_Packet,              4> ADSL_TxFIFO;
 extern FIFO<PAW_Packet,               4> PAW_TxFIFO;
 #endif
 
-extern FIFO<FSK_RxPacket,            32> FSK_RxFIFO;
+extern FIFO<FSK_RxPacket,             8> FSK_RxFIFO;
 
 #ifdef WITH_FANET
 extern FIFO<FANET_Packet,             4> FNT_TxFIFO;
-extern FIFO<FANET_RxPacket,           8> FNT_RxFIFO;
+extern FIFO<FANET_RxPacket,           4> FNT_RxFIFO;
 #endif
 #ifdef WITH_MESHT
 extern FIFO<MESHT_Packet,             4> MSH_TxFIFO;

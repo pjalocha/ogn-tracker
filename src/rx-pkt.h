@@ -20,7 +20,7 @@ const uint8_t Radio_SysID_OGN_ADSL  = 9; // OGN with ADS-L
 
 class FSK_RxPacket                    // Radio packet received by the RF chip
 { public:
-   static const uint8_t MaxBytes=128; // [bytes] max. number of bytes in the packet
+   static const uint8_t MaxBytes=255; // [bytes] max. number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
     int16_t msTime;                   // [ms] reception time since the PPS[Time]
    union
@@ -36,8 +36,8 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
     int8_t SNR;                       // [0.25dB]
     int8_t FreqErr;                   // [0.1kHz]
    uint8_t Bytes;                     // [bytes] actual packet size
-   uint8_t Data[MaxBytes];            // decoded data bits/bytes (aligned to 32-bit)
-   uint8_t Err [MaxBytes];            // Manchester decoding errors (for systems with Manchester encoding)
+   uint8_t Data[MaxBytes+1];          // decoded data bits/bytes (aligned to 32-bit)
+   uint8_t Err [MaxBytes+1];          // Manchester decoding errors (for systems with Manchester encoding)
 
   public:
 
@@ -62,7 +62,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      if(SysID==Radio_SysID_ADSL)     { SYNC=SYNC_ADSL;     PktLen=24;   return 8; }
      if(SysID==Radio_SysID_LDR)      { SYNC=SYNC_LDR;      PktLen=24;   return 2; }
      // if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen=24;   return 3; } // 3 for fixed packet size of 24-bytes
-     if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen=24;   return 2; } // 2 for variable packet size of 24-bytes
+     if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen= 0;   return 2; } // 2 for variable packet size of 24-bytes
      if(SysID==Radio_SysID_FLR_ADSL) { SYNC=SYNC_FLR_ADSL; PktLen=26+3; return 2; }
      if(SysID==Radio_SysID_OGN_ADSL) { SYNC=SYNC_OGN_ADSL; PktLen=26+3; return 2; }
      return 0; }

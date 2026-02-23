@@ -33,9 +33,9 @@
 #endif
 
  // queues for received packets
- FIFO<FSK_RxPacket,            32> FSK_RxFIFO;              // received packets of OGN, ADS-L, LDR
+ FIFO<FSK_RxPacket,             8> FSK_RxFIFO;              // received packets of OGN, ADS-L, LDR
 #ifdef WITH_FANET
- FIFO<FANET_RxPacket,           8> FNT_RxFIFO;              // received FANET packets
+ FIFO<FANET_RxPacket,           4> FNT_RxFIFO;              // received FANET packets
 #endif
 
  QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
@@ -364,8 +364,10 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   if(State) ErrState=State;
   State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
   if(State) ErrState=State;
-  State=Radio.variablePacketLengthMode(FSK_RxPacket::MaxBytes);     // variable packet size up to the size of the buffer
-  // State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
+  if(PktLen>0)
+    State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
+  else
+    State=Radio.variablePacketLengthMode(FSK_RxPacket::MaxBytes);     // variable packet size up to the size of the buffer
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   State=Radio.disableAddressFiltering();                            // don't want any of such features
@@ -413,6 +415,7 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
   RxPkt->Time = TimeRef.UTC;                                             // [sec] UTC PPS
   if(RxPkt->msTime<0) { RxPkt->msTime+1000; RxPkt->Time--; }
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
+  uint8_t RxPktLen=PktLen; if(!Manch && PktLen==0) RxPktLen=RxLen;
   if(Manch)                                                              // if Manchester encoding expected
   { Radio.readData(Radio_RxPacket, PktLen*2);                              // read packet from the Radio
     // Radio.startReceive();
@@ -424,26 +427,22 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
       ByteL = ManchesterDecode[ByteL]; uint8_t ErrL=ByteL>>4; ByteL&=0x0F; // second nibble
       RxPkt->Data[Idx]=(ByteH<<4) | ByteL;                               // fill Data
       RxPkt->Err [Idx]=(ErrH <<4) | ErrL ; }                             // and Manchester errors
-  }
+    RxPkt->Bytes=PktLen; }
   else                                                                   // if no Manchester encoding expected
-  { Radio.readData(RxPkt->Data, PktLen);                                 // get packet into the Data
-    // Radio.startReceive();
-    for(uint8_t Idx=0; Idx<PktLen; Idx++)
-      RxPkt->Err[Idx]=0;                                                 // clear manchester errors
-  }
+  { Radio.readData(RxPkt->Data, RxPktLen);                               // get packet into the Data
+    memset(RxPkt->Err, 0, RxPktLen);
+    RxPkt->Bytes=RxPktLen; }                                               // [bytes] actual packet size
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
 #ifdef DEBUG_RX
-    if(SysID==Radio_SysID_LDR && xSemaphoreTake(CONS_Mutex, 20))
-    { Serial.printf("RadioRx: Sys:%02X [%d%c]/%d #%d %+4.1fdBm ",
+    if( /* SysID==Radio_SysID_LDR && */ xSemaphoreTake(CONS_Mutex, 20))
+    { Serial.printf("RadioRx: Sys:%02X [%02d%c]/%d #%d %+4.1fdBm ",
          SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
-      for(uint8_t Idx=0; Idx<PktLen; Idx++)
+      for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
-      // Serial.printf(" %c%c\n", FNT_TxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
       Serial.printf("\n");
       xSemaphoreGive(CONS_Mutex); }
 #endif
-  RxPkt->Bytes   = PktLen;                                               // [bytes] actual packet size
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
   SysID = RxPkt->DecodeSysID();
   uint8_t ManchErr=RxPkt->ErrCount();
@@ -453,7 +452,7 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("RadioRx: %5.3fs [#%d:%d:%2d:%c%d] %+4.1fdBm ",
              1e-3*millis(), Channel, SysID, PktLen, Manch?'M':'_', ManchErr, -0.5*RxPkt->RSSI);
-      for(uint8_t Idx=0; Idx<PktLen; Idx++)
+      for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
       if(SysID==Radio_SysID_OGN) { Serial.printf(" (%d)", LDPC_Check((const uint32_t *)RxPkt->Data)); }
       if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkPI(RxPkt->Data, 24)); }
@@ -499,7 +498,10 @@ static void Radio_TxSysID(uint8_t SysID, const uint8_t *Packet, uint8_t PktLen)
 { bool Manch = SysID<4;
   if(Manch) Radio_TxManchFSK(Packet, PktLen);
   else if(SysID==Radio_SysID_LDR) Radio_TxLDR(Packet, PktLen);
-  else if(SysID==Radio_SysID_HDR) Radio_TxHDR(Packet, PktLen); }
+  else if(SysID==Radio_SysID_HDR)
+  { if(PktLen==0) PktLen=24;           // a hack for HDR variable size packet reception
+    Radio_TxHDR(Packet, PktLen); }
+}
 
 // TX/RX slot for a Manchester-encoded protocol
 static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, const uint8_t *TxPacket, uint8_t TxSysID,
