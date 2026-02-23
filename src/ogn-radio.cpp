@@ -364,8 +364,8 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   if(State) ErrState=State;
   State=Radio.setCRC(0, 0);                                         // disable CRC: we do it ourselves
   if(State) ErrState=State;
-  // State=Radio.variablePacketLengthMode();
-  State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
+  State=Radio.variablePacketLengthMode(FSK_RxPacket::MaxBytes);     // variable packet size up to the size of the buffer
+  // State=Radio.fixedPacketLengthMode(PktLen);                        // [bytes] Fixed packet size mode
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   State=Radio.disableAddressFiltering();                            // don't want any of such features
