@@ -436,7 +436,7 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
   RxPkt->Channel = Channel;                                              // Radio channel
 #ifdef DEBUG_RX
     if( /* SysID==Radio_SysID_LDR && */ xSemaphoreTake(CONS_Mutex, 20))
-    { Serial.printf("RadioRx: Sys:%02X [%02d%c]/%d #%d %+4.1fdBm ",
+    { Serial.printf("RadioRx: Sys:%02X [%02d%c]/%d #%d %+6.1fdBm ",
          SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
       for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
       { Serial.printf("%02X", RxPkt->Data[Idx]); }
@@ -450,13 +450,14 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
   LED_OGN_RX(10);
 #ifdef DEBUG_RX
   if(xSemaphoreTake(CONS_Mutex, 20))
-  { Serial.printf("RadioRx: %5.3fs [#%d:%d:%2d:%c%d] %+4.1fdBm ",
+  { Serial.printf("RadioRx: %5.3fs [#%d:%d:%2d:%c%d] %+6.1fdBm ",
              1e-3*millis(), Channel, SysID, PktLen, Manch?'M':'_', ManchErr, -0.5*RxPkt->RSSI);
-      for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
-      { Serial.printf("%02X", RxPkt->Data[Idx]); }
-      if(SysID==Radio_SysID_OGN) { Serial.printf(" (%d)", LDPC_Check((const uint32_t *)RxPkt->Data)); }
-      if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkPI(RxPkt->Data, 24)); }
-      Serial.printf(" %c%c\n", FNT_TxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
+    for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
+    { Serial.printf("%02X", RxPkt->Data[Idx]); }
+    if(SysID==Radio_SysID_OGN) { Serial.printf(" (%d)", LDPC_Check((const uint32_t *)RxPkt->Data)); }
+    if(SysID==Radio_SysID_ADSL) { Serial.printf(" (%06X)", ADSL_Packet::checkCRC24(RxPkt->Data, 24)); }
+    if(SysID==Radio_SysID_HDR) { Serial.printf(" (%06X)", ADSL_Packet::checkCRC24(RxPkt->Data, 24)); }
+    Serial.printf("\n");
     xSemaphoreGive(CONS_Mutex); }
 #endif
   FSK_RxFIFO.Write();                                                    // complete the write into the queue of received packets
