@@ -18,7 +18,7 @@ void Beep_Note(uint8_t Note);
 
 void Play(uint8_t Note, uint8_t Len);
 
-void Play_Morse(char Char, uint8_t Note = Play_Vol_1|Play_Oct_1, uint8_t Len=75);
+void Play_Morse(char Char, uint8_t Note = Play_Vol_1|Play_Oct_1, uint8_t DotLen=60); // Dot:60ms => 20 WPM Morse speed
 
 uint8_t Play_isBusy(void);
 

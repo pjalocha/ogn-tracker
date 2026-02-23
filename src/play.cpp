@@ -65,7 +65,8 @@ void Beep_Note(uint8_t Note) // Note = VVOONNNN: VV = Volume, OO=Octave, NNNN=No
 static volatile uint8_t Play_Note=0;             // Note being played
 static volatile uint8_t Play_Counter=0;          // [ms] time counter
 
-static FIFO<uint16_t, 64> Play_FIFO;             // queue of notes to play
+static FIFO<uint16_t,  64> Play_FIFO;            // queue of notes to play
+// static FIFO<uint16_t, 128> Morse_FIFO;           // queue for Morse messages
 
 void Play(uint8_t Note, uint8_t Len)             // [Note] [ms] put a new note to play in the queue
 { Serial.printf("Play(0x%02X, %d)\n", Note, Len);
@@ -73,20 +74,20 @@ void Play(uint8_t Note, uint8_t Len)             // [Note] [ms] put a new note t
 
 uint8_t Play_isBusy(void) { return Play_Counter; } // is a note being played right now ?
 
-void Play_Morse(char Char, uint8_t Note, uint8_t Len)
-{ if(Char<' ') return;
-  Char-=MORSE_ASCII_OFFSET;
-  if(Char>=sizeof(MorseTable)) return;
-  uint8_t Code=MorseTable[Char];
+void Play_Morse(char Char, uint8_t Note, uint8_t DotLen)
+{ if(Char<' ') return;                                      //
+  Char-=MORSE_ASCII_OFFSET;                                 //
+  if(Char>=sizeof(MorseTable)) return;                      //
+  uint8_t Code=MorseTable[Char];                            // coded element
   if(Code==MORSE_UNSUPPORTED) return;
-  if(Code==0x00) { Play(0x00, Len*2); return; }
+  if(Code==0x00) { Play(0x00, DotLen*4); return; }          // space adds 4x dot time
   for( ; ; )
   { if(Code==MORSE_GUARDBIT) break;
-    if(Code&MORSE_DASH) Play(Note, Len*3);
-                   else Play(Note, Len);
-    Play(0x00, Len);
+    if(Code&MORSE_DASH) Play(Note, DotLen*3);               // make dash
+                   else Play(Note, DotLen);                 // make dot
+    Play(0x00, DotLen);                                     // make space between dash/dot
     Code>>=1; }
-  Play(0x00, Len); }
+  Play(0x00, DotLen*2); }                                   // make space after each element
 
 // void Play_Morse(const char *Msg, uint8_t Note, uint8_t Len)
 // {

@@ -19,6 +19,11 @@ Optionally, you can add
 
 ### Modules
 The most popular is likely **TTGO T-Beam**: there are several variants with different radio chips and charge/power controllers
+There are some ready-to-use devices like ThinkNode-M5 which can be simply bought, programmed and there you have an OGN-Tracker ready which is visible to electronic conspicuity receivers.
+Programming can be done directly from the web page using the embedded ESP32 programmer:
+https://pjalocha.github.io/ogn-tracker/
+
+![ThinkNode-M5 ready for web-based programming](photos/ThinkNodeM5.jpeg)
 
 ### Antennas
 often ignored but they are essential for proper function of the tracker
@@ -29,6 +34,13 @@ and not just the antennas themselves but where and how are the antennas installe
 ## Transmitted signal
 The primary signal transmitted is the **OGN-Tracker** specific packet and position protocol.
 Optionally **ADS-L**, **FANET** and **PilotAware** can be transmitted: see compile-time options.
+As the electronic conspicuity is now going towards **ADS-L** the three ADS-L modulations: **MDR**, **LDR** and **HDR** are gaining importance.
+
+## Reception os other OGN-Trackers
+Reception and visualization is possible: the data is being sent via BT and can be seen with applications like XCsoar
+
+## Collision avoidance warning
+There is an experimental algorithm running on the device which can produce warning beeps and markes the aircrafts of concern for the visualization app
 
 ## Compile and upload (flash) the CPU
 You will need platformio which takes care for getting the right compiler and upload tools
