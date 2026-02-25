@@ -721,7 +721,7 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   uint32_t CRC = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
   uint8_t CRC8 = PAW_Packet::CRC8(RxPkt->Data, 24);
   if(CRC!=0 && CRC8!=RxPkt->Data[24])
-  { uint8_t ErrBit=ADSL_Packet::FindCRCsyndrome(CRC);
+  { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC);
     if(ErrBit!=0xFF)
     { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
       ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
@@ -751,11 +751,11 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=24 || RxPkt->Manchester) return;
   uint32_t CRC = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
   if(CRC!=0)
-  { uint8_t ErrBit=ADSL_Packet::FindCRCsyndrome(CRC);
+  { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC);
     if(ErrBit!=0xFF)
     { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
       ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
-      CRC^=ADSL_Packet::CRCsyndrome(ErrBit); }
+      CRC^=ADSL_Packet::CRC24syndrome(ErrBit); }
   }
   if(CRC==0)
   { // Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de\n",
@@ -922,7 +922,12 @@ void vTaskPROC(void* pvParameters)
         Radio_FreqPlan.setPlan(Position->Latitude, Position->Longitude); // set the frequency plan according to the GPS position
       else Radio_FreqPlan.setPlan(Parameters.FreqPlan);
 
-      GhostSilent = Parameters.GhostMode && Radio_PktRate==0;  // if ghost mode then inhibit position transmission unless traffic 
+      { int NewGhostSilent = Parameters.GhostMode && Radio_PktRate==0;  // if ghost mode then inhibit position transmission unless traffic 
+        if(NewGhostSilent!=GhostSilent)                                 // if change of state then
+        { XorShift32(Random.RX);
+          if(Parameters.AddrType==0) Parameters.Address = Parameters.Address^Random.RX; // random-ID if enabled
+          GhostSilent=NewGhostSilent; }
+      }
 
 #ifdef DEBUG_PRINT
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);

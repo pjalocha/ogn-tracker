@@ -283,6 +283,31 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
        return Len; }
      return 0; }
 
+   uint8_t ReadDump(const char *Inp, bool LDR=0)
+   { uint8_t Len=0;
+     if(Inp[0]==' ') Inp++;
+     int Chars = Read_Hex(Length, Inp); if(Chars!=2) return 0;
+     Inp+=Chars; Len+=1;
+     Chars = Read_Hex(Version, Inp); if(Chars!=2) return 0;
+     Inp+=Chars; Len+=1;
+     for( uint8_t Idx=0; Idx<5; Idx++)
+     { if(Inp[0]==' ') Inp++;
+       uint32_t ReadWord=0;
+       int Chars = Read_Hex(ReadWord, Inp); if(Chars!=8) return 0;
+       Word[Idx]=ReadWord;
+       Inp+=Chars; Len+=4; }
+     if(Inp[0]==' ') Inp++;
+     Chars = Read_Hex(CRC24[0], Inp); if(Chars!=2) return 0;
+     Inp+=Chars; Len+=1;
+     Chars = Read_Hex(CRC24[1], Inp); if(Chars!=2) return 0;
+     Inp+=Chars; Len+=1;
+     Chars = Read_Hex(CRC24[2], Inp); if(Chars!=2) return 0;
+     Inp+=Chars; Len+=1;
+     if(LDR)
+     { Chars = Read_Hex(CRC8, Inp); if(Chars!=2) return 0;
+       Inp+=Chars; Len+=1; }
+     return Len; }
+
    uint8_t Dump(char *Out, bool LDR=0)
    { uint8_t Len=0;
      Len+=Format_Hex(Out+Len, Length);
@@ -647,13 +672,32 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
     uint32_t checkCRC24(void) const
     { return checkCRC24((const uint8_t *)&Version, TxBytes-3); }
 
+    uint32_t checkCRC32(void) const
+    { uint32_t CRC24=checkCRC24((const uint8_t *)&Version, TxBytes-3);
+      uint8_t  CRC8 =checkCRC8((const uint8_t *)&Version, TxBytes-3+1);
+      return (CRC24<<8) | CRC8; }
+
+    static uint8_t checkCRC8(const uint8_t *Packet, int Len, uint8_t CRC=0x71)
+    { for(int Idx=0; Idx<Len; Idx++)
+        CRC = passCRC8(Packet[Idx], CRC);
+      return CRC; }
+
+    static uint8_t passCRC8(uint8_t Byte, uint8_t CRC)
+    { const uint8_t Poly = 0x07;  // 0x107
+      CRC ^= Byte;
+      for(uint8_t Bit=0; Bit<8; Bit++)
+      { if(CRC&0x80) { CRC = (CRC<<1) ^ Poly; }
+                else { CRC = (CRC<<1)       ; }
+      }
+      return CRC; }
+
     void FlipBit(uint8_t BitIdx)
     { return FlipBit((uint8_t *)&Version, BitIdx); }
 
     static int Correct(uint8_t *PktData, uint8_t *PktErr, const int MaxBadBits=6) // correct the manchester-decoded packet with dead/weak bits marked
     { const int Bytes=TxBytes-3;
       uint32_t CRC = checkCRC24(PktData, Bytes); if(CRC==0) return 0;
-      uint8_t ErrBit=FindCRCsyndrome(CRC);
+      uint8_t ErrBit=FindCRC24syndrome(CRC);
       if(ErrBit!=0xFF) { FlipBit(PktData, ErrBit); return 1; }
 
       uint8_t BadBitIdx[MaxBadBits];                                    // bad bit index
@@ -668,7 +712,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
           { if(BadBits<MaxBadBits)
             { BadBitIdx[BadBits]=ByteIdx;                               // store the bad bit index
               BadBitMask[BadBits]=Mask;
-              Syndrome[BadBits]=CRCsyndrome(ByteIdx*8+BitIdx); }
+              Syndrome[BadBits]=CRC24syndrome(ByteIdx*8+BitIdx); }
             BadBits++;
           }
           Mask>>=1;
@@ -684,7 +728,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
         uint8_t Bit=0; while(BitExp>>=1) Bit++;
         PktData[BadBitIdx[Bit]]^=BadBitMask[Bit];
         CRC^=Syndrome[Bit]; if(CRC==0) return Count1s(GrayIdx);
-        uint8_t ErrBit=FindCRCsyndrome(CRC);
+        uint8_t ErrBit=FindCRC24syndrome(CRC);
         if(ErrBit!=0xFF)
         { FlipBit(PktData, ErrBit);
           return Count1s(GrayIdx)+1; }
@@ -698,7 +742,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
       uint8_t Mask=1; Mask<<=BitIdx;
       Byte[ByteIdx]^=Mask; }
 
-    static uint32_t CRCsyndrome(uint8_t Bit)
+    static uint32_t CRC24syndrome(uint8_t Bit)
     { const uint16_t PacketBytes = TxBytes-3;
       const uint16_t PacketBits = PacketBytes*8;
       const uint32_t Syndrome[PacketBits] = {
@@ -729,7 +773,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
       if(Bit<PacketBits) return Syndrome[Bit];
       return 0; }
 
-    static uint8_t FindCRCsyndrome(uint32_t Syndr)              // quick search for a single-bit CRC syndrome
+    static uint8_t FindCRC24syndrome(uint32_t Syndr)              // quick search for a single-bit CRC syndrome
     { const uint16_t PacketBytes = TxBytes-3;
       const uint16_t PacketBits = PacketBytes*8;
       const uint32_t Syndrome[PacketBits] = {

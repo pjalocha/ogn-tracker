@@ -758,6 +758,8 @@ uint16_t StratuxPort;
       Address=Addr; return 1; }
     if(strcmp(Name, "AddrType")==0)
     { uint32_t Type=0; if(Read_Int(Type, Value)<=0) return 0;
+      if(AddrType==3) Address=getUniqueAddress();
+      else if(AddrType==0) Address=(calcCheckSum()*1664525+1013904223)^getUniqueAddress();
       AddrType=Type; return 1; }
     if(strcmp(Name, "Stealth")==0)
     { uint32_t Type=0; if(Read_Int(Type, Value)<=0) return 0;
