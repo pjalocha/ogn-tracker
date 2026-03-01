@@ -20,7 +20,7 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.14"
+#define VERSION "0.1.15"
 #endif
 
 // #define SOFT_NAME "dev-14.02" // signal development version
