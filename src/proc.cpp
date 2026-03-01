@@ -37,7 +37,11 @@ static GDL90_REPORT GDL_REPORT;
 #include "mesht-proto.h"
 #endif
 
-uint8_t AlarmLevel = 4;
+#ifdef WITH_THINKNODE_M5
+uint8_t AlarmLevel = 0;
+#else
+const uint8_t AlarmLevel = 3;
+#endif
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
@@ -718,20 +722,21 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
 
 static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=25 || RxPkt->Manchester) return;
-  uint32_t CRC = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
-  uint8_t CRC8 = PAW_Packet::CRC8(RxPkt->Data, 24);
-  if(CRC!=0 && CRC8!=RxPkt->Data[24])
-  { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC);
+  uint32_t CRC24 = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
+  uint8_t CRC8 = PAW_Packet::CRC8(RxPkt->Data, 25);
+  if(CRC24!=0x000000 && CRC8==0x00)
+  { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC24);
     if(ErrBit!=0xFF)
     { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
       ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
-      CRC=0x000000;
-      CRC8 = PAW_Packet::CRC8(RxPkt->Data, 24); }
+      CRC24=0x000000;
+      CRC8 = PAW_Packet::CRC8(RxPkt->Data, 25); }
   }
-  if(CRC8!=RxPkt->Data[24]) return;
-  if(CRC==0)
+  if(CRC8!=0x00) return;
+  if(CRC24==0x000000)
   { // Serial.printf("LDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
+    // RxPkt->Bytes--;
     DecodeRxADSL(RxPkt);
     return; }
   PAW_Packet::Whiten(RxPkt->Data, 24);
@@ -749,15 +754,15 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 
 static void DecodeRxHDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=24 || RxPkt->Manchester) return;
-  uint32_t CRC = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
-  if(CRC!=0)
-  { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC);
+  uint32_t CRC24 = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
+  if(CRC24!=0)
+  { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC24);
     if(ErrBit!=0xFF)
     { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
       ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
-      CRC^=ADSL_Packet::CRC24syndrome(ErrBit); }
+      CRC24^=ADSL_Packet::CRC24syndrome(ErrBit); }
   }
-  if(CRC==0)
+  if(CRC24==0x000000)
   { // Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
     DecodeRxADSL(RxPkt); }

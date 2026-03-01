@@ -817,7 +817,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
 } ;
 
 
-class ADSL_RxPacket
+class __attribute__((packed, aligned(4))) ADSL_RxPacket
 { public:
    ADSL_Packet Packet;
 
