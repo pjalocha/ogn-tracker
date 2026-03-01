@@ -1013,7 +1013,7 @@ void Radio_Task(void *Parms)
     uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);     // what would be OGN channel now
     if(EU)
     { int Alt = (GPS_Altitude+GPS_GeoidSepar+5)/10;   // [m] HAE
-      TxChan = ADSL_HopChannel(TimeRef.UTC, Alt);
+      TxChan = ADSL_HopChannel(TimeRef.UTC%60, Alt);
            if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
       else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
       else if(TxChan==2)  { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
