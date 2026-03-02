@@ -94,15 +94,15 @@ void BLE_SPP_Start(const char *DevName)
   // NimBLEDevice::setSecurityPasskey(123456);
   // NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); // Display only passkey
   NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // simplest pairing
-  NimBLEDevice::setSecurityAuth(true, false, true);
+  NimBLEDevice::setSecurityAuth(false, false, false);         // no mandatory pairing/auth for app compatibility
   pServer = NimBLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
   if(pServer==0) { Serial.printf("Cannot create NimBLE server\n"); return; }
+  pServer->setCallbacks(new MyServerCallbacks());
   NimBLEService *pService = pServer->createService(SERVICE_UUID);
   pCharacteristic = pService->createCharacteristic(
                       CHARACTERISTIC_UUID,
                       NIMBLE_PROPERTY::READ   |
-                      NIMBLE_PROPERTY::WRITE  | NIMBLE_PROPERTY::WRITE_ENC |
+                      NIMBLE_PROPERTY::WRITE  | NIMBLE_PROPERTY::WRITE_NR  |
                       NIMBLE_PROPERTY::NOTIFY );
   pCharacteristic->setCallbacks(new MyCallbacks());
   pService->start();
@@ -116,8 +116,8 @@ void BLE_SPP_Start(const char *DevName)
   ScanResp.setName(DevName);            // have the device name in the BT scan-response
   pAdvertising->setScanResponseData(ScanResp);
   pAdvertising->enableScanResponse(true);
-  pAdvertising->setMinInterval(3200);   // [0.625ms] 3200 = 2.0 s slower advertising => lower power
-  pAdvertising->setMaxInterval(4000);   // [0.625ms] 4000 = 2.5 s
+  pAdvertising->setMinInterval(160*4);    // [0.625ms] 160 = 100 ms, faster phone discovery/connect
+  pAdvertising->setMaxInterval(240*4);    // [0.625ms] 240 = 150 ms
   pAdvertising->start(); }
 #else
 void BLE_SPP_Start(const char *DevName)
@@ -133,6 +133,7 @@ void BLE_SPP_Start(const char *DevName)
                       CHARACTERISTIC_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_WRITE  |
+                      BLECharacteristic::PROPERTY_WRITE_NR |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
   pCharacteristic->addDescriptor(new BLE2902());
@@ -141,19 +142,27 @@ void BLE_SPP_Start(const char *DevName)
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinInterval(3200);    // [0.625ms] 3200 = 2.0 s slower advertising => lower power
-  pAdvertising->setMaxInterval(4000);    // [0.625ms] 4000 = 2.5 s
+  pAdvertising->setMinInterval(160*4);     // [0.625ms] 160 = 100 ms, faster phone discovery/connect
+  pAdvertising->setMaxInterval(240*4);     // [0.625ms] 240 = 150 ms
   // pAdvertising->setMinPreferred(0x12);   // [1.25ms] = 22.5ms prefered connection interval
   // pAdvertising->setMaxPreferred(0x24);   // [1.25ms] = 45.0ms
   pAdvertising->start(); }
 #endif
 
-void BLE_SPP_Check(void)
+static bool BLE_SPP_Send(void)
 { char *Block;
   int Size=BLE_SPP_TxFIFO.getReadBlock(Block);            // see how big is the next block to be sent on BLE
-  if(Size==0) return;                                     // no data to send: we are done
+  if(Size==0) return 0;                                   // no data to send: we are done
   if(Size>BLE_SPP_MTU-3) Size=BLE_SPP_MTU-3;              // clip to the MTU-3 on BLE
+  bool OK=1;
   if(BLE_SPP_isConnected)                                 // in BLE has a connected client
   { pCharacteristic->setValue((uint8_t *)Block, Size);    // then send the data out
     pCharacteristic->notify(); }
-  BLE_SPP_TxFIFO.flushReadBlock(Size); }                  // clear away the part which was sent out
+  if(OK) BLE_SPP_TxFIFO.flushReadBlock(Size);             // clear away the part which was sent out
+  return OK; }
+
+void BLE_SPP_Check(void)
+{ for( ; ; )
+  { bool OK=BLE_SPP_Send(); if(!OK) break;
+    vTaskDelay(1); }
+}
