@@ -1,6 +1,8 @@
 #pragma once
 
+#ifdef WITH_THINKNODE_M5
 extern uint8_t AlarmLevel;
+#endif
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
