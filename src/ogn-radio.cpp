@@ -541,7 +541,8 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     if (msTimeLen == 50 || msTimeLen == 150) msTimeLen++;           // FIXME: dirty fix against div by zero
     if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-150); }
             else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
-    PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
+    if(TxTime>5)
+      PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
 // #ifdef WITH_LBT
     for(int TxThres=10 ; ; )                                        // listen-before-talk
     { if(!SameChan) break;                                          // not if channels are different
@@ -1164,6 +1165,7 @@ void Radio_Task(void *Parms)
 
     static uint32_t PktCountSum=0;
     PktCountSum += PktCount;
+    // Serial.printf("Radio: %us %ums %dpkt\n", TimeRef.UTC, millis()-TimeRef.sysTime, PktCountSum);
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
      "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs [%d]",
