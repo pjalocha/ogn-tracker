@@ -19,6 +19,7 @@
 
 #define SERVICE_UUID        "FFE0"  // this service is used by XCSoar and SkyDemon to get NMEA
 #define CHARACTERISTIC_UUID "FFE1"
+#define BLE_SPP_DEFAULT_MTU 20
 
 #ifdef WITH_NIMBLE
 NimBLEServer* pServer = NULL;
@@ -29,7 +30,7 @@ BLECharacteristic* pCharacteristic = NULL;
 #endif
 
 bool BLE_SPP_isConnected = false;   // is a client connected ?
-int  BLE_SPP_MTU = 20;
+int  BLE_SPP_MTU = BLE_SPP_DEFAULT_MTU;
 
 #ifdef WITH_NIMBLE
 class MyServerCallbacks : public NimBLEServerCallbacks
@@ -44,18 +45,23 @@ class MyServerCallbacks : public NimBLEServerCallbacks
 
   void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int Reason) override
   { BLE_SPP_isConnected = false;
+    BLE_SPP_MTU = BLE_SPP_DEFAULT_MTU;
     Serial.printf("BLE device disconnected Reason:%d\n", Reason);
     pServer->startAdvertising(); }
 };
 #else
 class MyServerCallbacks: public BLEServerCallbacks
-{ void onConnect(BLEServer* pServer)
+{ void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) override
   { BLE_SPP_isConnected = true;
-    Serial.println("BLE device connected");
+    Serial.printf("BLE device connected ConnId:%d\n", pServer->getConnId());
+    pServer->updatePeerMTU(pServer->getConnId(), 247);
+    BLE_SPP_MTU = pServer->getPeerMTU(pServer->getConnId());
+    Serial.printf("BLE device MTU:%d\n", BLE_SPP_MTU);
   }
 
-  void onDisconnect(BLEServer* pServer)
+  void onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) override
   { BLE_SPP_isConnected = false;
+    BLE_SPP_MTU = BLE_SPP_DEFAULT_MTU;
     Serial.println("BLE device disconnected");
     pServer->startAdvertising(); }
 };
@@ -144,8 +150,8 @@ void BLE_SPP_Start(const char *DevName)
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinInterval(160*4);     // [0.625ms] 160 = 100 ms, faster phone discovery/connect
   pAdvertising->setMaxInterval(240*4);     // [0.625ms] 240 = 150 ms
-  // pAdvertising->setMinPreferred(0x12);   // [1.25ms] = 22.5ms prefered connection interval
-  // pAdvertising->setMaxPreferred(0x24);   // [1.25ms] = 45.0ms
+  pAdvertising->setMinPreferred(0x06);     // iPhone-friendly connection parameters
+  pAdvertising->setMaxPreferred(0x12);
   pAdvertising->start(); }
 #endif
 
