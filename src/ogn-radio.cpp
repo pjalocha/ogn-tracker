@@ -476,12 +476,14 @@ static float Radio_liveRSSI(void)  // read the current RSSI level (assume we are
 
 // keep receiving packets for a given time [ms] - put received packets into FSK_RxFIFO
 static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSync &TimeRef)
-{ uint32_t msStart = millis();                                     // [ms] start of the slot
+{ if(msTimeLen>500) msTimeLen=500;
+  uint32_t msStart = millis();                                     // [ms] start of the slot
   int PktCount=0;
   for( ; ; )
   { vTaskDelay(1);                                                 // wait 1ms
     PktCount+=Radio_Receive(PktLen, SysID, Channel, TimeRef);      // check if a packet has been received
-    uint32_t msTime = millis()-msStart;                            // [ms] time since start
+    uint32_t Now = millis();
+    uint32_t msTime = Now-msStart;                                 // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
   Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI); // [dBm] measure the noise level at the end of the slot and average
   return PktCount; }                                               // return number of received packets
@@ -546,7 +548,8 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
 // #ifdef WITH_LBT
     for(int TxThres=10 ; ; )                                        // listen-before-talk
     { if(!SameChan) break;                                          // not if channels are different
-      uint32_t msTime=millis()-msStart; if(msTime+20>=msTimeLen) break; // how much time left before the end of slot ?
+      uint32_t Now=millis();
+      uint32_t msTime=Now-msStart; if(msTime+20>=msTimeLen) break; // how much time left before the end of slot ?
       float RSSI=Radio_liveRSSI(); Random.RX+=RSSI;                 // [dBm] Live RSSI
       if(RSSI<Radio_BkgRSSI+TxThres)                                // if RSSI lower than 10dB(+) above average
       { Radio_BkgRSSI+=Radio_BkgUpdate*(RSSI-Radio_BkgRSSI); break; } //then go for transmission
@@ -568,8 +571,9 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     // Radio.setAFC(0);                                                // enable AFC
 #endif
     Radio.startReceive(); }                                            // start receiving again
-  uint32_t msTime = millis()-msStart;                                  // keep receiving till the end of slot
-  if(msTime<msTimeLen)
+  uint32_t Now = millis();
+  uint32_t msTime = Now-msStart;                                  // keep receiving till the end of slot
+  if(msTimeLen>msTime)
     PktCount+=Radio_Receive(msTimeLen-msTime, RxPktLen, RxSysID, RxChannel, TimeRef);
   Radio.standby();
   return PktCount; }
@@ -654,7 +658,8 @@ static int Radio_RxFANET(uint32_t msTimeLen, TimeSync &TimeRef)    // FANET rece
   for( ; ; )
   { vTaskDelay(1);                                                 // wait 1ms
     PktCount+=Radio_FANETrxPacket(TimeRef);                        // check if a packet has been received
-    uint32_t msTime = millis()-msStart;                            // [ms] time since start
+    uint32_t Now = millis();
+    uint32_t msTime = Now-msStart;                            // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
 #ifdef WITH_SX1262
   Radio_BkgRSSI += Radio_BkgUpdate*(Radio.getRSSI(false)-Radio_BkgRSSI);      // [dBm] measure the noise level at the end of the slot and average
@@ -724,10 +729,12 @@ static int Radio_FANETslot(float BW, float Freq, float TxPower, uint32_t msTimeL
     Radio_TxFANET(*TxPacket);                            // transmit the packet
     // msTxTime = millis()-msTxTime;
     // Serial.printf("TxFANET: %dms @%dms [%d]\n", TxTime, msTxTime, TxPacket->Len);
-    uint32_t msTime = millis()-msStart;
+    uint32_t Now = millis();
+    uint32_t msTime = Now-msStart;
     if(msTime<msTimeLen) PktCount+=Radio_RxFANET(msTimeLen-msTime, TimeRef); }
   else
-  { uint32_t msTime = millis()-msStart;
+  { uint32_t Now = millis();
+    uint32_t msTime = Now-msStart;
     if(msTime<msTimeLen) PktCount+=Radio_RxFANET(msTimeLen-msTime, TimeRef); }
   Radio.standby();
   return PktCount; }                                     // return number of received packets
@@ -752,7 +759,8 @@ static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLe
   Radio.startReceive();                             // start receiving
   for( ; ; )
   { vTaskDelay(1);
-    uint32_t msTime = millis()-msStart;             // [ms] time since start
+    uint32_t Now = millis();
+    uint32_t msTime = Now-msStart;             // [ms] time since start
     if(msTime>=msTimeLen) break;                    // [ms] when reached the requesten time length then stop
     if(Radio_IRQ()) break; }                        // break, when packet arrives
   if(!Radio_IRQ()) return 0;
@@ -1032,8 +1040,8 @@ void Radio_Task(void *Parms)
       if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
          else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
     }
-
-    msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
+    uint32_t Now = millis();
+    msTime = Now-TimeRef.sysTime;                // [ms] time since PPS
     if(msTime>=1000) msTime-=1000;
     uint32_t SlotLen = 900-msTime;                    // [ms] make the first slot longer, closer to ADS-L primary slot
          if(SlotLen>800) SlotLen=800;
@@ -1041,7 +1049,8 @@ void Radio_Task(void *Parms)
     // Serial.printf("Slot #0: %3d:%3d\n", msTime, SlotLen);
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
-    msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
+    Now = millis();
+    msTime = Now-TimeRef.sysTime;                // [ms] time since PPS
     SlotLen = 1200-msTime;
 #ifdef WITH_LORAWAN
     static uint8_t WAN_RxPacket[64];                  //
@@ -1053,7 +1062,7 @@ void Radio_Task(void *Parms)
     { if(WANdev.State==0 || WANdev.State==2) WANtx=1; } //
     if(WANtx) SlotLen = 1150-msTime;                    // if decision to transmit then stop the time slot a bit earlier
     else if(WANdev.State==1 || WANdev.State==3)         // if waiting for a reply
-    { int32_t RespLeft = WAN_RespTick-millis();         // and the reply time getting close
+    { int32_t RespLeft = WAN_RespTick-(uint32_t)millis();    // and the reply time getting close
       if(RespLeft>0 && RespLeft<1000) SlotLen=RespLeft-40; } // then adjust the time slot to be there in time
 #endif
 
