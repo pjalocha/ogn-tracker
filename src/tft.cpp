@@ -401,12 +401,9 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=16;
 
   Len=0;
-  // Len+=Format_String(Line+Len, "Lat: ");
   Line[Len++]=' ';
-  if(GPS && GPS->isValid())
-  { Len+=Format_SignDec(Line+Len,  GPS->Latitude /6, 7, 5);
-    /* Line[Len++]=0xB0; */ }
-  else Len+=Format_String(Line+Len, "---.-----");
+  if(GPS && GPS->isValid()) Len+=Format_SignDec(Line+Len,  GPS->Latitude /6, 7, 5);
+                      else  Len+=Format_String(Line+Len, "---.-----");
   Line[Len]=0;
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line);
@@ -414,11 +411,8 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   Vert+=16;
 
   Len=0;
-  // Len+=Format_String(Line+Len, "Lon:");
-  if(GPS && GPS->isValid())
-  { Len+=Format_SignDec(Line+Len,  GPS->Longitude /6, 8, 5);
-    /* Line[Len++]=0xB0; */ }
-  else Len+=Format_String(Line+Len, "----.-----");
+  if(GPS && GPS->isValid()) Len+=Format_SignDec(Line+Len,  GPS->Longitude /6, 8, 5);
+                      else  Len+=Format_String(Line+Len, "----.-----");
   Line[Len]=0;
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   TFT.setCursor(2, Vert); TFT.print(Line);
@@ -430,8 +424,7 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   if(GPS && GPS->isValid())
   { int32_t Alt = GPS->Altitude;
     if(Alt>=0) Line[Len++]=' ';
-    Len+=Format_SignDec(Line+Len,  Alt, 1, 1, 1);               // [0.1m]
-  }
+    Len+=Format_SignDec(Line+Len,  Alt, 1, 1, 1); }              // [0.1m]
   else Len+=Format_String(Line+Len, "-----.-");
   Line[Len++]='m'; Line[Len++]=' ';
   Line[Len]=0;
