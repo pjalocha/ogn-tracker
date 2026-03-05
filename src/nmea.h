@@ -170,6 +170,12 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
        if(Data[4]!='G') return 0;
        return Data[5]=='A'; }
 
+   uint8_t isGxGLL(void) const                  // 
+     { if(!isGx()) return 0;
+       if(Data[3]!='G') return 0;
+       if(Data[4]!='L') return 0;
+       return Data[5]=='L'; }
+
    uint8_t isGxVTG(void) const                  // velocity relative to the ground
      { if(!isGx()) return 0;
        if(Data[3]!='V') return 0;
