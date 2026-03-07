@@ -800,6 +800,7 @@ void setup()
    USB.begin();
    USBSerial.begin(Parameters.CONbaud);
 #else
+  Serial.setTxBufferSize(4096);
   Serial.begin(Parameters.CONbaud);          // for USB Console baud rate probably does not matter here
 #endif
 
