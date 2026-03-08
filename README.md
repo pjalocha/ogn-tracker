@@ -3,6 +3,22 @@ OGN Tracker implementation on ESP32 devices or anything which can be handled wit
 
 It works on TTGO modules like various T-Beam modules including the ESP32-S3 version.
 
+## Support Development
+
+This project is open source and developed in spare time.
+If you find it useful, you can support further development with a donation.
+
+Donations help fund ongoing **software development and research** related to Open Glider Network:
+
+- OGN/ADS-L/FANET trackers
+- OGN ground receivers which the base of the network
+- Stratux
+
+Your support helps cover development time, testing hardware, and experimentation needed to improve these systems.
+
+**Donate via PayPal:**
+https://paypal.me/paweljalocha
+
 ## New: firmware installer for dummies
 
 Use Chrome/Edge: https://pjalocha.github.io/ogn-tracker/
