@@ -5,16 +5,13 @@ It works on TTGO modules like various T-Beam modules including the ESP32-S3 vers
 
 ## Support Development
 
-This project is open source and developed in spare time.
-If you find it useful, you can support further development with a donation.
-
-Donations help fund ongoing **development and research** related to Open Glider Network:
+This project is open-source and developed in my spare time.
+If you find it useful, please support **development and research** related to the Open Glider Network:
 
 - OGN/ADS-L/FANET trackers
 - OGN ground receivers which form the base of the network
 - Stratux project: the OGN part
-
-Your support helps cover development time, testing hardware, and experimentation needed to improve these systems.
+- testing sotware and hardware, experimentation needed to improve things
 
 **Donate via PayPal:**
 https://paypal.me/paweljalocha
