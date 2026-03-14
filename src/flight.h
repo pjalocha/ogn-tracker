@@ -21,7 +21,7 @@ class FlightMonitor
   public:
 
    FlightMonitor()
-   { }
+   { Clear(); }
 
    void Clear(void)
    { FirstLock.Clear();

@@ -820,9 +820,8 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #endif
 #endif
 
-
 #if ARDUINO_USB_CDC_ON_BOOT==1
-  Serial.setTxTimeoutMs(10);                 // to prevent delays and blocking of threads which send data to the USB console
+  Serial.setTxTimeoutMs(0);              // to prevent delays and blocking of threads which send data to the USB console
 #endif
 
   GPS_UART_Init();

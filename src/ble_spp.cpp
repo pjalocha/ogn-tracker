@@ -156,9 +156,12 @@ void BLE_SPP_Start(const char *DevName)
 #endif
 
 static bool BLE_SPP_Send(void)
-{ char *Block;
+{ static uint8_t Wait=0;
+  char *Block;
   int Size=BLE_SPP_TxFIFO.getReadBlock(Block);            // see how big is the next block to be sent on BLE
   if(Size==0) return 0;                                   // no data to send: we are done
+  if(Size<BLE_SPP_MTU-3 && Wait<10) { Wait++; return 0; }
+  Wait=0;
   if(Size>BLE_SPP_MTU-3) Size=BLE_SPP_MTU-3;              // clip to the MTU-3 on BLE
   bool OK=1;
   if(BLE_SPP_isConnected)                                 // in BLE has a connected client

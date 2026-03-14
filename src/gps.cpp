@@ -716,7 +716,7 @@ static void GPS_NMEA(bool Correct=1)                                        // w
   {
 #ifdef WITH_GPS_NMEA_PASS                 // pass all GPS NMEA
 #else                                     // or filter them
-    if(Parameters.Verbose & 0b01 && !NMEA.isGxGSV() && !NMEA.isGxGSA() && !NMEA.isGxTXT())
+    if(Parameters.Verbose & 0b01 && !NMEA.isGxGSV() /* && !NMEA.isGxGSA() */ && !NMEA.isGxTXT())
 #endif
     { if(xSemaphoreTake(CONS_Mutex, 10))
       { Format_String(CONS_UART_Write, (const char *)NMEA.Data, 0, NMEA.Len);
