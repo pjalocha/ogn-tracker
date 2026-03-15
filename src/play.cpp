@@ -69,7 +69,7 @@ static FIFO<uint16_t,  64> Play_FIFO;            // queue of notes to play
 // static FIFO<uint16_t, 128> Morse_FIFO;           // queue for Morse messages
 
 void Play(uint8_t Note, uint8_t Len)             // [Note] [ms] put a new note to play in the queue
-{ Serial.printf("Play(0x%02X, %d)\n", Note, Len);
+{ // Serial.printf("Play(0x%02X, %d)\n", Note, Len);
   uint16_t Word = Note; Word<<=8; Word|=Len; Play_FIFO.Write(Word); }
 
 uint8_t Play_isBusy(void) { return Play_Counter; } // is a note being played right now ?
