@@ -58,7 +58,7 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
              else Len+=sprintf(Out+Len, " ---.-m/s");
      if(hasTurn)  Len+=sprintf(Out+Len, " %+5.1fdeg/s", (360.0/0x10000)*Turn);
              else Len+=sprintf(Out+Len, " ---.-deg/s");
-     Len+sprintf(Out+Len, " [%4.1fm]", 0.5*Error);
+     Len+=sprintf(Out+Len, " [%4.1fm]", 0.5*Error);
      // printf(" [%+6.2f,%+6.2f]m/s^2", 0.0625*Ax, 0.0625*Ay);
      // if(R) printf(" R:%+8.1fm [%+7.1f, %+7.1f]", 0.5*R, 0.5*Ox, 0.5*Oy);
      return Len; }

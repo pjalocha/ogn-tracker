@@ -92,7 +92,7 @@ class LookOut_Target           // describes a flying aircrafts
    void Print(void) const
    { if(Call[0]) printf("%-8s", Call);
            else  printf("%08X", ID);
-     printf("/%+5.1fs/%7.1fm/%7.1fm/%5.1fs/%5.1fm/%+5.1fs/w%d ",
+     printf("/%+5.1fs/%7.1fm/%7.1fm/%5.1fs/%5.1fm/%+5.1fs/w%d",
             0.5*Pred, 0.5*DistMargin, 0.5*HorDist, 0.5*TimeMargin, 0.5*MissDist, 0.5*MissTime, WarnLevel);
      // printf(" [%+7.1f,%+7.1f,%+7.1f]m [%+5.1f,%+5.1f,%+5.1f]m/s", 0.5*dX, 0.5*dY, 0.5*dZ, 0.5*Vx, 0.5*Vy, 0.5*Vz);
      // printf(" [%+5.2f,%+5.2f]m/s^-2", 0.0625*Ax, 0.0625*Ay);
@@ -384,20 +384,20 @@ template <const uint8_t MaxTgts=32>
    }
 
    template <class OGNx_Packet>
-    int32_t Start(OGNx_Packet &OwnPos, uint32_t RxTime)
+    int32_t Start(OGNx_Packet &OwnPos, uint32_t RxTime)  // start the algorytm with an OGN packet received at RxTime [sec]
    { Clear();
      // ID = OwnPos.getAddressAndType() | ((uint32_t)OwnPos.Position.AcftType<<26) ;
-     ID = OwnPos.Header.Address | ((uint32_t)(OwnPos.Header.AddrType+4)<<24);
-     AcftType = OwnPos.Position.AcftType;
-     RefTime = OwnPos.getTime(RxTime);                // set reference time
-     RefLat = OwnPos.DecodeLatitude();                // and reference positon
+     ID = OwnPos.Header.Address | ((uint32_t)(OwnPos.Header.AddrType+4)<<24);           // do ADS-L address-type
+     AcftType = OwnPos.Position.AcftType;             // OGN aircraft-type
+     RefTime = OwnPos.getTime(RxTime);                // [sec] set reference time
+     RefLat = OwnPos.DecodeLatitude();                // set reference positon
      RefLon = OwnPos.DecodeLongitude();
      RefAlt = OwnPos.DecodeAltitude();                // and reference altitude
      LatCos = Icos(GPS_Position::calcLatAngle16(RefLat));
      Pred=0;
      return Pos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange); }
 
-   template <class OGNx_Packet>
+   template <class OGNx_Packet> // after starting the algorithm, process own position packets
     const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime, int OwnGeoidSepar) // process own position
    { // printf("ProcessOwn() ... entry\n");
      GeoidSepar=OwnGeoidSepar;
@@ -408,7 +408,7 @@ template <const uint8_t MaxTgts=32>
        // if(!Pos.hasStdAlt)                                                              // if no StdAlt
        // { }                                                                             // get it from targets
      }
-     else
+     else //if algorithm not yet started then do so
      { hasPosition = Start(OwnPos, RxTime)>=0; }
 
      if(hasPosition)                                                                  // if already started

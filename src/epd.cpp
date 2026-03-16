@@ -84,8 +84,7 @@ static bool UpdateSatMon(void)
 
 // ========================================================================================================================
 
-// static uint8_t AlarmLevel = 4;   // now in proc.h/.cpp
-static uint8_t PrevAlarmLevel = 0;
+static uint8_t PrevAlarmThresh = 0;
 
 static void DrawAlarmFrame(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_BLACK)
 { int16_t W2 = W/2;
@@ -93,20 +92,20 @@ static void DrawAlarmFrame(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_
   EPD.drawLine(X, Y, X-W2, Y+W, Color);
   EPD.drawLine(X-W2, Y+W, X+W2, Y+W, Color); }
 
-static void DrawAlarmLevel(void)
+static void DrawAlarmThresh(void)
 { DrawAlarmFrame(110, 0, 34);
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold12pt7b);
-  EPD.drawChar(110-6, 28, '0'+AlarmLevel, GxEPD_BLACK, GxEPD_WHITE, 1);
-  PrevAlarmLevel=AlarmLevel; }
+  EPD.drawChar(110-6, 28, '0'+AlarmThresh, GxEPD_BLACK, GxEPD_WHITE, 1);
+  PrevAlarmThresh=AlarmThresh; }
 
-static bool UpdateAlarmLevel(void)
-{ if(PrevAlarmLevel==AlarmLevel) return 0;
-  // PrevAlarmLevel=AlarmLevel;
+static bool UpdateAlarmThresh(void)
+{ if(PrevAlarmThresh==AlarmThresh) return 0;
+  // PrevAlarmThresh=AlarmThresh;
   EPD.setPartialWindow(110-17, 0, 35, 35);                       // partial update
   EPD.fillRect(110-17, 0, 35, 35, GxEPD_WHITE);                  // clear the area to be redrawn
   EPD.firstPage();
-  DrawAlarmLevel();
+  DrawAlarmThresh();
   EPD.nextPage();
   return 1; }
 
@@ -188,7 +187,7 @@ void EPD_DrawID(void)
   EPD.setCursor(0, 195);
   EPD.print(Line);
   // drawSpeaker(110, 16, 32, GxEPD_BLACK);
-  DrawAlarmLevel();
+  DrawAlarmThresh();
   DrawBattFrame();
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
   UpdateTime = millis();
@@ -202,7 +201,7 @@ void EPD_UpdateID(void)
   else
   { msAge = msTime-UpdateTime;
     if(msAge<1000) return; }                                     // do not update more frequent than once per 2 seconds
-  PartUpd+=UpdateAlarmLevel();
+  PartUpd+=UpdateAlarmThresh();
   PartUpd+=UpdateBatt();
   PartUpd+=UpdateSatMon();
   UpdateTime=msTime; }

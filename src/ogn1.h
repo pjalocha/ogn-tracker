@@ -215,7 +215,9 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      Inp+=Chars; Len+=4;
      for( uint8_t Idx=0; Idx<4; Idx++)
      { if(Inp[0]==' ') Inp++;
-       int Chars = Read_Hex(Data[Idx], Inp); if(Chars!=8) return 0;
+       uint8_t Byte;
+       int Chars = Read_Hex(Byte, Inp); if(Chars!=8) return 0;
+       Data[Idx]=Byte;
        Inp+=Chars; Len+=4; }
      return Len; }
 

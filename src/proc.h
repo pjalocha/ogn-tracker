@@ -1,7 +1,7 @@
 #pragma once
 
 #ifdef WITH_THINKNODE_M5
-extern uint8_t AlarmLevel;
+extern uint8_t AlarmThresh;
 #endif
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings

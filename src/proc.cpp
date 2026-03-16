@@ -37,10 +37,12 @@ static GDL90_REPORT GDL_REPORT;
 #include "mesht-proto.h"
 #endif
 
+uint8_t AlarmLevel = 0;               // current alarm level, from Lookout, 0=no alarm
+
 #ifdef WITH_THINKNODE_M5
-uint8_t AlarmLevel = 0;
+uint8_t AlarmThresh = 4;               // 0: all alarms, 1: only 1 or higher, 2: only 2 or higher, 3: only three or higher, 4: all blocked
 #else
-const uint8_t AlarmLevel = 3;
+const uint8_t AlarmThresh = 1;
 #endif
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
@@ -572,11 +574,11 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                         // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
      bool Signif = PrevRxPacket==0;
@@ -663,11 +665,11 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(AlarmLevel>3) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
 /*
@@ -981,7 +983,7 @@ void vTaskPROC(void* pvParameters)
       else
       { if(!GhostSilent) OGN_TxFIFO.Write();                                                // complete the write into the TxFIFO
         TxBackOff = 0;
-        if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
+        if(AlarmLevel==0 && AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
         if(Radio_TxCredit<=0) TxBackOff+=1; }
       Position->Sent=1;
 #ifdef WITH_ADSL
@@ -1072,21 +1074,22 @@ void vTaskPROC(void* pvParameters)
 #endif // WITH_PFLAA
       uint8_t Warn = 0;
       if(Tgt) Warn = Tgt->WarnLevel;                                       // what is the warning level ?
+      AlarmLevel=Warn;
       if( (Warn>0) /* && (AverSpeed>=10) */ )                                    // if non-zero warning level and we seem to be moving
       { // int16_t RelBearing = Look.getRelBearing(Tgt);                      // relative bearing to the Target
         // int8_t Bearing = (12*(int32_t)RelBearing+0x8000)>>16;              // [-12..+12]
 #ifdef WITH_BEEPER                                                         // make the sound according to the level
         if(Warn<=1)
-        { if(AlarmLevel>2)
+        { if(AlarmThresh<=1)
           { Play(Play_Vol_1 | Play_Oct_1 | 4, 200); }
         }
         else if(Warn<=2)
-        { if(AlarmLevel>1)
+        { if(AlarmThresh<=2)
           { Play(Play_Vol_3 | Play_Oct_1 | 8, 150); Play(Play_Oct_1 | 8, 150);
             Play(Play_Vol_3 | Play_Oct_1 | 8, 150); }
         }
         else if(Warn<=3)
-        { if(AlarmLevel>0)
+        { if(AlarmThresh<=3)
           { Play(Play_Vol_3 | Play_Oct_1 |11, 100); Play(Play_Oct_1 |11, 100);
             Play(Play_Vol_3 | Play_Oct_1 |11, 100); Play(Play_Oct_1 |11, 100);
             Play(Play_Vol_3 | Play_Oct_1 |11, 100); }
