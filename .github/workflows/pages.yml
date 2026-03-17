@@ -44,8 +44,10 @@ jobs:
           VARIANTS=(
             "ttgo-sx1276-tbeam-v10:esp32:ESP32:0x1000:0x8000::0x10000"
             "ttgo-sx1276-tbeam-v12:esp32:ESP32:0x1000:0x8000::0x10000"
+            "ttgo-sx1276-tbeam-v12-oled:esp32:ESP32:0x1000:0x8000::0x10000"
             "ttgo-sx1262-tbeam-v10:esp32:ESP32:0x1000:0x8000::0x10000"
             "ttgo-sx1262-tbeam-v12:esp32:ESP32:0x1000:0x8000::0x10000"
+            "ttgo-sx1262-tbeam-v12-oled:esp32:ESP32:0x1000:0x8000::0x10000"
             "ttgo-sx1262-tbeam-s3-mtk-oled:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
             "ttgo-sx1262-tbeam-s3-ubx-oled:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
             "HTIT-Tracker:esp32s3:ESP32-S3:0x0000:0x8000:0xE000:0x10000"
