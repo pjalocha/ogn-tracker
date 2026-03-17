@@ -506,8 +506,8 @@ static Button2 OptButton(Button2_Pin);
 static bool OptButton_isPressed(void) { return digitalRead(Button2_Pin)==0; }
 
 static void OptButton_Single(Button2 Butt) // callback when a single press on the button
-{ AlarmThres++;
-  if(AlarmThres>4) AlarmThres=0; }
+{ AlarmThresh++;
+  if(AlarmThresh>4) AlarmThresh=0; }
 
 static void OptButton_Init(void)
 { pinMode(Button2_Pin, INPUT);
