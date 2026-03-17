@@ -381,14 +381,19 @@ static void ReadStatus(OGN_Packet &Packet)
     Len+=Format_String(Line+Len, "$POGNR,");                                  // NMEA report: radio status
     Len+=Format_UnsDec(Line+Len, (uint32_t)Radio_FreqPlan.Plan);              // which frequency plan
     Line[Len++]=',';
+    Len+=Format_UnsDec(Line+Len, (uint32_t)roundf(Radio_PktRate*60));
     // Len+=Format_UnsDec(Line+Len, (uint32_t)RX_OGN_Count64);                   // number of OGN packets received
     Line[Len++]=',';
     Line[Len++]=',';
+    Len+=Format_SignDec(Line+Len, (int32_t)roundf(Radio_BkgRSSI*10), 2, 1);       // average RF level (over all channels)
     // Len+=Format_SignDec(Line+Len, -5*TRX.averRSSI, 2, 1);                     // average RF level (over all channels)
     Line[Len++]=',';
     Len+=Format_SignDec(Line+Len, Radio_TxCredit/100, 2, 1);                       // [sec] transmitter on-air time counter
     Line[Len++]=',';
+#ifdef WITH_SX1276
+    Len+=Format_SignDec(Line+Len, (int32_t)Radio_ChipTemperature);
     // Len+=Format_SignDec(Line+Len, (int16_t)TRX.chipTemp);                     // the temperature of the RF chip
+#endif
     Line[Len++]=',';
     // Len+=Format_SignDec(Line+Len, MCU_Temp, 2, 1);
     Line[Len++]=',';
