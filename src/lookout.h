@@ -67,7 +67,7 @@ class LookOut_Target           // describes a flying aircrafts
    // int16_t        Ax;        // [1/16m/s^2] relative acceleration of target
    // int16_t        Ay;        // [1/16m/s^2]
 
-  uint16_t   HorDist;        // [0.5m]   relative hor. distance to target
+  uint16_t   HorDist;        // [0.5m]   relative horizontal distance to target
    int16_t  MissTime;        // [0.5s]   estimated closest approach time
   uint16_t  MissDist;        // [0.5m]   estimated closest approach distance
 

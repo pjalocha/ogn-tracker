@@ -11,8 +11,11 @@
 
 static char Line[32];
 
+#ifdef WITH_TBEAMS3
 U8G2_SH1106_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
-// U8G2_SSD1306_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
+#else
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
+#endif
 
 void OLED_DrawLogo(u8g2_t *OLED, const GPS_Position *GPS)  // draw logo and hardware options in software
 { u8g2_DrawCircle(OLED, 96, 32, 30, U8G2_DRAW_ALL);

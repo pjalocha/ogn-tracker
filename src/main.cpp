@@ -1074,7 +1074,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_OLED
   OLED.begin();
+#ifdef WITH_TBEAMS3
   OLED.setDisplayRotation(U8G2_R2);
+#else
+  OLED.setDisplayRotation(U8G2_R0);
+#endif
   OLED.clearBuffer();
   OLED_DrawLogo(OLED.getU8g2(), 0);
   OLED.sendBuffer();

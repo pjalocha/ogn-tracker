@@ -37,13 +37,13 @@ static GDL90_REPORT GDL_REPORT;
 #include "mesht-proto.h"
 #endif
 
-uint8_t AlarmLevel = 0;               // current alarm level, from Lookout, 0=no alarm
-
 #ifdef WITH_THINKNODE_M5
-uint8_t AlarmThresh = 4;               // 0: all alarms, 1: only 1 or higher, 2: only 2 or higher, 3: only three or higher, 4: all blocked
+uint8_t AlarmThresh = 4;              // 0: all alarms, 1: only 1 or higher, 2: only 2 or higher, 3: only three or higher, 4: all blocked
 #else
 const uint8_t AlarmThresh = 1;
 #endif
+uint8_t AlarmLevel = 0;               // current alarm level, from Lookout, 0=no alarm
+uint8_t GhostSilent = 0;              // if the Ghost-mode is silent
 
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
@@ -95,8 +95,6 @@ static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN
 // FlightMonitor Flight;
 
 // #define DEBUG_PRINT
-
-static int GhostSilent = 0;           // if the Ghost-mode is silent
 
 // =======================================================================================================================================
 
@@ -929,7 +927,7 @@ void vTaskPROC(void* pvParameters)
         Radio_FreqPlan.setPlan(Position->Latitude, Position->Longitude); // set the frequency plan according to the GPS position
       else Radio_FreqPlan.setPlan(Parameters.FreqPlan);
 
-      { int NewGhostSilent = Parameters.GhostMode && Radio_PktRate==0;  // if ghost mode then inhibit position transmission unless traffic 
+      { uint8_t NewGhostSilent = Parameters.GhostMode && Radio_PktRate==0;  // if ghost mode then inhibit position transmission unless traffic 
         if(NewGhostSilent!=GhostSilent)                                 // if change of state then
         { XorShift32(Random.RX);
           if(Parameters.AddrType==0) Parameters.Address = Parameters.Address^Random.RX; // random-ID if enabled
