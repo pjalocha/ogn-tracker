@@ -39,6 +39,8 @@ esp_err_t WIFI_Connect(const char *SSID, const char *Pass, int8_t MinSig=(-90));
 esp_err_t WIFI_Disconnect(void);
 
 uint32_t WIFI_getLocalIP(void);
+uint32_t WIFI_getBroadcastIP(void);
+uint32_t WIFI_getBroadcastIP(tcpip_adapter_if_t Iface);
 
 esp_err_t WIFI_ActiveScan(wifi_ap_record_t *AP, uint16_t &APs);
 esp_err_t WIFI_PassiveScan(wifi_ap_record_t *AP, uint16_t &APs);

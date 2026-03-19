@@ -2,17 +2,17 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 
-class Socket
+class TCPsocket
 { public:
    struct addrinfo *Host;
    int Link;
 
   public:
-   Socket()
+   TCPsocket()
    { Host=0;
      Link=(-1); }
 
-  ~Socket()
+  ~TCPsocket()
    { Disconnect(); }
 
    uint32_t getIP(void) const
@@ -68,6 +68,84 @@ class Socket
    int setReceiveTimeout(int Sec)
    { struct timeval Timeout = { tv_sec:Sec, tv_usec:0 };
      return setsockopt(Link, SOL_SOCKET, SO_RCVTIMEO, &Timeout, sizeof(Timeout)); }
+
+} ;
+
+
+class UDPsocket
+{ public:
+   int Link;
+
+  public:
+   UDPsocket()
+   { Link=(-1); }
+
+  ~UDPsocket()
+   { Close(); }
+
+   bool isOpen(void) const
+   { return Link>=0; }
+
+   int Open(void)
+   { Close();
+     Link = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+     return Link; }
+
+   void Close(void)
+   { if(Link>=0) { close(Link); Link=(-1); } }
+
+   int Bind(uint16_t Port)
+   { if(!isOpen())
+     { if(Open()<0) return -1; }
+     struct sockaddr_in LocalAddr = { };
+     LocalAddr.sin_family = AF_INET;
+     LocalAddr.sin_port   = htons(Port);
+     LocalAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+     return bind(Link, (struct sockaddr *)&LocalAddr, sizeof(LocalAddr)); }
+
+   int setBlocking(int Block=1)
+   { int Flags = fcntl(Link, F_GETFL, 0);
+     if(Block) Flags &= ~O_NONBLOCK;
+          else Flags |=  O_NONBLOCK;
+     return fcntl(Link, F_SETFL, Flags); }
+
+   int setNonBlocking(void)
+   { return setBlocking(0); }
+
+   int setReceiveTimeout(int Sec)
+   { struct timeval Timeout = { tv_sec:Sec, tv_usec:0 };
+     return setsockopt(Link, SOL_SOCKET, SO_RCVTIMEO, &Timeout, sizeof(Timeout)); }
+
+   int setReuseAddress(int Enable=1)
+   { return setsockopt(Link, SOL_SOCKET, SO_REUSEADDR, &Enable, sizeof(Enable)); }
+
+   int setBroadcast(int Enable=1)
+   { return setsockopt(Link, SOL_SOCKET, SO_BROADCAST, &Enable, sizeof(Enable)); }
+
+   int SendTo(uint32_t IP, uint16_t Port, const void *Buff, int Len)
+   { if(!isOpen()) return -1;
+     struct sockaddr_in DestAddr = { };
+     DestAddr.sin_family = AF_INET;
+     DestAddr.sin_port   = htons(Port);
+     DestAddr.sin_addr.s_addr = IP;
+     return sendto(Link, Buff, Len, 0, (struct sockaddr *)&DestAddr, sizeof(DestAddr)); }
+
+   int ReceiveFrom(void *Buff, int Len, uint32_t &IP, uint16_t &Port)
+   { if(!isOpen()) return -1;
+     struct sockaddr_in SrcAddr = { };
+     socklen_t AddrLen = sizeof(SrcAddr);
+     int Ret=recvfrom(Link, Buff, Len, 0, (struct sockaddr *)&SrcAddr, &AddrLen);
+     if(Ret>=0)
+     { IP   = SrcAddr.sin_addr.s_addr;
+       Port = ntohs(SrcAddr.sin_port);
+       return Ret; }
+     return errno==EWOULDBLOCK ? 0:Ret; }
+
+   int SendBroadcast(uint16_t Port, const void *Buff, int Len, uint32_t BroadcastIP=INADDR_BROADCAST)
+   { if(!isOpen()) return -1;
+     int Err = setBroadcast(1);
+     if(Err!=0) return Err;
+     return SendTo(BroadcastIP, Port, Buff, Len); }
 
 } ;
 

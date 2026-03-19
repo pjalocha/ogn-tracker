@@ -176,6 +176,15 @@ uint32_t WIFI_getLocalIP(void)                       // get local IP, once DHCP 
   Err=tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &WIFI_IP); if(Err!=ESP_OK) return 0;
   return WIFI_IP.ip.addr; }
 
+uint32_t WIFI_getBroadcastIP(tcpip_adapter_if_t Iface)
+{ tcpip_adapter_ip_info_t IPinfo;
+  esp_err_t Err=tcpip_adapter_get_ip_info(Iface, &IPinfo);
+  if(Err!=ESP_OK) return 0;
+  return IPinfo.ip.addr | ~IPinfo.netmask.addr; }
+
+uint32_t WIFI_getBroadcastIP(void)
+{ return WIFI_getBroadcastIP(TCPIP_ADAPTER_IF_STA); }  // TCPIP_ADAPTER_IF_AP for AP broadcast
+
 uint8_t IP_Print(char *Out, uint32_t IP)
 { uint8_t Len=0;
   for(uint8_t Idx=0; Idx<4; Idx++)

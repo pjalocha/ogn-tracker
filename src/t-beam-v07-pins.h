@@ -14,6 +14,9 @@
 #define Radio_PinIRQ  26 // IRQ
 #define Radio_PinBusy 32 // Busy but only for SX1262
 
+#define Buzzer_Pin     4 // GPIO  4 = Beeper
+#define Buzzer_Channel 0 // LED controller channel
+
 // I2C
 #define I2C_PinSCL    22 // GPIO  1 = SCL
 #define I2C_PinSDA    21 // GPIO  2 = SDA

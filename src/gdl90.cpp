@@ -98,41 +98,40 @@ uint16_t CRC16_CCITT(const uint8_t *Data, uint8_t Len, uint16_t CRC)
 const uint8_t GDL90_Flag = 0x7E;
 const uint8_t GDL90_Esc  = 0x7D;
 
-static int GDL90_SendEsc(void (*Output)(char), uint8_t Byte)   // shall we escape control characters as well ?
-{ // if(Byte<0x20 || Byte==GDL90_Flag || Byte==GDL90_Esc) { (*Output)((char)GDL90_Esc); Byte^=0x20; (*Output)((char)Byte); return 2; }
-  if(Byte==GDL90_Flag || Byte==GDL90_Esc) { (*Output)((char)GDL90_Esc); Byte^=0x20; (*Output)((char)Byte); return 2; } // ESCape some characters
+static int GDL90_SendEsc(void (*Output)(char), uint8_t Byte, bool EscCtrl)   // shall we escape control characters as well ?
+{ if((EscCtrl && Byte<0x20) || Byte==GDL90_Flag || Byte==GDL90_Esc)
+  { (*Output)((char)GDL90_Esc); Byte^=0x20; (*Output)((char)Byte); return 2; } // ESCape some characters
   (*Output)((char)Byte); return 1; }
 
-int GDL90_Send(void (*Output)(char), uint8_t ID, const uint8_t *Data, int Len)
+int GDL90_Send(void (*Output)(char), uint8_t ID, const uint8_t *Data, int Len, bool EscCtrl)
 { int OutLen=0; uint16_t CRC=0;
   (*Output)((char)GDL90_Flag); OutLen++;
   CRC=GDL90_CRC16(ID, CRC);
-  OutLen+=GDL90_SendEsc(Output, ID);
+  OutLen+=GDL90_SendEsc(Output, ID, EscCtrl);
   for( int Idx=0; Idx<Len; Idx++)
   { uint8_t Byte=Data[Idx];
     CRC=GDL90_CRC16(Byte, CRC);
-    OutLen+=GDL90_SendEsc(Output, Byte); }
-  OutLen+=GDL90_SendEsc(Output, CRC&0xFF);
-  OutLen+=GDL90_SendEsc(Output, CRC>>8);
+    OutLen+=GDL90_SendEsc(Output, Byte, EscCtrl); }
+  OutLen+=GDL90_SendEsc(Output, CRC&0xFF, EscCtrl);
+  OutLen+=GDL90_SendEsc(Output, CRC>>8, EscCtrl);
   (*Output)((char)GDL90_Flag); OutLen++;
   return OutLen; }
 
-static int GDL90_SendEsc(uint8_t *Out, uint8_t Byte)   // shall we escape control characters as well ?
-{ // if(Byte<0x20 || Byte==GDL90_Flag || Byte==GDL90_Esc) { Out[0]=GDL90_Esc; Byte^=0x20; Out[]=Byte; return 2; }
-  if(Byte==GDL90_Flag || Byte==GDL90_Esc) { Out[0]=GDL90_Esc; Byte^=0x20; Out[1]=Byte; return 2; } // ESCape some characters
+static int GDL90_SendEsc(uint8_t *Out, uint8_t Byte, bool EscCtrl)   // shall we escape control characters as well ?
+{ if((EscCtrl && Byte<0x20) || Byte==GDL90_Flag || Byte==GDL90_Esc) { Out[0]=GDL90_Esc; Byte^=0x20; Out[1]=Byte; return 2; } // ESCape some characters
   Out[0]=Byte; return 1; }
 
-int GDL90_Send(uint8_t *Out, uint8_t ID, const uint8_t *Data, int Len)
+int GDL90_Send(uint8_t *Out, uint8_t ID, const uint8_t *Data, int Len, bool EscCtrl)
 { int OutLen=0; uint16_t CRC=0;
   Out[OutLen++]=GDL90_Flag;
   CRC=GDL90_CRC16(ID, CRC);
-  OutLen+=GDL90_SendEsc(Out+OutLen, ID);
+  OutLen+=GDL90_SendEsc(Out+OutLen, ID, EscCtrl);
   for( int Idx=0; Idx<Len; Idx++)
   { uint8_t Byte=Data[Idx];
     CRC=GDL90_CRC16(Byte, CRC);
-    OutLen+=GDL90_SendEsc(Out+OutLen, Byte); }
-  OutLen+=GDL90_SendEsc(Out+OutLen, CRC&0xFF);
-  OutLen+=GDL90_SendEsc(Out+OutLen, CRC>>8);
+    OutLen+=GDL90_SendEsc(Out+OutLen, Byte, EscCtrl); }
+  OutLen+=GDL90_SendEsc(Out+OutLen, CRC&0xFF, EscCtrl);
+  OutLen+=GDL90_SendEsc(Out+OutLen, CRC>>8, EscCtrl);
   Out[OutLen++]=GDL90_Flag;
   return OutLen; }
 

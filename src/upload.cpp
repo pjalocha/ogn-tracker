@@ -166,7 +166,7 @@ static int Upload(void)
 static const char *UploadHost = "ogn3.glidernet.org";                // server address
 static const char *UploadPort = "8084";                              // server socket
 
-static Socket UploadSocket;                                          // socket to talk to the server
+static TCPsocket UploadSocket;                                       // socket to talk to the server
 
 static int UploadDialog(void)               // connect and talk to the server exchaging data
 { int ConnErr=UploadSocket.Connect(UploadHost, UploadPort);   // connect to the server
