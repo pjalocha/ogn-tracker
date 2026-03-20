@@ -1161,7 +1161,9 @@ uint16_t StratuxPort;
       strcpy(Line, "WIFIpass"); Line[8]='0'+Idx; Line[9]='='; strcpy(Line+10, WIFIpass[Idx]); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);; }
     // Write_String (Line, "WIFIname", WIFIname[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
     // Write_String (Line, "WIFIpass", WIFIpass[0]); strcat(Line, " #  [char]\n"); Format_String(Output, Line);
+#ifdef WITH_UPLOAD
     strcpy(Line, "UploadURL      = "); strcat(Line, UploadURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);
+#endif
 #endif
 #ifdef WITH_OTA_HTTPS
     strcpy(Line, "FirmwareURL    = "); strcat(Line, FirmwareURL); strcat(Line, "; #  [char]\n"); Format_String(Output, Line);

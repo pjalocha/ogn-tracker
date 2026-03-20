@@ -1,6 +1,6 @@
 #include "main.h"
 
-#ifdef WITH_WIFI
+#ifdef WITH_UPLOAD
 
 #include "socket.h"
 #include "wifi.h"

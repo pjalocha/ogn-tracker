@@ -30,7 +30,8 @@
 #ifdef WITH_GDL90
 #include "gdl90.h"
 static GDL90_HEARTBEAT GDL_HEARTBEAT;
-static GDL90_REPORT GDL_REPORT;
+static GDL90_GEOMALT   GDL_GEOMALT;
+static GDL90_REPORT    GDL_REPORT;
 #endif
 
 #ifdef WITH_MESHT
@@ -891,16 +892,20 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_GDL90
     GDL_HEARTBEAT.Clear();
     GDL_HEARTBEAT.Initialized=1;
+    GDL_HEARTBEAT.AddrType = Parameters.AddrType!=1;
+    /// GDL_HEARTBEAT.LowBatt = ;
     if(Position)
     { if(Position->isTimeValid())
       { GDL_HEARTBEAT.UTCvalid=1;
-        GDL_HEARTBEAT.setTimeStamp(SlotTime);
+        if(Position->isDateValid()) GDL_HEARTBEAT.setTimeStamp(SlotTime);
         if(Position->isValid()) GDL_HEARTBEAT.PosValid = 1; }
     }
+    GDL_GEOMALT.Clear();
+    Position->Encode(GDL_GEOMALT);
     GDL_REPORT.Clear();
     GDL_REPORT.setAddress(Parameters.Address);
     GDL_REPORT.setAddrType(Parameters.AddrType!=1);
-    GDL_REPORT.setAcftType(Parameters.AcftType);
+    GDL_REPORT.setAcftTypeOGN(Parameters.AcftType);
     if(Parameters.Reg[0]) GDL_REPORT.setAcftCall(Parameters.Reg);
                      // else GDL_REPORT.setAcftCall();
     if(Position && Position->isValid()) Position->Encode(GDL_REPORT);
