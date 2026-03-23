@@ -638,6 +638,26 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
   }
 }
 
+static bool ADSL_isSignif(const ADSL_Packet *Packet, const ADSL_Packet *PrevPacket)
+{ if(PrevPacket==0) return 1;
+  int8_t TimeDelta = Packet->TimeStamp - PrevPacket->TimeStamp;            // [0.25sec]
+  if(TimeDelta<0) TimeDelta+=60;                                           // [0.25sec] time since previous  packet
+  if(TimeDelta>=20) return 1;                                              // [0.25sec] if more than 5sec time diff. then return  "yes"
+  int16_t Climb = Packet->getClimb();                                      // [0.125m/s]
+  if(abs(Climb)>=80) return 1;                                             // if climb/decent rate more than 10m/s
+  if(Packet->hasAlt() && PrevPacket->hasAlt())
+  { int32_t AltDelta=Packet->getAlt()-PrevPacket->getAlt();                // [m] altitude change
+    if(abs(AltDelta)>=20)  return 1; }                                     // if more than 20m altitude change
+  int16_t PrevClimb = PrevPacket->getClimb();                              // [0.125m/s]
+  int32_t DistDeltaV = (int32_t)(Climb-PrevClimb)*TimeDelta;               // [0.125/4m]
+  if(abs(DistDeltaV)>=640) return 1;                                       // if climb distance >= 20m
+  int16_t Speed = Packet->getSpeed();                                      // [0.25m/s]
+  int16_t PrevSpeed = PrevPacket->getSpeed();                              // [0.25m/s]
+  int32_t DistDeltaH = (int32_t)(Speed-PrevSpeed)*TimeDelta;               // [0.25/4m] speed change * time since last recorded packet
+  if(abs(DistDeltaH)>=320) return 1;                                       // if extrapolation error more than 50m
+  /// calc. turnrate and stuff ?
+  return 0; }
+
 // process received ADS-L packets
 static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
 { uint32_t Address = RxPacket->Packet.getAddress();                                      // address
@@ -691,9 +711,9 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #endif // WITH_LOOKOUT
 
     bool Signif = PrevRxPacket==0;
-    // if(!Signif) Signif=OGN_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID fr>
+    if(!Signif) Signif=ADSL_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID fr>
 #ifdef WITH_LOG
-    if(Signif || Warn) FlashLog(RxPacket, RxTime);                                          // log only significant packets
+    if(Signif || Warn) FlashLog(RxPacket, RxTime);                                      // log only significant packets
 #endif
 /*
 #ifdef WITH_SDLOG
