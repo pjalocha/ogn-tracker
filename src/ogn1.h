@@ -235,6 +235,8 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
 
    int Print(char *Out) const
    { int Len=0;
+     if(!Header.NonPos) { Out[Len++]=HexDigit(Position.AcftType); Out[Len++]=':'; }
+                   else { Out[Len++]=' '; Out[Len++]=':'; }
      Out[Len++]='0'+Header.AddrType; Out[Len++]=':';
      uint32_t Addr = Header.Address;
      Len+=Format_Hex(Out+Len, (uint8_t)(Addr>>16));
@@ -507,8 +509,31 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
        Len+=Format_UnsDec(JSON+Len, (uint32_t)DecodeDOP()+10, 2, 1); }
      else if(!Header.Encrypted && Header.NonPos)                         // non-encrypted status and info
      { if(isStatus())                                                    // status
-       { }
-       else if(isInfo())                                                 // info
+       { Len+=Format_String(JSON+Len, ",\"battery_V\":");
+         Len+=Format_UnsDec(JSON+Len, ((uint32_t)DecodeVoltage()*100+32)>>6, 3, 2);
+         if(hasTemperature())
+         { Len+=Format_String(JSON+Len, ",\"temperature_deg\":");
+           Len+=Format_SignDec(JSON+Len, (int32_t)DecodeTemperature(), 2, 1, 1); }
+         if(Status.Pressure>0)
+         { Len+=Format_String(JSON+Len, ",\"pressure_hPa\":");
+           Len+=Format_UnsDec(JSON+Len, ((uint32_t)Status.Pressure<<3), 3, 2); }
+         if(Status.FixQuality)
+         { int32_t Altitude=DecodeAltitude();
+           Len+=Format_String(JSON+Len, ",\"alt_msl_m\":");
+           Len+=Format_UnsDec(JSON+Len, (uint32_t)Altitude); }
+         Len+=Format_String(JSON+Len, ",\"GPS_fix\":");
+                            JSON[Len++] = '0'+Status.FixQuality;
+         Len+=Format_String(JSON+Len, ",\"GPS_sats\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Status.Satellites);
+         Len+=Format_String(JSON+Len, ",\"GPS_SNR_dB\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Status.SatSNR+8);
+         Len+=Format_String(JSON+Len, ",\"Tx_power_dBm\":");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Status.TxPower+4);
+         Len+=Format_String(JSON+Len, ",\"Rx_rate_min\":");
+         Len+=Format_UnsDec(JSON+Len, ((uint32_t)1<<Status.RxRate)-1);
+         Len+=Format_String(JSON+Len, ",\"Rx_noise_dBm\":-");
+         Len+=Format_UnsDec(JSON+Len, (uint32_t)Status.RadioNoise*5, 2, 1); }
+       else if(isInfo() && goodInfoCheck())                              // info
        { char Value[16];
          uint8_t InfoType;
          uint8_t Idx=0;
@@ -663,6 +688,9 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      { Data+=9; }
      EncodeAltitude(FeetToMeters(Altitude));
 
+     clrClimbRate();
+     clrTurnRate();
+     clrBaro();
      for( ; ; )
      { if(Data[0]!=' ') break;
        Data++;
@@ -714,7 +742,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
 
      return Time; }                                  // [sec] return Time-of-Day
 
-   uint8_t WriteAPRS(char *Msg, uint32_t Time, const char *ProtName="APRS")    // write an APRS position message
+   uint8_t WriteAPRS(char *Msg, uint32_t Time, const char *ProtName="OGNTRK")    // write an APRS position message
    { uint8_t Len=0;
      static const char *AddrTypeName[4] = { "RND", "ICA", "FLR", "OGN" } ;
      memcpy(Msg+Len, AddrTypeName[Header.AddrType], 3); Len+=3;
@@ -786,13 +814,18 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      Msg[Len++] = '0'+Lon/10;
      Msg[Len++] = '!';
 
-     Msg[Len++] = ' '; Msg[Len++] = 'i'; Msg[Len++] = 'd'; Len+=Format_Hex(Msg+Len, ((uint32_t)Position.AcftType<<26) | ((uint32_t)Header.AddrType<<24) | Header.Address);
+     Msg[Len++] = ' '; Msg[Len++] = 'i'; Msg[Len++] = 'd';
+     Len+=Format_Hex(Msg+Len, ((uint32_t)Position.AcftType<<26) | ((uint32_t)Header.AddrType<<24) | Header.Address);
 
      if(hasClimbRate())
-     { Msg[Len++] = ' '; Len+=Format_SignDec(Msg+Len, ((int32_t)DecodeClimbRate()*10079+256)>>9, 3); Msg[Len++] = 'f'; Msg[Len++] = 'p'; Msg[Len++] = 'm'; }
+     { Msg[Len++] = ' ';
+       Len+=Format_SignDec(Msg+Len, ((int32_t)DecodeClimbRate()*5039+128)>>8, 3);
+       Msg[Len++] = 'f'; Msg[Len++] = 'p'; Msg[Len++] = 'm'; }
 
      if(hasTurnRate())
-     { Msg[Len++] = ' '; Len+=Format_SignDec(Msg+Len, (int32_t)DecodeTurnRate()/3, 2, 1); Msg[Len++] = 'r'; Msg[Len++] = 'o'; Msg[Len++] = 't'; }
+     { Msg[Len++] = ' ';
+       Len+=Format_SignDec(Msg+Len, (int32_t)DecodeTurnRate()/3, 2, 1);
+       Msg[Len++] = 'r'; Msg[Len++] = 'o'; Msg[Len++] = 't'; }
 
      if(hasBaro())
      { int32_t Alt = DecodeStdAltitude();
@@ -806,7 +839,6 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      Msg[Len++] = ' ';  Msg[Len++] = 'g'; Msg[Len++] = 'p'; Msg[Len++] = 's';
      Len+=Format_UnsDec(Msg+Len, (uint32_t)HorPrec); Msg[Len++] = 'x'; Len+=Format_UnsDec(Msg+Len, (uint32_t)VerPrec);
 
-     // Msg[Len++]='\n';
      Msg[Len]=0;
      return Len; }
 
@@ -953,10 +985,10 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
    void clrClimbRate(void)       { Position.ClimbRate=0x100; }            // mark climb rate as absent
    bool hasClimbRate(void) const { return Position.ClimbRate!=0x100; }
 
-   void EncodeClimbRate(int16_t Climb)
+   void EncodeClimbRate(int16_t Climb)                                    // [0.1m/s]
    { Position.ClimbRate = EncodeSR2V6(Climb); }
 
-   int16_t DecodeClimbRate(void) const
+   int16_t DecodeClimbRate(void) const                                    // [0.1m/s]
    { return DecodeSR2V6(Position.ClimbRate); }
 
 // --------------------------------------------------------------------------------------------------------------

@@ -283,6 +283,115 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
        return Len; }
      return 0; }
 
+   uint8_t WriteAPRS(char *Msg, uint32_t Time, int32_t GeoidSepar=40, const char *ProtName="OGADSL")    // write an APRS position message
+   { uint8_t Len=0;
+     static const char *AddrTypeName[8] = { "RND", "RND", "RND", "RND", "RND", "ICA", "FLR", "OGN" } ;
+     uint8_t AddrType=getAddrTable();
+     if(AddrType<8) { memcpy(Msg+Len, AddrTypeName[AddrType], 3); Len+=3; }
+              else  { Msg[Len++]='A'; Len+=Format_Hex(Msg+Len, AddrType); }
+     uint32_t Address=getAddress();
+     Len+=Format_Hex(Msg+Len, (uint8_t)(Address>>16));
+     Len+=Format_Hex(Msg+Len, (uint16_t)(Address));
+     Msg[Len++] = '>';
+     uint8_t ProtLen = strlen(ProtName);
+     memcpy(Msg+Len, ProtName, ProtLen); Len+=ProtLen;
+     if(isRelay()) { memcpy(Msg+Len, ",RELAY*", 7); Len+=7; }
+     Msg[Len++] = ':';
+
+     bool isPos=isPosition();
+     int16_t msTime=0;
+     if(isPos) Time = getTime(msTime, Time, 3);
+     Msg[Len++] = isPos ? '/':'>';
+     Len+=Format_HHMMSS(Msg+Len, Time);
+     Msg[Len++] = 'h';
+     if(isTelemetry())
+     { Msg[Len++]=' ';
+       return Len; }
+     if(!isPos) return 0;
+
+     uint8_t AcftType = getAcftTypeOGN();
+     const char *Icon = getAprsIcon(AcftType);
+
+     int32_t Lat = getLatOGN();
+     bool NegLat = Lat<0; if(NegLat) Lat=(-Lat);
+     uint32_t LatDeg = Lat/600000;
+     Len+=Format_UnsDec(Msg+Len, LatDeg, 2);
+     Lat -= LatDeg*600000;
+     uint32_t LatMin = Lat/100;
+     Len+=Format_UnsDec(Msg+Len, LatMin, 4, 2);
+     Lat -= LatMin*100;
+     Msg[Len++] = NegLat ? 'S':'N';
+     Msg[Len++] = Icon[0];
+
+     int32_t Lon = getLonOGN();
+     bool NegLon = Lon<0; if(NegLon) Lon=(-Lon);
+     uint32_t LonDeg = Lon/600000;
+     Len+=Format_UnsDec(Msg+Len, LonDeg, 3);
+     Lon -= LonDeg*600000;
+     uint32_t LonMin = Lon/100;
+     Len+=Format_UnsDec(Msg+Len, LonMin, 4, 2);
+     Lon -= LonMin*100;
+     Msg[Len++] = NegLon ? 'W':'E';
+     Msg[Len++] = Icon[1];
+
+     uint32_t Track=getTrack();                              // [9-bit cordic]
+     Len+=Format_UnsDec(Msg+Len, (Track*90+0x40)>>7, 3);
+     Msg[Len++] = '/';
+     uint32_t Speed = getSpeed();                            // [0.25m/s]
+     Len+=Format_UnsDec(Msg+Len, (Speed*1990+2048)>>12, 3);
+     if(hasAlt())
+     { Msg[Len++] = '/'; Msg[Len++] = 'A'; Msg[Len++] = '=';
+       int32_t Alt = getAlt()-GeoidSepar;                      // [m]
+       if(Alt>=0) Len+=Format_UnsDec(Msg+Len, (uint32_t)MetersToFeet(Alt), 6);
+            else  { Alt = (-Alt); Msg[Len++] = '-'; Len+=Format_UnsDec(Msg+Len, (uint32_t)MetersToFeet(Alt), 5); }
+     }
+
+     Msg[Len++] = ' ';
+     Msg[Len++] = '!';
+     Msg[Len++] = 'W';
+     Msg[Len++] = '0'+Lat/10;
+     Msg[Len++] = '0'+Lon/10;
+     Msg[Len++] = '!';
+
+     if(AddrType<=4) AddrType=0;
+     else if(AddrType<8) AddrType-=4;
+     else AddrType=3;
+     Msg[Len++] = ' '; Msg[Len++] = 'i'; Msg[Len++] = 'd';
+     Len+=Format_Hex(Msg+Len, ((uint32_t)AcftType<<26) | ((uint32_t)AddrType<<24) | Address);
+
+     if(hasClimb())
+     { Msg[Len++] = ' ';
+       Len+=Format_SignDec(Msg+Len, ((int32_t)getClimb()*6299+128)>>8, 3);
+       Msg[Len++] = 'f'; Msg[Len++] = 'p'; Msg[Len++] = 'm'; }
+
+     Msg[Len++] = ' ';  Msg[Len++] = 'g'; Msg[Len++] = 'p'; Msg[Len++] = 's';
+     Len+=Format_UnsDec(Msg+Len, (uint32_t)getHorAccur());
+     Msg[Len++] = 'x'; Len+=Format_UnsDec(Msg+Len, (uint32_t)getVerAccur());
+
+     Msg[Len]=0; return Len; }
+
+   static const char *getAprsIcon(uint8_t AcftType)
+   { static const char *AprsIcon[16] = // Icons for various FLARM acftType's
+     { "/z",  //  0 = ?
+       "/'",  //  1 = (moto-)glider    (most frequent)
+       "/'",  //  2 = tow plane        (often)
+       "/X",  //  3 = helicopter       (often)
+       "/g" , //  4 = parachute        (rare but seen - often mixed with drop plane)
+       "\\^", //  5 = drop plane       (seen)
+       "/g" , //  6 = hang-glider      (rare but seen)
+       "/g" , //  7 = para-glider      (rare but seen)
+       "\\^", //  8 = powered aircraft (often)
+       "/^",  //  9 = jet aircraft     (rare but seen)
+       "/z",  //  A = UFO              (people set for fun)
+       "/O",  //  B = balloon          (seen once)
+       "/O",  //  C = airship          (seen once)
+       "/'",  //  D = UAV              (drones, can become very common)
+       "/z",  //  E = ground support   (ground vehicles at airfields)
+       "\\n"  //  F = static object    (ground relay ?)
+     } ;
+     return AcftType<16 ? AprsIcon[AcftType]:0;
+   }
+
    uint8_t ReadDump(const char *Inp, bool LDR=0)
    { uint8_t Len=0;
      if(Inp[0]==' ') Inp++;
@@ -495,7 +604,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
      int32_t Word=UnsVRencode<uint32_t,12>(Alt);
      Position[7]=Word;
      Position[8] = (Position[8]&0xC0) | (Word>>8); }
-   bool hasAlt(void) const { return (Position[8]&0x3F)==0x3F && Position[7]==0xFF; }             // is altitude valid ?
+   bool hasAlt(void) const { return (Position[8]&0x3F)!=0x3F || Position[7]!=0xFF; }            // is altitude valid ?
    void clrAlt(void) { Position[8]|=0x3F; Position[7]=0xFF; }                                   // declare invalid altitude
 
    int16_t getClimbWord(void) const                                                             //
@@ -604,6 +713,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
      // Len+=Format_String(JSON+Len, ",\"acft_cat\":\"");
      // Len+=Format_Hex(JSON+Len, AcftCat);
      JSON[Len++]='\"';
+     if(isRelay()) Len+=Format_String(JSON+Len, ",\"relay\":1");
 
      Len+=Format_String(JSON+Len, ",\"lat_deg\":");
      Len+=Format_SignDec(JSON+Len, getLatUBX(), 8, 7, 1);
