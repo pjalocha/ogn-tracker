@@ -146,11 +146,14 @@ template <class OGNx_Packet>
    { uint8_t Flags;
      struct
      { uint8_t SNR : 6;        // [dB]
-       uint8_t Prot: 1;
-       uint8_t Rx  : 1;        // received or (own) transmitted ?
+       uint8_t Prot: 1;        // 0:OGN1, 1:ADSL
+       uint8_t Rx  : 1;        // 1:received 0:own transmitted
      } __attribute__((packed)) ;
    } ;
    uint8_t    Check;           // simple control sum
+
+  public:
+   uint8_t *PktByte(void) { return Packet.Byte(); }
 
    void     setTime(uint32_t EstTime) { Time = EstTime>>4; }
    uint32_t getTime(uint32_t EstTime) const

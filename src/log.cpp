@@ -183,7 +183,8 @@ int FlashLog_ListFiles(void)                            //
   return Files; }
 */
 
-int FlashLog_ListFile(const char *FileName, uint32_t FileTime)    // print the content, thus every packet of the given log file in APRS format
+// print the content, thus every packet of the given log file in APRS format
+int FlashLog_ListFile(const char *FileName, uint32_t FileTime)
 { char Line[128];
   // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
   // Format_String(CONS_UART_Write, "FlashLog_ListFile(");
@@ -192,13 +193,20 @@ int FlashLog_ListFile(const char *FileName, uint32_t FileTime)    // print the c
   // xSemaphoreGive(CONS_Mutex);
   FILE *File=fopen(FileName, "rb"); if(File==0) return -1;
   OGN_LogPacket<OGN_Packet> Packet;
+  ADSL_Packet AdslPacket;
   int Packets=0;
   for( ; ; )
   { if(fread(&Packet, Packet.Bytes, 1, File)!=1) break;          // read the next packet
     if(!Packet.isCorrect()) continue;
-    // if(Packet.Packet.Header.NonPos) continue;                    // skip non-position packets (although we could print them too)
-    uint32_t Time = Packet.getTime(FileTime);                    // [sec] get exact time from short time in the packet and the file start time
-    uint8_t Len=Packet.Packet.WriteAPRS(Line, Time);             // print the packet in the APRS format
+    uint32_t Time = Packet.getTime(FileTime);                  // [sec] get exact time from short time in the packet and the file start time
+    uint8_t Len=0;
+    if(Packet.Prot)                                              // if ADS-L packet
+    { AdslPacket.Version=0x00;
+      memcpy(AdslPacket.Byte, Packet.PktByte(), 20);
+      Len=AdslPacket.WriteAPRS(Line, Time, GPS_GeoidSepar/10); }
+    else                                                         // if OGN1 packet
+    { // if(Packet.Packet.Header.NonPos) continue;                    // skip non-position packets (although we could print them too)
+      Len=Packet.Packet.WriteAPRS(Line, Time); }                 // print the packet in the APRS format
     if(Len==0) continue;                                         // if cannot be printed for whatever reason
     Line[Len++]='\n'; Line[Len]=0;
     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);

@@ -101,17 +101,28 @@ static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN
 
 #ifdef WITH_LOG
 
-// log a received packet
-static int FlashLog(OGN_RxPacket<OGN_Packet> *Packet, uint32_t Time)
+// log a received ADS-L packet
+static int FlashLog(ADSL_RxPacket *RxPacket, uint32_t Time)
 { OGN_LogPacket<OGN_Packet> *LogPacket = FlashLog_FIFO.getWrite(); if(LogPacket==0) return -1; // allocate new packet in the LOG_FIFO
-  LogPacket->Packet = Packet->Packet;                                                          // copy the packet
+  memcpy(LogPacket->PktByte(), RxPacket->Packet.Byte, 20);
+  LogPacket->Flags=0x80;                                                                       // set Rx flag
+  LogPacket->Prot=1;          // this is an ADS-L, not OGN packet
+  LogPacket->setTime(Time);
+  LogPacket->setCheck();
+  FlashLog_FIFO.Write();                                                                       // finalize the write
+  return 1; }
+
+// log a received OGN packet
+static int FlashLog(OGN_RxPacket<OGN_Packet> *RxPacket, uint32_t Time)
+{ OGN_LogPacket<OGN_Packet> *LogPacket = FlashLog_FIFO.getWrite(); if(LogPacket==0) return -1; // allocate new packet in the LOG_FIFO
+  LogPacket->Packet = RxPacket->Packet;                                                          // copy the packet
   LogPacket->Flags=0x80;                                                                       // set Rx flag
   LogPacket->setTime(Time);
   LogPacket->setCheck();
   FlashLog_FIFO.Write();                                                                       // finalize the write
   return 1; }
 
-// log own packet
+// log own OGN packet
 static int FlashLog(OGN_TxPacket<OGN_Packet> *Packet, uint32_t Time)
 { OGN_LogPacket<OGN_Packet> *LogPacket = FlashLog_FIFO.getWrite(); if(LogPacket==0) return -1;
   LogPacket->Packet = Packet->Packet;
@@ -513,9 +524,9 @@ static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
 
 // process received OGN packets
 static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ uint32_t Address  = RxPacket->Packet.Header.Address;
-  uint8_t  AddrType = RxPacket->Packet.Header.AddrType;
-  uint8_t OwnPacket = ( Address  == Parameters.Address  )
+{ uint32_t Address  = RxPacket->Packet.Header.Address;                               // address
+  uint8_t  AddrType = RxPacket->Packet.Header.AddrType;                              // address-type: FLR/OGN convention
+  uint8_t OwnPacket = ( Address  == Parameters.Address  )                            // my own aircraft ?
                    && ( AddrType == Parameters.AddrType );
   if(RxPacket->Packet.Header.NonPos)                                                 // status or info packet
   { if(RxPacket->Packet.isInfo())                                                    // info packet
@@ -566,6 +577,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 //     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
 //     Format_String(CONS_UART_Write, Line, 0, Len);
 //     xSemaphoreGive(CONS_Mutex);
+
 #ifdef WITH_LOOKOUT
     const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime);           // process the received target postion
     if(Tgt) Warn=Tgt->WarnLevel;                                                      // remember warning level of this target
@@ -585,13 +597,14 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
     if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                         // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
+
      bool Signif = PrevRxPacket==0;
      if(!Signif) Signif=OGN_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID from the relay queue
 #ifdef WITH_APRS
      if(Signif) APRSrx_FIFO.Write(*RxPacket);                                        // APRS queue for received packets
 #endif
 #ifdef WITH_LOG
-     if(Signif) FlashLog(RxPacket, RxTime);                                          // log only significant packets
+     if(Signif || Warn) FlashLog(RxPacket, RxTime);                                          // log only significant packets
 #endif
 #ifdef WITH_SDLOG
      if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
@@ -627,11 +640,11 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 
 // process received ADS-L packets
 static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
-{ uint32_t Address = RxPacket->Packet.getAddress();
-  uint8_t AddrType = RxPacket->Packet.getAddrTable();
+{ uint32_t Address = RxPacket->Packet.getAddress();                                      // address
+  uint8_t AddrType = RxPacket->Packet.getAddrTable();                                    // address-type: ADS-L convention
   if(AddrType<4) AddrType=0;
-  else AddrType-=4;
-  uint8_t MyOwnPacket = ( Address  == Parameters.Address )
+  else AddrType-=4;                                                                      // address-type: FLR/OGN convention
+  uint8_t MyOwnPacket = ( Address  == Parameters.Address )                               // is it my own aircraft ?
                      && ( AddrType == Parameters.AddrType);
   if(RxPacket->Packet.isTelemetry())
   { // Serial.printf("ProcessRxADSL() %02X:%06X Telem:%d\n", AddrType, Address, RxPacket->Packet.Telemetry.Header.TelemType);
@@ -676,6 +689,18 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
+
+    bool Signif = PrevRxPacket==0;
+    // if(!Signif) Signif=OGN_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID fr>
+#ifdef WITH_LOG
+    if(Signif || Warn) FlashLog(RxPacket, RxTime);                                          // log only significant packets
+#endif
+/*
+#ifdef WITH_SDLOG
+    if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
+#endif
+*/
+
 /*
 #ifdef WITH_PFLAA
     if( Parameters.Verbose & 0b01   // print PFLAA on the console for received packets
@@ -1140,7 +1165,7 @@ void vTaskPROC(void* pvParameters)
         APRStx_FIFO.Write(PosPacket);
 #endif // WITH_APRS
 #ifdef WITH_LOG
-        FlashLog(&PosPacket, PosTime);
+        FlashLog(&PosPacket, PosTime);  // log own OGN position packet
 #endif // WITH_LOG
         PrevLoggedPacket = PosPacket.Packet;
       }
@@ -1202,7 +1227,7 @@ void vTaskPROC(void* pvParameters)
         APRStx_FIFO.Write(StatPacket);
 #endif // WITH_APRS
 #ifdef WITH_LOG
-        FlashLog(&StatPacket, PosTime);                         // log the status packet
+        FlashLog(&StatPacket, PosTime);                          // log own status packet
 #endif // WITH_LOG
        *StatusPacket = StatPacket;                               // copy status packet into the Tx queue
         StatusPacket->Packet.Whiten();                           // whiten for transmission
