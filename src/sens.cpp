@@ -150,7 +150,7 @@ static void ProcBaro(void)
     if(AverCount==0) { PipeCount=0; return ; }                              // and we summed-up some measurements
     AverPress = ( (AverPress<<2) + (AverCount>>1) )/AverCount;              // [0.25Pa]] make the average
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "BMP180: ");
     Format_UnsDec(CONS_UART_Write, (AverPress+2)/4, 3, 2);
     Format_String(CONS_UART_Write, "hPa/");
@@ -212,7 +212,7 @@ static void ProcBaro(void)
       uint8_t BestIdx; int16_t BestRes;
       GPS_Position *PosPtr = GPS_getPosition(BestIdx, BestRes, Sec/10, (int16_t)100*Frac, 0);
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_String(CONS_UART_Write, "ProcBaro: ");
       Format_UnsDec(CONS_UART_Write, (uint16_t)Sec, 3, 1);
       Format_String(CONS_UART_Write, "s -> GPS: ");
@@ -350,7 +350,7 @@ void vTaskSENS(void* pvParameters)
   uint8_t Detected = InitBaro();
 #endif
 
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "TaskSENS:");
 
 #ifdef WITH_BMP180

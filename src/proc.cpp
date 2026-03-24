@@ -61,7 +61,7 @@ void Sound_TrafficWarn(const LookOut_Target *Tgt)
   uint16_t HorDist = Tgt->HorDist;       // [0.5]
   uint16_t Bearing = Tgt->getBearing();  //
   int16_t RelBearing = Look.getRelBearing(Tgt);
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "Traffic: ");
   CONS_UART_Write('#');
   CONS_UART_Write('0'+WarnLevel);
@@ -144,7 +144,7 @@ Relay_PrioQueue<ADSL_RxPacket, RelayQueueSize>           ADSL_RelayQueue;       
 static void PrintRelayQueue(uint8_t Idx)                    // for debug
 { uint8_t Len=0;
   // Len+=Format_String(Line+Len, "");
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   // Format_String(CONS_UART_Write, Line, Len);
   Line[Len++]='['; Len+=Format_Hex(Line+Len, Idx); Line[Len++]=']'; Line[Len++]=' ';
   Len+=OGN_RelayQueue.Print(Line+Len);
@@ -355,7 +355,7 @@ static void ReadStatus(OGN_Packet &Packet)
   Packet.EncodeVoltage(((BatteryVoltage>>2)+500)/1000);            // [1/64V] encode into the status packet
 
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "Battery: ");
   // Format_UnsDec(CONS_UART_Write, BattVolt);
   // CONS_UART_Write(' ');
@@ -420,12 +420,12 @@ static void ReadStatus(OGN_Packet &Packet)
     Len+=NMEA_AppendCheckCRNL(Line, Len);                                    // append NMEA check-sum and CR+NL
     // LogLine(Line);
     // if(CONS_UART_Free()>=128)
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    { xSemaphoreTake(CONS_Mutex, 25);
       Format_String(CONS_UART_Write, Line, 0, Len);                          // send the NMEA out to the console
       xSemaphoreGive(CONS_Mutex); }
 #ifdef WITH_SDLOG
     if(Log_Free()>=128)
-    { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
+    { xSemaphoreTake(Log_Mutex, 25);
       Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
       xSemaphoreGive(Log_Mutex); }
 #endif
@@ -439,7 +439,7 @@ static void ReadStatus(OGN_Packet &Packet)
 static uint8_t WritePFLAU(char *NMEA, uint8_t GPS=1)    // produce the (mostly dummy) PFLAU to satisfy XCsoar and LK8000
 { uint8_t Len=0;
   Len+=Format_String(NMEA+Len, "$PFLAU,");
-  NMEA[Len++]='0';
+  NMEA[Len++]='0';                                      // number of targets
   NMEA[Len++]=',';
   NMEA[Len++]='0'+GPS;                                  // TX status
   NMEA[Len++]=',';
@@ -562,19 +562,19 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 #ifdef WITH_POGNT
     { uint8_t Len=RxPacket->WritePOGNT(Line);                                         // print on the console as $POGNT
       if(Parameters.Verbose & 0b01)
-      { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      { xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
 #ifdef WITH_SDLOG
       if(Log_Free()>=128)
-      { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
+      { xSemaphoreTake(Log_Mutex, 25);
         Format_String(Log_Write, Line, 0, Len);
         xSemaphoreGive(Log_Mutex); }
 #endif
     }
 #endif
 //     Len=RxPacket->Packet.WriteAPRS(Line, RxTime);                                     // print on the console as APRS message
-//     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+//     xSemaphoreTake(CONS_Mutex, 25);
 //     Format_String(CONS_UART_Write, Line, 0, Len);
 //     xSemaphoreGive(CONS_Mutex);
 
@@ -585,7 +585,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 #ifdef WITH_GDL90
     if(Tgt)
     { Look.Write(GDL_REPORT, Tgt);                                                    // produce GDL90 report for this target
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       GDL_REPORT.Send(CONS_UART_Write, 20);                                           // transmit as traffic position report (not own-ship)
       xSemaphoreGive(CONS_Mutex); }
 #endif
@@ -610,20 +610,20 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
      if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
 #endif
 #ifdef WITH_PFLAA
-    if( Parameters.Verbose & 0b01   // print PFLAA on the console for received packets
+    if( (Parameters.Verbose & 0b01)   // print PFLAA on the console for the received packet
 #ifdef WITH_LOOKOUT
     && (!Tgt)
 #endif
     )
     { uint8_t Len=RxPacket->WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.DecodeAltitude()-GPS_Altitude/10);
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_String(CONS_UART_Write, Line, 0, Len);
       xSemaphoreGive(CONS_Mutex);
 #ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
-      Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
-      xSemaphoreGive(Log_Mutex); }
+      if(Log_Free()>=128)
+      { xSemaphoreTake(Log_Mutex, 25);
+        Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
+        xSemaphoreGive(Log_Mutex); }
 #endif
     }
 #endif // WITH_PFLAA
@@ -631,7 +631,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
    MAV_ADSB_VEHICLE MAV_RxReport;
    RxPacket->Packet.Encode(&MAV_RxReport);
    MAV_RxMsg::Send(sizeof(MAV_RxReport), MAV_Seq++, MAV_SysID, MAV_COMP_ID_ADSB, MAV_ID_ADSB_VEHICLE, (const uint8_t *)&MAV_RxReport, GPS_UART_Write);
-   // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+   // xSemaphoreTake(CONS_Mutex, 25);
    // MAV_RxMsg::Send(sizeof(MAV_RxReport), MAV_Seq++, MAV_SysID, MAV_COMP_ID_ADSB, MAV_ID_ADSB_VEHICLE, (const uint8_t *)&MAV_RxReport, CONS_UART_Write);
    // xSemaphoreGive(CONS_Mutex);
 #endif
@@ -697,7 +697,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #ifdef WITH_GDL90
     if(Tgt)
     { Look.Write(GDL_REPORT, Tgt);                                                    // produce GDL90 report for this target
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       GDL_REPORT.Send(CONS_UART_Write, 20);                                           // transmit as traffic position report (not own-ship)
       xSemaphoreGive(CONS_Mutex); }
 #endif
@@ -729,7 +729,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #endif
     )
     { uint8_t Len=RxPacket->WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.DecodeAltitude()-GPS_Altitude/10);
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_String(CONS_UART_Write, Line, 0, Len);
       xSemaphoreGive(CONS_Mutex);
     }
@@ -834,7 +834,7 @@ static void DecodeRxPacket(FSK_RxPacket *RxPkt)
       for(uint8_t Idx=0; Idx<Flarm_Packet::Bytes; Idx++)
         Len+=sprintf(Line+Len, "%02X", RxPkt->Data[Idx]);
       Len+=NMEA_AppendCheckCRNL(Line, Len); Line[Len]=0;
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_String(CONS_UART_Write, Line);
       xSemaphoreGive(CONS_Mutex); }
     return; }
@@ -849,7 +849,7 @@ void vTaskPROC(void* pvParameters)
 {
 #ifdef WITH_FLASHLOG
   uint16_t kB = FlashLog_OpenForWrite();
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "TaskPROC: ");
   Format_UnsDec(CONS_UART_Write, kB);
   Format_String(CONS_UART_Write, "KB FlashLog\n");
@@ -875,7 +875,7 @@ void vTaskPROC(void* pvParameters)
     { FSK_RxPacket *RxPkt = FSK_RxFIFO.getRead();                        // check for new received packets
       if(RxPkt==0) break;                                                // if there is a new received packet
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
       CONS_UART_Write('.');
       Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
@@ -915,7 +915,7 @@ void vTaskPROC(void* pvParameters)
 #endif
     // GPS_Position *Position = GPS_getPosition();
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     // Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
     // Format_UnsDec(CONS_UART_Write, Time%60, 2);
     Format_UnsDec(CONS_UART_Write, Time, 10);
@@ -954,7 +954,7 @@ void vTaskPROC(void* pvParameters)
     if(Parameters.Reg[0]) GDL_REPORT.setAcftCall(Parameters.Reg);
                      // else GDL_REPORT.setAcftCall();
     if(Position && Position->isValid()) Position->Encode(GDL_REPORT);
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     GDL_HEARTBEAT.Send(CONS_UART_Write);
     GDL_REPORT.Send(CONS_UART_Write);
     xSemaphoreGive(CONS_Mutex);
@@ -990,7 +990,7 @@ void vTaskPROC(void* pvParameters)
       }
 
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60);
       CONS_UART_Write('.');
       Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
@@ -1015,7 +1015,7 @@ void vTaskPROC(void* pvParameters)
 #ifdef DEBUG_PRINT
       { uint8_t Len=PosPacket.Packet.WriteAPRS(Line, PosTime);         // print on the console as APRS message
         Line[Len++]='\n'; Line[Len]=0;
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+        xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
 #endif // DEBUG_PRINT
@@ -1101,12 +1101,12 @@ void vTaskPROC(void* pvParameters)
       const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime, Position->GeoidSeparation/10);
 #ifdef WITH_PFLAA
       if(Parameters.Verbose & 0b01)
-      { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      { xSemaphoreTake(CONS_Mutex, 25);
         Look.WritePFLA(CONS_UART_Write);                                  // produce PFLAU and PFLAA for all tracked targets
         xSemaphoreGive(CONS_Mutex);
 #ifdef WITH_SDLOG
         if(Log_Free()>=512)
-        { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
+        { xSemaphoreTake(Log_Mutex, 25);
           Look.WritePFLA(Log_Write);
           xSemaphoreGive(Log_Mutex); }
 #endif // WITH_SDLOG
@@ -1114,12 +1114,12 @@ void vTaskPROC(void* pvParameters)
 #else // WITH_PFLAA
       if(Parameters.Verbose & 0b01)
       { uint8_t Len=Look.WritePFLAU(Line);                                // $PFLAU, overall status
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+        xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex);
 #ifdef WITH_SDLOG
         if(Log_Free()>=128)
-        { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
+        { xSemaphoreTake(Log_Mutex, 25);
           Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
           xSemaphoreGive(Log_Mutex); }
 #endif // WITH_SDLOG
@@ -1157,12 +1157,12 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_PFLAA
       if(Parameters.Verbose & 0b01)
       { uint8_t Len=Look.WritePFLAU(Line);                                // $PFLAU, overall status
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+        xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex);
 #ifdef WITH_SDLOG
         if(Log_Free()>=128)
-        { xSemaphoreTake(Log_Mutex, portMAX_DELAY);
+        { xSemaphoreTake(Log_Mutex, 25);
           Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
           xSemaphoreGive(Log_Mutex); }
 #endif // WITH_SDLOG
@@ -1173,7 +1173,7 @@ void vTaskPROC(void* pvParameters)
       bool Written=FlashLog_Process(PosPacket.Packet, PosTime);
       // if(Written)
       // { uint8_t Len=FlashLog_Print(Line);
-      //   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      //   xSemaphoreTake(CONS_Mutex, 25);
       //   Format_String(CONS_UART_Write, Line);
       //   xSemaphoreGive(CONS_Mutex);
       // }
@@ -1195,7 +1195,7 @@ void vTaskPROC(void* pvParameters)
       TxPacket->Packet = PosPacket.Packet;                            // copy the position packet
       TxPacket->Packet.Whiten(); TxPacket->calcFEC();                 // whiten and calculate FEC code
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_UnsDec(CONS_UART_Write, PosTime);
       Format_String(CONS_UART_Write, " (_) TxFIFO <- ");
       Format_Hex(CONS_UART_Write, TxPacket->Packet.HeaderWord);
@@ -1211,7 +1211,7 @@ void vTaskPROC(void* pvParameters)
     // char Line[128];
     Line[0]='0'+OGN_TxFIFO.Full(); Line[1]=' ';                  // print number of packets in the TxFIFO
     OGN_RelayQueue.Print(Line+2);                                   // dump the relay queue
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, Line);
     xSemaphoreGive(CONS_Mutex);
 #endif // DEBUG_PRINT

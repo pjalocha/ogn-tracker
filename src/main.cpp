@@ -1101,7 +1101,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
   Len+=NMEA_AppendCheckCRNL(Line, Len);
   Line[Len]=0;
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, Line);
   xSemaphoreGive(CONS_Mutex);
   PrintPOGNS();
@@ -1220,7 +1220,7 @@ static void ListTraffic(void)
 static void ListLogFile(void)
 { if(NMEA.Parms!=1) return;
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "ListLogFile() ");
   Format_String(CONS_UART_Write, (const char *)NMEA.ParmPtr(0), 0, 12);
   Format_String(CONS_UART_Write, " ");
@@ -1231,7 +1231,7 @@ static void ListLogFile(void)
   uint32_t FileTime = FlashLog_ReadShortFileTime((const char *)NMEA.ParmPtr(0), NMEA.ParmLen(0));
   if(FileTime==0) return;
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "ListLogFile() ");
   Format_Hex(CONS_UART_Write, FileTime);
   Format_String(CONS_UART_Write, "\n");

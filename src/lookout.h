@@ -40,7 +40,6 @@ class LookOut_Target           // describes a flying aircrafts
      { // bool   isMoving   :1;   // is a moving target
        bool   isTracked  :1;   // is being tracked or only stored
        // bool   isHidden   :1;   // hidden track, should normally not be revealed
-       // bool   hasStdAlt  :1;   // has pressure StdAlt
        bool   Reported   :1;   // this target has already been reported with $PFLAA or GDL90
        bool   Alloc      :1;   // is allocated or not (a free slot, where a new target can go into)
      }  __attribute__((packed));
@@ -120,7 +119,7 @@ class LookOut_Target           // describes a flying aircrafts
      uint8_t AddrType = (ID>>24)&0x03F;
 // #ifdef WITH_SKYDEMON                                            // SkyDemon hack which accepts only 1 or 2
 //      if(AddrType!=1) AddrType=2;
-     bool ICAO=AddrType==5;
+     bool ICAO=AddrType==5;                                        //
 // #endif
      NMEA[Len++]='2'-ICAO;                                         // address-type (3=OGN, but not accepted by SkyDemon)
      NMEA[Len++]=',';
@@ -215,14 +214,14 @@ template <const uint8_t MaxTgts=32>
      { Target[Idx].Clear(); }
      SortSize=0; }
 
-   static bool Lower_Dist(LookOut_Target *A, LookOut_Target *B)
+   static bool Lower_Dist(LookOut_Target *A, LookOut_Target *B) // sorting function: lower distance first
    { if(!B->Alloc) return 1;
      if(!A->Alloc) return 0;
      if(A->WarnLevel>0 || B->WarnLevel>0 ) return A->WarnLevel > B->WarnLevel;
      if(A->DistMargin>0 || B->DistMargin>0) return A->DistMargin < B->DistMargin;
      return A->TimeMargin < B->TimeMargin; }
 
-   void Sort_Dist(void)
+   void Sort_Dist(void)                                         // sort targets: lower distance first
    { SortSize=0;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { LookOut_Target *Tgt = Target+Idx; if(!Tgt->Alloc) continue;
@@ -230,10 +229,10 @@ template <const uint8_t MaxTgts=32>
      if(SortSize<=1) return;
      std::sort(Sort, Sort+SortSize, Lower_Dist); }
 
-   int16_t getRelBearing(const LookOut_Target *Tgt) const  // [360/0x10000 deg] relative bearing to the target
+   int16_t getRelBearing(const LookOut_Target *Tgt) const        // [360/0x10000 deg] relative bearing to the target
    { return Tgt->getBearing()-Pos.Heading; }
 
-   uint8_t WritePOGNA(char *NMEA, const LookOut_Target *Tgt) // Alert NMEA centence
+   uint8_t WritePOGNA(char *NMEA, const LookOut_Target *Tgt)     // Alert NMEA centence
    { uint8_t Len=0;
      Len+=Format_String(NMEA+Len, "$POGNA,");
 
@@ -300,7 +299,7 @@ template <const uint8_t MaxTgts=32>
      NMEA[Len]=0;
      return Len; }
 
-   int32_t Latitude(int32_t LatDist) const { return RefLat + (LatDist*27)/10; }   // relative distance [0.5m] => Latitude [1/60000 deg]
+   int32_t Latitude (int32_t LatDist) const { return RefLat + (LatDist*27)/10; }   // relative distance [0.5m] => Latitude [1/60000 deg]
    int32_t Longitude(int32_t LonDist) const { LonDist = (LonDist<<12)/LatCos; return RefLon + (LonDist*27)/10; }
 
    // static int32_t CordicCoord(int32_t Coord) { return ((int64_t)Coord*83399993+(1<<21))>>22; } // [1/60000deg] => [cordic]
@@ -494,7 +493,7 @@ template <const uint8_t MaxTgts=32>
 
      if(Old && Old->Call[0] && New->Call[0]==0) { strncpy(New->Call, Old->Call, 10); New->Call[10]=0; } // copy the call
 
-     if(Old && (!New->Pos.hasTurn || !New->Pos.hasClimb))
+     if(Old && (!New->Pos.hasTurn || !New->Pos.hasClimb))   // if the new position is missing turn-rate or climb-rate
      { int16_t Told = Old->Pos.T - Old->Pred;
        int16_t dT = New->Pos.T - Told;
        int32_t dZ = 0;

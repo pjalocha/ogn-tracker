@@ -122,7 +122,7 @@ void FlightProcess(void)
   { if(RndID_TimeToChange==1)
     { Parameters.Address = (Rnd%0xFFFFFE)+1;
       Parameters.WritePOGNS(Line);
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_String(CONS_UART_Write, Line);
       // Format_String(CONS_UART_Write, "$POGNS,Address=0x");
       // Format_Hex(CONS_UART_Write, (uint8_t)(Parameters.Address>>16));
@@ -171,7 +171,7 @@ static void GPS_PPS_On(void)                          // called on rising edge o
   if(abs((int)Delta-1000)>=20) return;                // [ms] filter out difference away from 1.00sec
   TimeSync_HardPPS(PPS_Tick);                         // [ms] synchronize the UTC time to the PPS at given Tick
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
   CONS_UART_Write('.');
   Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
@@ -186,7 +186,7 @@ static void GPS_PPS_On(void)                          // called on rising edge o
 //   static MAV_SYSTEM_TIME MAV_Time;
 //   MAV_Time.time_unix_usec = (uint64_t)1000000*TimeSync_Time();
 //   MAV_Time.time_boot_ms   = TickCount;
-//   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+//   xSemaphoreTake(CONS_Mutex, 25);
 //   MAV_RxMsg::Send(sizeof(MAV_Time), MAV_Seq++, MAV_SysID, MAV_COMP_ID_GPS, MAV_ID_SYSTEM_TIME, (const uint8_t *)&MAV_Time, CONS_UART_Write);
 //   xSemaphoreGive(CONS_Mutex);
 // #endif
@@ -232,7 +232,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
   if(CharDelay) Burst_Tick -= (CharDelay*10000)/GPS_BaudRate;           // correct for the data already received on the GPS port
   // Serial.printf("GPS_BurstStart(%d) Burst_Tick:%u\n", CharDelay, Burst_Tick);
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time(Burst_Tick)%60, 2);
   CONS_UART_Write('.');
   Format_UnsDec(CONS_UART_Write, TimeSync_msTime(Burst_Tick), 3);
@@ -424,7 +424,7 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
           Format_String(GPS_UART_Write, GPS_Cmd, Len, 0); }
 #ifdef DEBUG_PRINT
         uint8_t Len = strlen(GPS_Cmd);
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+        xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, "GPS <- ");
         Format_String(CONS_UART_Write, GPS_Cmd, Len, 0);
         xSemaphoreGive(CONS_Mutex);
@@ -484,7 +484,7 @@ static void GPS_BurstComplete(void)                                   // when GP
   //          GPS_PosIdx, GPS_Status.Flags, GPS_Pos[GPS_PosIdx].NMEAerrors, Line);
 #ifdef DEBUG_PRINT
   GPS_Pos[GPS_PosIdx].PrintLine(Line);                                   // print out the GPS position in a single-line format
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
   CONS_UART_Write('.');
   Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
@@ -544,7 +544,7 @@ static void GPS_BurstComplete(void)                                   // when GP
           PrevIdx=PrevIdx2; }                                                  //
         TimeDiff=GPS_Pos[GPS_PosIdx].calcDifferentials(GPS_Pos[PrevIdx]);
 #ifdef DEBUG_PRINT
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+        xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, "calcDiff() => ");
         Format_UnsDec(CONS_UART_Write, (uint16_t)GPS_PosIdx);
         Format_String(CONS_UART_Write, "->");
@@ -562,7 +562,7 @@ static void GPS_BurstComplete(void)                                   // when GP
 // #ifdef WITH_MAVLINK
 //     static MAV_GPS_RAW_INT MAV_Position;
 //     GPS_Pos[GPS_PosIdx].Encode(MAV_Position);
-//     xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+//     xSemaphoreTake(CONS_Mutex, 25);
 //     MAV_RxMsg::Send(sizeof(MAV_Position), MAV_Seq++, MAV_SysID, MAV_COMP_ID_GPS, MAV_ID_GPS_RAW_INT, (const uint8_t *)&MAV_Position, CONS_UART_Write);
 //     xSemaphoreGive(CONS_Mutex);
 // #endif
@@ -575,7 +575,7 @@ static void GPS_BurstComplete(void)                                   // when GP
   { int32_t Period = GPS_Pos[GPS_PosIdx].calcTimeDiff(GPS_Pos[NextPosIdx]);   // [msec]
     if(Period>0) GPS_PosPeriod = (Period+GPS_PosPipeSize/2)/(GPS_PosPipeSize-1);
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write,"GPS[");
     CONS_UART_Write('0'+GPS_PosIdx); CONS_UART_Write(']'); CONS_UART_Write(' ');
     Format_UnsDec(CONS_UART_Write, (uint16_t)GPS_Pos[GPS_PosIdx].Sec, 2);
@@ -595,7 +595,7 @@ static void GPS_BurstComplete(void)                                   // when GP
   // Flight.Process(GPS_Pos[GPS_PosIdx]);
   // GPS_Pos[NextPosIdx].copyDate(GPS_Pos[GPS_PosIdx]);
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "GPS -> ");
   Format_UnsDec(CONS_UART_Write, (uint16_t)GPS_Pos[NextPosIdx].Sec, 2);
   CONS_UART_Write('.');
@@ -624,7 +624,7 @@ static void GPS_BurstEnd(void)                                             // wh
 
   // Serial.printf("GPS: %02X %s\n", GPS_Status.Flags, Line);
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time(Burst_Tick)%60, 2);
   CONS_UART_Write('.');
   Format_UnsDec(CONS_UART_Write, TimeSync_msTime(Burst_Tick), 3);
@@ -694,7 +694,7 @@ static void GPS_NMEA(bool Correct=1)                                        // w
     GPS_Burst.GxGGA=1; }
   GPS_Pos[GPS_PosIdx].ReadNMEA(NMEA);                                        // read position elements from NMEA
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
   CONS_UART_Write('.');
   Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
@@ -756,7 +756,7 @@ static void GPS_UBX(void)                                                       
 #endif
   // GPS_Pos[GPS_PosIdx].ReadUBX(UBX);
 #ifdef WITH_GPS_UBX_PASS
-  { if(xSemaphoreTake(CONS_Mutex, portMAX_DELAY))                                 // send ther UBX packet to the console
+  { if(xSemaphoreTake(CONS_Mutex, 25))                                 // send ther UBX packet to the console
     { UBX.Send(CONS_UART_Write);
     // DumpUBX();
     // Format_String(CONS_UART_Write, "UBX");
@@ -789,7 +789,7 @@ static void GPS_UBX(void)                                                       
   if(UBX.isCFG_PRT())                                                             // if port configuration
   { class UBX_CFG_PRT *CFG = (class UBX_CFG_PRT *)UBX.Word;                       // create pointer to the packet content
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "CFG-PRT: ");
     DumpUBX();
     Format_Hex(CONS_UART_Write, CFG->portID);
@@ -804,7 +804,7 @@ static void GPS_UBX(void)                                                       
       CFG->outProtoMask|=0x02;                                                    // enable NMEA protocol
       UBX.RecalcCheck();                                                          // reclaculate the check sum
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+      xSemaphoreTake(CONS_Mutex, 25);
       Format_UnsDec(CONS_UART_Write, GPS_TargetBaudRate);
       Format_String(CONS_UART_Write, "bps\n");
       DumpUBX();
@@ -816,7 +816,7 @@ static void GPS_UBX(void)                                                       
   if(UBX.isCFG_NAV5())                                                            // Navigation config
   { class UBX_CFG_NAV5 *CFG = (class UBX_CFG_NAV5 *)UBX.Word;
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "CFG-NAV5: ");
     Format_Hex(CONS_UART_Write, CFG->dynModel);
     Format_String(CONS_UART_Write, "\n");
@@ -842,7 +842,7 @@ static void GPS_UBX(void)                                                       
   }
 #ifdef DEBUG_PRINT
   if(UBX.isACK())
-  { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  { xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "TaskGPS: ACK_ ");
     Format_Hex(CONS_UART_Write,  UBX.ID);
     CONS_UART_Write(' ');
@@ -915,7 +915,7 @@ static void GPS_MAV(void)                                                  // wh
     { uint64_t PrevUnixTime_ms = GPS_Pos[GPS_PosIdx].getUnixTime_ms();
       int32_t TimeDiff_ms = UnixTime_ms-PrevUnixTime_ms;
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_TimeDiff: ");
     Format_UnsDec(CONS_UART_Write, (uint16_t)MsgID, 3); CONS_UART_Write(' ');
     Format_SignDec(CONS_UART_Write, TimeDiff_ms, 3);
@@ -928,7 +928,7 @@ static void GPS_MAV(void)                                                  // wh
   if(MsgID==MAV_ID_HEARTBEAT)
   { const MAV_HEARTBEAT *Heartbeat = (const MAV_HEARTBEAT *)MAV.getPayload();
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_HEARTBEAT: ");
     Format_Hex(CONS_UART_Write, Heartbeat->system_status);
     Format_String(CONS_UART_Write, "\n");
@@ -941,7 +941,7 @@ static void GPS_MAV(void)                                                  // wh
     MAV_TimeOfs_ms=UnixTime_ms-SysTime->time_boot_ms;                      // [ms] difference between the Unix Time and the Ardupilot time-since-boot
     TimeSync_SoftPPS(TickCount-UnixFrac, UnixTime, Parameters.PPSdelay);
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_SYSTEM_TIME: ");
     Format_UnsDec(CONS_UART_Write, UnixTime, 10);
     CONS_UART_Write('.');
@@ -956,7 +956,7 @@ static void GPS_MAV(void)                                                  // wh
     GPS_Pos[GPS_PosIdx].Read(Pos, UnixTime_ms);                              // read position/altitude/speed/etc. into GPS_Position structure
 #ifdef DEBUG_PRINT
     GPS_Pos[GPS_PosIdx].PrintLine(Line);
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_GLOBAL_POSITION_INT: ");
     Format_UnsDec(CONS_UART_Write, UnixTime_ms, 13, 3);
     Format_String(CONS_UART_Write, "\nGPS"); CONS_UART_Write('0'+GPS_PosIdx); CONS_UART_Write(':'); CONS_UART_Write(' ');
@@ -970,7 +970,7 @@ static void GPS_MAV(void)                                                  // wh
     GPS_Pos[GPS_PosIdx].PrintLine(Line);
     uint32_t UnixTime = (UnixTime_ms+500)/1000;
      int32_t TimeDiff = (int64_t)UnixTime_ms-(int64_t)UnixTime*1000;
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_GPS_RAW_INT: ");
     Format_UnsDec(CONS_UART_Write, UnixTime_ms, 13, 3);
     CONS_UART_Write(' ');
@@ -986,7 +986,7 @@ static void GPS_MAV(void)                                                  // wh
     GPS_Pos[GPS_PosIdx].Read(Press, UnixTime_ms);
 #ifdef DEBUG_PRINT
     GPS_Pos[GPS_PosIdx].PrintLine(Line);
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_SCALED_PRESSURE: ");
     Format_UnsDec(CONS_UART_Write, UnixTime_ms, 13, 3);
     Format_String(CONS_UART_Write, "\nGPS"); CONS_UART_Write('0'+GPS_PosIdx); CONS_UART_Write(':'); CONS_UART_Write(' ');
@@ -999,7 +999,7 @@ static void GPS_MAV(void)                                                  // wh
     MAVLINK_BattCurr = Status->battery_current;   // [10mA]
     MAVLINK_BattCap  = Status->battery_remaining; // [%]
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV_SYS_STATUS: ");
     Format_UnsDec(CONS_UART_Write, Status->battery_voltage, 4, 3);
     Format_String(CONS_UART_Write, "V ");
@@ -1012,7 +1012,7 @@ static void GPS_MAV(void)                                                  // wh
   }
 #ifdef DEBUG_PRINT
   else
-  { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  { xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, "MAV: MsgID=");
     Format_UnsDec(CONS_UART_Write, (uint16_t)MAV.getMsgID(), 3);
     Format_String(CONS_UART_Write, "\n");
@@ -1070,7 +1070,7 @@ void vTaskGPS(void* pvParameters)
 
   vTaskDelay(5);                                                         // put some initial delay for lighter startup load
 
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "TaskGPS:");
   Format_String(CONS_UART_Write, "\n");
   xSemaphoreGive(CONS_Mutex);
@@ -1133,7 +1133,7 @@ void vTaskGPS(void* pvParameters)
 /*
 #ifdef DEBUG_PRINT
     if(Bytes)
-    { xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    { xSemaphoreTake(CONS_Mutex, 25);
       Format_UnsDec(CONS_UART_Write, TimeSync_Time(RefTick)%60);
       CONS_UART_Write('.');
       Format_UnsDec(CONS_UART_Write, TimeSync_msTime(RefTick),3);

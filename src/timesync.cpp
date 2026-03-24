@@ -15,7 +15,7 @@ void TimeSync_HardPPS(void) { TimeSync_HardPPS(xTaskGetTickCount()); }     //
 void TimeSync_SoftPPS(TickType_t Tick, uint32_t Time, int32_t msOfs)       // [ms], [sec], [ms] software PPS: from GPS burst start or from MAV
 {
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "TimeSync_SoftPPS(");
   Format_UnsDec(CONS_UART_Write, Tick);
   Format_String(CONS_UART_Write, ", ");
@@ -34,7 +34,7 @@ void TimeSync_SoftPPS(TickType_t Tick, uint32_t Time, int32_t msOfs)       // [m
   int32_t Diff = Tick-TimeSync_RefTick;
   TimeSync_RefTick += (Diff+8)>>4;
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_UnsDec(CONS_UART_Write, TimeSync_RefTick);
   Format_String(CONS_UART_Write, ", ");
   Format_UnsDec(CONS_UART_Write, TimeSync_RefTime);

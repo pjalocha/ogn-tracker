@@ -149,7 +149,7 @@ int FlashLog_ListFiles(void)                                  // list log files 
     Line[Len++]=',';
     Len+=Format_UnsDec(Line+Len, (uint32_t)Size/OGN_LogPacket<OGN_Packet>::Bytes); // number of packets stored
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, Line, 0, Len);
     xSemaphoreGive(CONS_Mutex);
     Files++; }
@@ -186,7 +186,7 @@ int FlashLog_ListFiles(void)                            //
 // print the content, thus every packet of the given log file in APRS format
 int FlashLog_ListFile(const char *FileName, uint32_t FileTime)
 { char Line[128];
-  // xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  // xSemaphoreTake(CONS_Mutex, 25);
   // Format_String(CONS_UART_Write, "FlashLog_ListFile(");
   // Format_String(CONS_UART_Write, FileName);
   // Format_String(CONS_UART_Write, ")\n");
@@ -209,13 +209,13 @@ int FlashLog_ListFile(const char *FileName, uint32_t FileTime)
       Len=Packet.Packet.WriteAPRS(Line, Time); }                 // print the packet in the APRS format
     if(Len==0) continue;                                         // if cannot be printed for whatever reason
     Line[Len++]='\n'; Line[Len]=0;
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+    xSemaphoreTake(CONS_Mutex, 25);
     Format_String(CONS_UART_Write, Line, 0, Len);                // send the APRS to the console
     xSemaphoreGive(CONS_Mutex);
     vTaskDelay(10);                                              // limit the printout to some 100 packet/sec
     Packets++; }                                                 // count printed packets
   fclose(File);
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);                     // 
+  xSemaphoreTake(CONS_Mutex, 25);                     // 
   Format_String(CONS_UART_Write, FileName);
   Format_String(CONS_UART_Write, " => ");
   Format_UnsDec(CONS_UART_Write, (uint32_t)Packets);
@@ -268,7 +268,7 @@ static int FlashLog_Clean(size_t MinFree=0)                          // clean ol
   char FullName[32];
   FlashLog_FullFileName(FullName, Oldest);                         // oldest file name
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "FlashLog_Clean() ");
   Format_String(CONS_UART_Write, FullName);
   CONS_UART_Write(' ');
@@ -295,7 +295,7 @@ static int FlashLog_Open(uint32_t Time)                            // open a new
   FlashLog_File = fopen(FlashLog_FileName, "wb");                  // open the new file
   FlashLog_FileFlush = 0;
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "FlashLog_Open() ");
   Format_String(CONS_UART_Write, FlashLog_FileName);
   Format_String(CONS_UART_Write, "\n");
@@ -347,7 +347,7 @@ static int Copy(void)                                              // copy the p
     Err=FlashLog_Record(Packet, Packets, Time); } // if failed: give it another try
   // if(Err<0) FlashLog_Clean(0, 4);
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+  xSemaphoreTake(CONS_Mutex, 25);
   Format_String(CONS_UART_Write, "vTaskLOG() ");
   Format_UnsDec(CONS_UART_Write, Packets);
   Format_String(CONS_UART_Write, " packets => ");
