@@ -73,6 +73,8 @@ class LookOut_Target           // describes a flying aircrafts
   public:
    void Clear(void) { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; Rank=0xFFFF; }
 
+   bool isMoving(void) const { return Pos.isMoving; }
+
    // uint16_t HorRelSpeed(void) const { }
 
    uint32_t DistSqr(void) const { return (int32_t)dX*dX + (int32_t)dY*dY + (int32_t)dZ*dZ; } // [0.25m^2]  Distance-square to the Target
@@ -174,7 +176,7 @@ template <const uint8_t MaxTgts=32>
    { uint8_t Flags;
      struct
      { uint8_t GpsPrec     :6;            // GPS position precision
-       bool    isMoving    :1;            // own position moving
+       // bool    isMoving    :1;            // own position moving
        bool    hasPosition :1;            // own position is valid
      } ;
    } ;
@@ -228,6 +230,8 @@ template <const uint8_t MaxTgts=32>
        Sort[SortSize++]=Tgt; }
      if(SortSize<=1) return;
      std::sort(Sort, Sort+SortSize, Lower_Dist); }
+
+   bool isMoving(void) const { return Pos.isMoving; }
 
    int16_t getRelBearing(const LookOut_Target *Tgt) const        // [360/0x10000 deg] relative bearing to the target
    { return Tgt->getBearing()-Pos.Heading; }
@@ -427,6 +431,7 @@ template <const uint8_t MaxTgts=32>
          { Tgt->Pos.StepFwd2secs(); Tgt->Pred+=4; }
        }
        uint8_t Warn=calcTarget(Tgt);                                                  // (re)calculate the target
+       if(!Tgt->isMoving() && !isMoving()) Warn=0;
        if(Warn)
        { if(Warn>WarnLevel) WarnLevel=Warn;                                           // register highest warning level
          if(Tgt->TimeMargin<WorstTgtTime) { WorstTgtTime=Tgt->TimeMargin; WorstTgtIdx=Idx; } // and shortest time margin
@@ -611,6 +616,7 @@ template <const uint8_t MaxTgts=32>
      printf("calcTarget(%08X) V=[%+5.1f, %+5.1f, %+5.1f]m/s D=[%+7.1f, %+7.1f, %+7.1f]m MissTime=%5.1fsec MissDist=%6.1fm\n",
               Tgt->ID, 0.5*Tgt->Vx, 0.5*Tgt->Vy, 0.5*Tgt->Vz, 0.5*Tgt->dX, 0.5*Tgt->dY, 0.5*Tgt->dZ, 0.5*Tgt->MissTime, 0.5*Tgt->MissDist);
 #endif
+     // Tgt->isMoving = Tgt->Pos.Speed>2; ///
      return Tgt->WarnLevel; }
 
    uint16_t calcVertMargin(LookOut_Target *Tgt)                        // calculate vertical savety margin

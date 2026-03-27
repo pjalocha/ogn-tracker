@@ -271,10 +271,13 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
 
    template <class OGNx_Packet>                         // zero the position, read differentials from an OGN packet
     void Start(OGNx_Packet &Packet)
-   { T=0; X=0; Y=0; Z=0;
+   { Flags=0;
+     T=0; X=0; Y=0; Z=0;
      Speed = (Packet.DecodeSpeed()+2)/5;                // [0.1m/s] => [0.5m/s]
+     if(Speed>2) isMoving=1;
      Heading = Packet.getHeadingAngle();                // [360/0x10000deg]
      Climb = Packet.DecodeClimbRate()/5;                // [0.1m/s] => [0.5m/s]
+     if(Climb>2) isMoving=1;
      Turn = ((int32_t)Packet.DecodeTurnRate()*1165+32)>>6; // [0.1deg/s] => [360/0x10000deg/s]
      calcDir();
      Error = (2*Packet.DecodeDOP()+22)/5; }
@@ -293,9 +296,11 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
      Y = LonDist*2;                                    // [m]      => [0.5m] relative along longitude
      Z = Packet.getAlt()-RefAlt-GeoidSepar; Z*=2;
      Speed = Packet.getSpeed()/2;
+     if(Speed>2) isMoving=1;
      Heading = Packet.getTrack()<<7;
      if(Packet.hasClimb())
      { Climb=Packet.getClimb()/4;
+       if(Climb<(-2) || Climb>2) isMoving=1;
        hasClimb=1; }
      calcDir();
      Error=Packet.getHorAccur();
@@ -327,9 +332,11 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
      Z = (Packet.DecodeAltitude()-RefAlt)<<1;           // [m]      => [0.5m] relative vertical
      if(Packet.hasBaro()) { dStdAlt=Packet.getBaroAltDiff()<<1; hasStdAlt=1; }
      Speed = (Packet.DecodeSpeed()+2)/5;                // [0.1m/s] => [0.5m/s]
+     if(Speed>2) isMoving=1;
      Heading = Packet.getHeadingAngle();                // [360/0x10000deg]
      if(Packet.hasClimbRate())
      { Climb = Packet.DecodeClimbRate()/5;              // [0.1m/s] => [0.5m/s]
+       if(Climb<(-2) || Climb>2) isMoving=1;
        hasClimb = 1; }
      if(Packet.hasTurnRate())
      { Turn = ((int32_t)Packet.DecodeTurnRate()*1165+32)>>6; // [0.1deg/s] => [360/0x10000deg/s]
