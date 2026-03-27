@@ -437,7 +437,7 @@ template <class OGNx_Packet=OGN1_Packet>
      int32_t AltDist = Packet.DecodeAltitude()-RefAlt;
      return WritePFLAA(NMEA, Status, LatDist, LonDist, AltDist, Status); }                   // return number of formatted characters
 
-   uint8_t WritePFLAA(char *NMEA, uint8_t Status, int32_t LatDist, int32_t LonDist, int32_t AltDist)
+   uint8_t WritePFLAA(char *NMEA, uint8_t Status, int32_t LatDist, int32_t LonDist, int32_t AltDist, const char *Call=0)
    { uint8_t Len=0;
      Len+=Format_String(NMEA+Len, "$PFLAA,");                             // sentence name and alarm-level (but no alarms for trackers)
      NMEA[Len++]='0'+Status;
@@ -457,6 +457,7 @@ template <class OGNx_Packet=OGN1_Packet>
      uint32_t Addr = Packet.Header.Address;                               // [24-bit] address
      Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));                      // XXXXXX 24-bit address: RND, ICAO, FLARM, OGN
      Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
+     if(Call) { NMEA[Len++]='|'; Len+=Format_String(NMEA+Len, Call); }
      NMEA[Len++]=',';
      Len+=Format_UnsDec(NMEA+Len, (uint32_t)Packet.DecodeHeading(), 4, 1);          // [deg] heading (by GPS)
      NMEA[Len++]=',';
