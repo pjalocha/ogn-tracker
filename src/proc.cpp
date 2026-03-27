@@ -610,6 +610,27 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
      if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
 #endif
 #ifdef WITH_PFLAA
+    if(Parameters.Verbose & 0b01)
+    { uint8_t Len=0;
+#ifdef WITH_LOOKOUT
+      if(Tgt) { Len=Tgt->WritePFLAA(Line); }
+      else
+#endif
+      { Len=RxPacket->WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.DecodeAltitude()-GPS_Altitude/10); }
+      if(Len>0)
+      { xSemaphoreTake(CONS_Mutex, 25);
+        Format_String(CONS_UART_Write, Line, 0, Len);
+        xSemaphoreGive(CONS_Mutex); }
+#ifdef WITH_SDLOG
+      if(Len>0 && Log_Free()>=128)
+      { xSemaphoreTake(Log_Mutex, 25);
+        Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
+        xSemaphoreGive(Log_Mutex); }
+#endif
+    }
+#endif // WITH_PFLAA
+/*
+#ifdef WITH_PFLAA
     if( (Parameters.Verbose & 0b01)   // print PFLAA on the console for the received packet
 #ifdef WITH_LOOKOUT
     && (!Tgt)
@@ -627,6 +648,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 #endif
     }
 #endif // WITH_PFLAA
+*/
 #ifdef WITH_MAVLINK
    MAV_ADSB_VEHICLE MAV_RxReport;
    RxPacket->Packet.Encode(&MAV_RxReport);
@@ -720,7 +742,26 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
 #endif
 */
-
+#ifdef WITH_PFLAA
+    if(Parameters.Verbose & 0b01)
+    { uint8_t Len=0;
+#ifdef WITH_LOOKOUT
+      if(Tgt) { Len=Tgt->WritePFLAA(Line); }
+      else
+#endif
+      { Len=RxPacket->Packet.WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.getAlt()-(GPS_Altitude+GPS_GeoidSepar)/10); }
+      if(Len>0)
+      { xSemaphoreTake(CONS_Mutex, 25);
+        Format_String(CONS_UART_Write, Line, 0, Len);
+        xSemaphoreGive(CONS_Mutex); }
+#ifdef WITH_SDLOG
+      if(Len>0 && Log_Free()>=128)
+      { xSemaphoreTake(Log_Mutex, 25);
+        Format_String(Log_Write, Line, 0, Len);                                // send the NMEA out to the log file
+        xSemaphoreGive(Log_Mutex); }
+#endif
+    }
+#endif // WITH_PFLAA
 /*
 #ifdef WITH_PFLAA
     if( Parameters.Verbose & 0b01   // print PFLAA on the console for received packets

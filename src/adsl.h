@@ -646,6 +646,44 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
 
 // --------------------------------------------------------------------------------------------------------
 
+   uint8_t WritePFLAA(char *NMEA, uint8_t Status, int32_t LatDist, int32_t LonDist, int32_t AltDist)
+   { uint8_t Len=0;
+     Len+=Format_String(NMEA+Len, "$PFLAA,");                             // sentence name and alarm-level (but no alarms for tracker>
+     NMEA[Len++]='0'+Status;
+     NMEA[Len++]=',';
+     Len+=Format_SignDec(NMEA+Len, LatDist);
+     NMEA[Len++]=',';
+     Len+=Format_SignDec(NMEA+Len, LonDist);
+     NMEA[Len++]=',';
+     Len+=Format_SignDec(NMEA+Len, AltDist);                              // [m] relative altitude
+     NMEA[Len++]=',';
+     uint8_t AddrType = getAddrType();
+// #ifdef WITH_SKYDEMON
+     if(AddrType==5) AddrType=1;
+                else AddrType=2;                                          // SkyDemon only accepts 1 or 2
+// #endif
+     NMEA[Len++]='0'+AddrType;                                            // address-type (3=OGN)
+     NMEA[Len++]=',';
+     uint32_t Addr = getAddress();                                        // [24-bit] address
+     Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));                      // XXXXXX 24-bit address: RND, ICAO, FLARM, OGN
+     Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
+     NMEA[Len++]=',';
+     Len+=Format_UnsDec(NMEA+Len, ((uint32_t)225*getTrack()+16)>>5, 2, 1); // [deg] heading (by GPS)
+     Len-=2;  // remove decimal
+     NMEA[Len++]=',';
+     NMEA[Len++]=',';
+     Len+=Format_UnsDec(NMEA+Len, ((uint32_t)getSpeed()*10+2)>>2, 2, 1);   // [m/s] ground speed
+     Len-=2;  // remove decimal
+     NMEA[Len++]=',';
+     Len+=Format_SignDec(NMEA+Len, ((int32_t)getClimb()*10+4)>>3, 2, 1, 1); // [m/s] climb/sink rate
+     NMEA[Len++]=',';
+     NMEA[Len++]=HexDigit(getAcftTypeOGN());                       // [0..F] aircraft-type: 1=glider, 2=tow plane, etc.
+     Len+=NMEA_AppendCheckCRNL(NMEA, Len);
+     NMEA[Len]=0;
+     return Len; }                                                        // return number of formatted characters
+
+// --------------------------------------------------------------------------------------------------------
+
    int WriteSafeSky(char *Msg, const char *Call, uint32_t RxTime) const  // SafeSky message
    { int Len=0;
      uint32_t Address=getAddress();                               // address

@@ -105,7 +105,7 @@ class LookOut_Target           // describes a flying aircrafts
                 0.5*Pred, 0.5*DistMargin, 0.5*HorDist, 0.5*TimeMargin, 0.5*MissDist, 0.5*MissTime, WarnLevel);
      return Len; }
 
-   uint8_t WritePFLAA(char *NMEA)
+   uint8_t WritePFLAA(char *NMEA) const
    { uint8_t Len=0;
      Len+=Format_String(NMEA+Len, "$PFLAA,");                      // sentence name and alarm-level (but no alarms for trackers)
      NMEA[Len++]='0'+WarnLevel;                                    // warning level

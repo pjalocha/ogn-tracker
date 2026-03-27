@@ -449,9 +449,9 @@ template <class OGNx_Packet=OGN1_Packet>
      Len+=Format_SignDec(NMEA+Len, AltDist);                              // [m] relative altitude
      NMEA[Len++]=',';
      uint8_t AddrType = Packet.Header.AddrType;
-#ifdef WITH_SKYDEMON
+// #ifdef WITH_SKYDEMON
      if(AddrType!=1) AddrType=2;                                          // SkyDemon only accepts 1 or 2
-#endif
+// #endif
      NMEA[Len++]='0'+AddrType;                                            // address-type (3=OGN)
      NMEA[Len++]=',';
      uint32_t Addr = Packet.Header.Address;                               // [24-bit] address
