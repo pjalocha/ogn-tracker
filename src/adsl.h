@@ -34,7 +34,17 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
            uint8_t Emergency   :3; // 1=OK
          } __attribute__((packed));
        } ;
-       uint8_t Position[11]; // Lat[24]/Lon[24]/Speed[8]/Alt[14]/Climb[9]/Track[9]
+       union
+       { uint8_t Position[11]; // Lat[24]/Lon[24]/Speed[8]/Alt[14]/Climb[9]/Track[9]
+         struct
+         {  int32_t Latitude  :24;
+            int32_t Longitude :24;
+           uint16_t Speed     : 8;
+           uint16_t Alt       :14;
+           uint16_t Climb     : 9;
+           uint16_t Track     : 9;
+         } __attribute__((packed));
+       } ;
        union
        { uint8_t Integrity[2]; // SourceInteg[2]/DesignAssurance[2]/NavigationIntegrity[4]/NorizAccuracy[3]/VertAccuracy[2]/ValocityAccuracy[2]/Reserved[1]
          struct
