@@ -1310,7 +1310,7 @@ void vTaskPROC(void* pvParameters)
       if(StatTxBackOff) StatTxBackOff--;
       else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
-        StatTxPkt++; if(StatTxPkt>=3) StatTxPkt=0;
+        StatTxPkt++; if(StatTxPkt>3) StatTxPkt=0;
         if(getTelemetry(*Packet, Position, StatTxPkt))
         { Packet->Scramble();
           Packet->setCRC24();
