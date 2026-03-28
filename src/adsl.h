@@ -37,13 +37,33 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
        union
        { uint8_t Position[11]; // Lat[24]/Lon[24]/Speed[8]/Alt[14]/Climb[9]/Track[9]
          struct
-         {  int32_t Latitude  :24;
-            int32_t Longitude :24;
-           uint16_t Speed     : 8;
+         {  int32_t Lat    :24;
+            int32_t Lon    :24;
+           uint16_t Speed  : 8;
+           uint16_t Alt    :14;
+           uint16_t Climb  : 9;
+           uint16_t Track  : 9;
+         } __attribute__((packed)) BasicPos;
+         struct
+         { union
+           { uint8_t Flags;
+             struct
+             { uint8_t AltType   :2;  // 0:HAE, 1:cabin baro, 2:static baro, 3:ext.
+               uint8_t ClimbType :1;  // 0:GPS, 1:baro (cabin or static, as above)
+               uint8_t SpeedType :1;  // 0:GPS, 1:airspeed
+               uint8_t TrackType :1;  // 0:GPS, 1:magnetic
+               uint8_t TurnType  :2;  // 0:GPS, 1:magnetic, 2:3-D accel, 3:high-tech (how about gyro-turn ?)
+               bool    BadGPS    :1;  // 1:GPS jamming/spoofing detected
+             } __attribute__((packed));
+           } ;
+           uint16_t ShortLat;       // aligned to 32-bits in this structure
+           uint16_t ShortLon;
+            uint8_t Turn;           //
+           uint16_t Speed     : 8;  // as in the BasicPos
            uint16_t Alt       :14;
            uint16_t Climb     : 9;
            uint16_t Track     : 9;
-         } __attribute__((packed));
+         } __attribute__((packed)) Air2airPos;
        } ;
        union
        { uint8_t Integrity[2]; // SourceInteg[2]/DesignAssurance[2]/NavigationIntegrity[4]/NorizAccuracy[3]/VertAccuracy[2]/ValocityAccuracy[2]/Reserved[1]
@@ -200,10 +220,10 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    { uint8_t Type=SatSNR.Header.GNSStype;
      if(Type==0) return PrintSatSNR(Out);
      if(Type==1) return PrintSatPPS(Out);
-     int Len=0;
+     // int Len=0;
      return 0; }
 
-   int PrintSatPPS(char *Out) const
+   int PrintSatPPS(char *Out) const  // print GNSS PPS monitor timestamp and status
    { int Len=0;
      uint8_t RefClock=SatPPS.Data.RefClock; if(RefClock==0) RefClock=1;
      Len+=sprintf(Out+Len, " SatPPS: %08X:%08X/%dMHz/%3.1fus %+dppm %3.1fus %ds",
@@ -213,7 +233,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
               SatPPS.Data.PPScount );
      return Len; }
 
-   int PrintSatSNR(char *Out) const
+   int PrintSatSNR(char *Out) const  // print GNSS constellations monitor status
    { int Len=0;
      const char *SysName[5] = { "QZ", "GP", "GL", "GA", "BD" };
      Len+=sprintf(Out+Len, " SatSNR:");
@@ -589,51 +609,75 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
     int32_t getLatUBX(void) const { return FNTtoUBX(getLat()); }
     int32_t getLonUBX(void) const { return FNTtoUBX(getLon()); }
 
-    int32_t getLat(void) const { int32_t Lat=get3bytes(Position  ); Lat<<=8; Lat>>=1; return Lat; } // FANET-cordic
-    int32_t getLon(void) const { int32_t Lon=get3bytes(Position+3); Lon<<=8; return Lon; }          // FANET-cordic
-
     void setLatOGN(int32_t Lat)  { setLat(OGNtoFNT(Lat)); }
     void setLonOGN(int32_t Lon)  { setLon(OGNtoFNT(Lon)); }
 
     void setLatUBX(int32_t Lat)  { setLat(UBXtoFNT(Lat)); }
     void setLonUBX(int32_t Lon)  { setLon(UBXtoFNT(Lon)); }
 
-    void    setLat(int32_t Lat)  { Lat = (Lat+0x40)>>7; set3bytes(Position  , Lat); }           // FANET-cordic
-    void    setLon(int32_t Lon)  { Lon = (Lon+0x80)>>8; set3bytes(Position+3, Lon); }           // FANET-cordic
+    void    setLat(int32_t Lat)  { BasicPos.Lat = (Lat+0x40)>>7; }                            // FANET-cordic
+    void    setLon(int32_t Lon)  { BasicPos.Lon = (Lon+0x80)>>8; }
+    int32_t getLat(void) const { int32_t Lat=BasicPos.Lat; Lat<<=8; Lat>>=1; return Lat; }    // FANET-cordic
+    int32_t getLon(void) const { int32_t Lon=BasicPos.Lon; Lon<<=8; return Lon; }
 
-    uint16_t getSpeed(void) const { return UnsVRdecode<uint16_t,6>(Position[6]); }              // [0.25 m/s]
-    void setSpeed(uint16_t Speed) { Position[6] = UnsVRencode<uint16_t,6>(Speed); }             // [0.25 m/s]
-    bool hasSpeed(void) const { return Position[6]!=0xFF; }
-    void clrSpeed(void) { Position[6]=0xFF; }
+    // void    setLat(int32_t Lat)  { Lat = (Lat+0x40)>>7; set3bytes(Position  , Lat); }           // FANET-cordic
+    // void    setLon(int32_t Lon)  { Lon = (Lon+0x80)>>8; set3bytes(Position+3, Lon); }           // FANET-cordic
+    // int32_t getLat(void) const { int32_t Lat=get3bytes(Position  ); Lat<<=8; Lat>>=1; return Lat; } // FANET-cordic
+    // int32_t getLon(void) const { int32_t Lon=get3bytes(Position+3); Lon<<=8; return Lon; }          // FANET-cordic
 
-   int32_t getAlt(void) const                                                                   // [m]
-   { int32_t Word=Position[8]&0x3F; Word<<=8; Word|=Position[7];
-     return UnsVRdecode<int32_t,12>(Word)-320; }
+    uint16_t getSpeed(void) const { return UnsVRdecode<uint16_t,6>(BasicPos.Speed); }
+    void setSpeed(uint16_t Speed) { BasicPos.Speed = UnsVRencode<uint16_t,6>(Speed); }           // [0.25 m/s]
+    bool hasSpeed(void) const { return BasicPos.Speed!=0xFF; }                                   // is Speed valid
+    void clrSpeed(void)              { BasicPos.Speed=0xFF; }                                    // mark as invalid
+
+    // uint16_t getSpeed(void) const { return UnsVRdecode<uint16_t,6>(Position[6]); }              // [0.25 m/s]
+    // void setSpeed(uint16_t Speed) { Position[6] = UnsVRencode<uint16_t,6>(Speed); }             // [0.25 m/s]
+    // bool hasSpeed(void) const { return Position[6]!=0xFF; }
+    // void clrSpeed(void) { Position[6]=0xFF; }
+
+   int32_t getAlt(void) const { return UnsVRdecode<int32_t,12>(BasicPos.Alt)-320; }                                                                  // [m]
    void setAlt(int32_t Alt)
    { Alt+=320; if(Alt<0) Alt=0;
-     int32_t Word=UnsVRencode<uint32_t,12>(Alt);
-     Position[7]=Word;
-     Position[8] = (Position[8]&0xC0) | (Word>>8); }
-   bool hasAlt(void) const { return (Position[8]&0x3F)!=0x3F || Position[7]!=0xFF; }            // is altitude valid ?
-   void clrAlt(void) { Position[8]|=0x3F; Position[7]=0xFF; }                                   // declare invalid altitude
+     BasicPos.Alt=UnsVRencode<uint32_t,12>(Alt); }
+   bool hasAlt(void) const { return BasicPos.Alt!=0x3FFF; }  // max. value means "not valid"
+   void clrAlt(void)              { BasicPos.Alt=0x3FFF; }
 
-   int16_t getClimbWord(void) const                                                             //
-   { int16_t Word=Position[9]&0x7F; Word<<=2; Word|=Position[8]>>6; return Word; }
-   int16_t getClimb(void) const                                                                 // [0.125 m/s]
-   { return SignVRdecode<int16_t,6>(getClimbWord()); }
-   void setClimb(int16_t Climb)                                                                 // [0.125 m/s]
-   { setClimbWord(SignVRencode<int16_t,6>(Climb)); }
-   void setClimbWord(int16_t Word)
-   { Position[8] = (Position[8]&0x3F) | ((Word&0x03)<<6);
-     Position[9] = (Position[9]&0x80) |  (Word>>2); }
-   bool hasClimb(void) const { return getClimbWord()!=0x1FF; }                                  // climb-rate is valid ?
-   void clrClimb(void) { setClimbWord(0x1FF); }                                                 // declare climb-rate as absent
+   // int32_t getAlt(void) const                                                                   // [m]
+   // { int32_t Word=Position[8]&0x3F; Word<<=8; Word|=Position[7];
+   //   return UnsVRdecode<int32_t,12>(Word)-320; }
+   // void setAlt(int32_t Alt)
+   // { Alt+=320; if(Alt<0) Alt=0;
+   //   int32_t Word=UnsVRencode<uint32_t,12>(Alt);
+   //   Position[7]=Word;
+   //   Position[8] = (Position[8]&0xC0) | (Word>>8); }
+   // bool hasAlt(void) const { return (Position[8]&0x3F)!=0x3F || Position[7]!=0xFF; }            // is altitude valid ?
+   // void clrAlt(void) { Position[8]|=0x3F; Position[7]=0xFF; }                                   // declare invalid altitude
 
-   uint16_t getTrack(void) const                                                                // 9-bit cordic
-   { int16_t Word=Position[10]; Word<<=1; Word|=Position[9]>>7; return Word; }
-   void setTrack(int16_t Word)
-   { Position[9] = (Position[9]&0x7F) | ((Word&0x01)<<7);
-     Position[10] = Word>>1; }
+   int16_t getClimb(void) const { return SignVRdecode<int16_t,6>(BasicPos.Climb); }                // [0.125m/s]
+   void    setClimb(int16_t Climb) { BasicPos.Climb=SignVRencode<int16_t,6>(Climb); }
+   bool    hasClimb(void) const { return BasicPos.Climb!=0x1FF; }                                  // is climb-rate valid ?
+   void    clrClimb(void)              { BasicPos.Climb=0x1FF; }                                   // declare climb-rate as invalid
+
+   // int16_t getClimbWord(void) const                                                             //
+   // { int16_t Word=Position[9]&0x7F; Word<<=2; Word|=Position[8]>>6; return Word; }
+   // int16_t getClimb(void) const                                                                 // [0.125 m/s]
+   // { return SignVRdecode<int16_t,6>(getClimbWord()); }
+   // void setClimb(int16_t Climb)                                                                 // [0.125 m/s]
+   // { setClimbWord(SignVRencode<int16_t,6>(Climb)); }
+   // void setClimbWord(int16_t Word)
+   // { Position[8] = (Position[8]&0x3F) | ((Word&0x03)<<6);
+   //   Position[9] = (Position[9]&0x80) |  (Word>>2); }
+   // bool hasClimb(void) const { return getClimbWord()!=0x1FF; }                                  // climb-rate is valid ?
+   // void clrClimb(void) { setClimbWord(0x1FF); }                                                 // declare climb-rate as absent
+
+   uint16_t getTrack(void) const { return BasicPos.Track; }                                     // 9-bit cordic
+   void setTrack(uint16_t Track)        { BasicPos.Track=Track; }
+
+   // uint16_t getTrack(void) const                                                                // 9-bit cordic
+   // { int16_t Word=Position[10]; Word<<=1; Word|=Position[9]>>7; return Word; }
+   // void setTrack(int16_t Word)
+   // { Position[9] = (Position[9]&0x7F) | ((Word&0x01)<<7);
+   //   Position[10] = Word>>1; }
 
 // --------------------------------------------------------------------------------------------------------
 
