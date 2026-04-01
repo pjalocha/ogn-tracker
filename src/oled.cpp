@@ -11,7 +11,7 @@
 
 static char Line[32];
 
-#ifdef WITH_TBEAMS3
+#ifdef WITH_BIGOLED
 U8G2_SH1106_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
 #else
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
