@@ -17,7 +17,7 @@
 #define Radio_PinIRQ1 33 // IRQ
 #define Radio_PinBusy 32 // Busy
 
-#define Flasher_Pin    0 // High intensity LED for collision alert: HIGH active
+#define Flasher_Pin    4 // High intensity LED for collision alert: HIGH active
 
 #define Buzzer_Pin    13 // Beeper/buzzer
 #define Buzzer_Channel 0 // LED controller channel
