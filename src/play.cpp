@@ -14,27 +14,49 @@
 
 void Beep_Init(void)
 { pinMode(Buzzer_Pin, OUTPUT);
-  digitalWrite(Buzzer_Pin, LOW); }
+  digitalWrite(Buzzer_Pin, LOW);
+#ifdef Flasher_Pin
+  pinMode(Flasher_Pin, OUTPUT);
+  digitalWrite(Flasher_Pin, LOW);
+#endif
+}
 
 void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl)
-{ digitalWrite(Buzzer_Pin, Freq>0); }
+{ digitalWrite(Buzzer_Pin, Freq>0);
+#ifdef Flasher_Pin
+  digitalWrite(Flasher_Pin, Freq>0);
+#endif
+}
 
 #else                   // direct driven buzzer: multi-tone
 
 void Beep_Init(void)
 { ledcSetup(Buzzer_Channel, 800, 8);      // channel, frequency, resolution
   pinMode(Buzzer_Pin, OUTPUT);
-  digitalWrite(Buzzer_Pin, LOW); }
+  digitalWrite(Buzzer_Pin, LOW);
+#ifdef Flasher_Pin
+  pinMode(Flasher_Pin, OUTPUT);
+  digitalWrite(Flasher_Pin, LOW);
+#endif
+}
 
 void Beep(uint16_t Freq, uint8_t Duty, uint8_t DoubleAmpl) // [Hz, 1/256] play sound with given frequency and duty (=volume)
 { if(Freq==0)
   { ledcDetachPin(Buzzer_Pin);
     pinMode(Buzzer_Pin, OUTPUT);
-    digitalWrite(Buzzer_Pin, LOW); }
+    digitalWrite(Buzzer_Pin, LOW);
+#ifdef Flasher_Pin
+    digitalWrite(Flasher_Pin, LOW);
+#endif
+  }
   else
-  { ledcAttachPin(Buzzer_Pin, Buzzer_Channel); }
+  { ledcAttachPin(Buzzer_Pin, Buzzer_Channel);
     ledcWriteTone(Buzzer_Channel, Freq);
     ledcWrite(Buzzer_Channel, Duty);
+#ifdef Flasher_Pin
+    digitalWrite(Flasher_Pin, HIGH);
+#endif
+  }
 }
 
 #endif
