@@ -264,7 +264,7 @@ static void ProcBaro(void)
       Line[Len++]=','; }
 #endif
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose & 0b10)
+    if(Parameters.Verbose & 0b01)
     { if(xSemaphoreTake(CONS_Mutex, 20))
       { Format_String(CONS_UART_Write, Line, 0, Len);                       // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }
