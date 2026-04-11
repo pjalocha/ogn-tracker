@@ -26,3 +26,5 @@
 #define I2C_PinSCL    22 // SCL
 #define I2C_PinSDA    21 // SDA
 
+// OLED
+#define OLED_PinRST   -1 // no reset line

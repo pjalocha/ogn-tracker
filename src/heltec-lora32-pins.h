@@ -22,4 +22,4 @@
 #define I2C_PinSDA     4 // SDA
 
 // OLED
-#define OLED_RST      16 //
+#define OLED_PinRST   16 //

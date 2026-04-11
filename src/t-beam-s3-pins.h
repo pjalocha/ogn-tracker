@@ -20,6 +20,9 @@
 #define I2C_PinSCL    18 // SCL
 #define I2C_PinSDA    17 // SDA
 
+// OLED
+#define OLED_PinRST   -1 // no reset line
+
 // Internal I2C for PMU, RTC
 #define PMU_I2C_PinSCL    41 // SCL
 #define PMU_I2C_PinSDA    42 // SDA

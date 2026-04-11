@@ -12,9 +12,9 @@
 static char Line[32];
 
 #ifdef WITH_BIGOLED
-U8G2_SH1106_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
+U8G2_SH1106_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, OLED_PinRST);
 #else
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, U8X8_PIN_NONE); // no reset line
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C OLED(U8G2_R0, OLED_PinRST);
 #endif
 
 void OLED_DrawLogo(u8g2_t *OLED, const GPS_Position *GPS)  // draw logo and hardware options in software
