@@ -800,6 +800,7 @@ void setup()
    USB.begin();
    USBSerial.begin(Parameters.CONbaud);
 #else
+  Serial.setRxBufferSize(2048);
   Serial.setTxBufferSize(4096);
   Serial.begin(Parameters.CONbaud);          // for USB Console baud rate probably does not matter here
 #endif
@@ -1101,9 +1102,9 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
   Len+=NMEA_AppendCheckCRNL(Line, Len);
   Line[Len]=0;
-  xSemaphoreTake(CONS_Mutex, 25);
-  Format_String(CONS_UART_Write, Line);
-  xSemaphoreGive(CONS_Mutex);
+  if(xSemaphoreTake(CONS_Mutex, 25))
+  { Format_String(CONS_UART_Write, Line);
+    xSemaphoreGive(CONS_Mutex); }
   PrintPOGNS();
 
 #ifdef WITH_LOG
@@ -1173,7 +1174,7 @@ static void PrintParameters(void)                              // print paramete
   xSemaphoreGive(CONS_Mutex); }                                // give back UART1 to other tasks
 
 static void PrintPOGNS(void)                                   // print parameters in the $POGNS form
-{ if(!xSemaphoreTake(CONS_Mutex, 100))
+{ if(!xSemaphoreTake(CONS_Mutex, 100)) return;
   Parameters.WritePOGNS(Line);
   Format_String(CONS_UART_Write, Line);
   Parameters.WritePOGNS_Pilot(Line);

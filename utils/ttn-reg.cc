@@ -81,23 +81,25 @@ static char *WaitResp(const char *Match, double Timeout=1.0)
 
 static char CmdLine[512];
 
+static const char *PortName = "/dev/ttyACM0";                              // default serial port name
+static       int   BaudRate = 115200;                                      // default baud rate on the serial port
+
+const   int64_t JoinEUI    = 0x70B3D57ED0035895;  // 64-bit OGN application EUI
+static  int64_t DevEUI     = 0;                   // 64-bit device EUI = tracker MAC
+static  char    DevID[40];                        // (ascii) device-ID created from DevEUI
+static  uint8_t AppKey[16];                       // 128-bit application key
+
 int main(int argc, char *argv[])
 {
-  const char *PortName = "/dev/ttyACM0";                              // default serial port name
-        int   BaudRate = 115200;                                      // default baud rate on the serial port
   if(argc>1)
   { char *Colon = strchr(argv[1],':');
     if(Colon) { Colon[0]=0; BaudRate=atol(Colon+1); }
     PortName = argv[1]; }
   if(Port.Open(PortName, BaudRate)<0) { printf("Can't open %s at %dbps\n", PortName, BaudRate); return -1; }
 
-  int64_t JoinEUI    = 0x70B3D57ED0035895;  // 64-bit OGN application EUI
-  int64_t DevEUI     = 0;                   // 64-bit device EUI
-  char    DevID[40];                        //
-  uint8_t AppKey[16];                       // 128-bit application key
-
-  for( int Try=0; Try<3; Try++)
-  { strcpy(CmdLine, "$POGNS\r\n");
+                                            // Read the MAC from the tracker
+  for( int Try=0; Try<3; Try++)             // retry three times
+  { strcpy(CmdLine, "$POGNS\r\n");          // prompt the tracker to send its MAC and other parameters
     Port.Write(CmdLine);
     printf("Serial <= %s", CmdLine);
     for( ; ; )
@@ -108,9 +110,11 @@ int main(int argc, char *argv[])
     if(DevEUI>0xFFFFFFFF) break; }
   if(DevEUI<=0xFFFFFFFF) return 0;
 
+                                                      // generate a random AppKey
   if(getrandom(&AppKey, 16, 0)!=16) { printf("Could not produce AppKey\n"); return 0; }
-  sprintf(DevID, "ogntrk-%012lx", DevEUI);              // assign some device-id based on EUI (but could be any string)
-  PrintHex(CmdLine, AppKey, 16);                        // print application key in the hex form
+
+  sprintf(DevID, "ogntrk-%012lx", DevEUI);            // assign some device-id based on EUI (but could be any string)
+  PrintHex(CmdLine, AppKey, 16);                      // print application key in the hex form
   printf("JoinEUI=%016lX, DevEUI=%012lX, DevID=%s, AppKey=%s\n", JoinEUI, DevEUI, DevID, CmdLine);
 
   int CmdLen=sprintf(CmdLine, "ttn-lw-stack.ttn-lw-cli devices delete --application-id=ogn --device-id=%s\n", DevID);
@@ -126,14 +130,14 @@ int main(int argc, char *argv[])
   CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.adr.mode.disabled");
   CmdLen+=sprintf(CmdLine+CmdLen, "\n");
 
-  CmdRet=system(CmdLine);
+  CmdRet=system(CmdLine);                             // print the commmand sent and the responnse code
   printf("%s => %d\n", CmdLine, CmdRet);
-
+                                                      // send the AppKey to the tracker
   CmdLen=sprintf(CmdLine, "$POGNS,AppKey=");          // construct NMEA to config the new AppKey
   CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
   CmdLen+=sprintf(CmdLine+CmdLen, "\r\n");
   Port.Write(CmdLine);
-  printf("Serial <= %s", CmdLine);
+  printf("Serial <= %s", CmdLine);                    // print command sent to the serial port of the tracker
 
   Port.Close();
 
