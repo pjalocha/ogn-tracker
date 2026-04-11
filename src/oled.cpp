@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include "main.h"
+#include "ble_spp.h"
 #include "oled.h"
 
 #include "gps.h"
@@ -74,8 +75,8 @@ void OLED_DrawStatusBar(u8g2_t *OLED, const GPS_Position *GPS)   // status bar o
   { u8g2_SetFont(OLED, u8g2_font_twelvedings_t_all);
     u8g2_DrawGlyph(OLED, 24, 12, 0x73); }
 #endif
-#ifdef WITH_BT_SPP
-  if(BT_SPP_isConnected())
+#ifdef WITH_BLE_SPP
+  if(BLE_SPP_isConnected)
   { u8g2_SetFont(OLED, u8g2_font_open_iconic_all_1x_t);
     u8g2_DrawGlyph(OLED, 36, 11, 0x5E); } // 0x4A
 #endif

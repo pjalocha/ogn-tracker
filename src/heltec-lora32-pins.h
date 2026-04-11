@@ -1,9 +1,12 @@
 #pragma once
 
+#define LED_PCB_Pin   25 // LED on the PCB
+
 // GPS
 #define GPS_UART UART_NUM_1  // UART for GPS
-#define GPS_PinTx     15 // Tx-Data
-#define GPS_PinRx     12 // Rx-Data
+#define GPS_PinTx     12 // Tx-Data
+#define GPS_PinRx     39 // Rx-Data
+#define GPS_PinPPS    38 // PPS
 #define GPS_PinEna    13 // enable/wakeup
 
 // SX1276 or SX1262 RF chip
