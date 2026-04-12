@@ -685,8 +685,8 @@ void  GPS_UART_SetBaudrate  (int BaudRate ) {        uart_set_baudrate(GPS_UART,
 bool GPS_PPS_isOn(void) { return gpio_get_level((gpio_num_t)GPS_PinPPS); }
 #endif
 #ifdef GPS_PinEna
-void GPS_DISABLE(void) { gpio_set_level((gpio_num_t)GPS_PinEna, 0); }
-void GPS_ENABLE (void) { gpio_set_level((gpio_num_t)GPS_PinEna, 1); }
+void GPS_DISABLE(void) { digitalWrite(GPS_PinEna, LOW); }
+void GPS_ENABLE (void) { digitalWrite(GPS_PinEna, HIGH); }
 #endif
 
 static void GPS_UART_Init(int BaudRate=115200)
@@ -704,7 +704,7 @@ static void GPS_UART_Init(int BaudRate=115200)
   gpio_isr_handler_add((gpio_num_t)GPS_PinPPS, PPS_Intr, 0);   // the last arg. is context which can be passed to the interrupt handl$#endif
 #endif
 #ifdef GPS_PinEna
-  gpio_set_direction((gpio_num_t)GPS_PinEna, GPIO_MODE_OUTPUT);
+  pinMode(GPS_PinEna, OUTPUT);
   GPS_ENABLE();
 #endif
   uart_config_t GPS_UART_Config =
