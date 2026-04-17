@@ -36,7 +36,7 @@ class FANET_Packet
 
    bool ExtHeader(void) const { return Byte[0]&0x80; }      // is there extended header ?
    bool Forward(void) const { return Byte[0]&0x40; }        // forward flag
-   uint8_t Type(void) const { return Byte[0]&0x3F; }        // message type
+   uint8_t getMsgType(void) const { return Byte[0]&0x3F; }        // message type
    uint32_t getAddr(void) const { uint32_t Addr=Byte[1]; Addr<<=8; Addr|=Byte[3]; Addr<<=8; Addr|=Byte[2]; return Addr; } // 24-bit source address
    uint8_t getAddrPref(void) const { return Byte[1]; }
 
@@ -49,7 +49,7 @@ class FANET_Packet
    void setAddrPref(uint8_t Prefix) { Byte[1]=Prefix; }                          // address prefix
    void setAddrLow(uint16_t Addr  ) { Byte[2]=Addr; Byte[3]=Addr>>8; }           // lower 16-bits of the address
    void setHeader(uint8_t Type) { Byte[0] = 0x40 | (Type&0x3F); }
-   void setType(uint8_t Type) { Byte[0] = (Byte[0]&0xC0) | (Type&0x3F); }        // packet-type: 1=air-position
+   void setMsgType(uint8_t Type) { Byte[0] = (Byte[0]&0xC0) | (Type&0x3F); }        // packet-type: 1=air-position
 
    uint8_t ExtHeaderLen(void) const // length ot the extended header (zero in most cases)
    { if(!ExtHeader()) return 0;
@@ -58,15 +58,15 @@ class FANET_Packet
      if(Byte[4]&0x10) Len+=4;    // if Signature
      return Len; }
 
-  uint8_t MsgOfs(void) const { return 4+ExtHeaderLen(); }              // offset to the actual message (past the header and ext. header)
+  uint8_t getMsgOfs(void) const { return 4+ExtHeaderLen(); }           // offset to the actual message (past the header and ext. header)
   uint8_t MsgLen(void) const { return Len-4-ExtHeaderLen(); }          // length of the actual message
-  const uint8_t *Msg(void) const { return Byte+MsgOfs(); }             // pointer to the message, past the header
-  uint8_t *Msg(void)         { return Byte+MsgOfs(); }
+  const uint8_t *Msg(void) const { return Byte+getMsgOfs(); }             // pointer to the message, past the header
+  uint8_t *Msg(void)         { return Byte+getMsgOfs(); }
 
   void setName(const char *Name)
   { setHeader(2);
     uint8_t Ofs;
-    for(Ofs=MsgOfs(); Ofs<MaxBytes; Ofs++)
+    for(Ofs=getMsgOfs(); Ofs<MaxBytes; Ofs++)
     { char ch = *Name++; if(ch==0) break;
       Byte[Ofs]=ch; }
     // xif(Ofs<MaxBytes) Byte[Ofs++]=0;
@@ -143,7 +143,7 @@ class FANET_Packet
   //                       [0..7]         [0..1] [FANET cordic] [FANET cordic]     [m]     [cordic]        [0.1m/s]       [0.1m/s]    [0.1deg/s]
   void setAirPos(uint8_t AcftType, uint8_t Track, int32_t Lat, int32_t Lon, int16_t Alt, uint8_t Dir, uint16_t Speed, int16_t Climb, int16_t Turn)
   { setHeader(1);
-    uint8_t Ofs=MsgOfs();
+    uint8_t Ofs=getMsgOfs();
     Len=Ofs+12;
     setLat(Byte+Ofs, Lat);            // [cordic]
     setLon(Byte+Ofs+3, Lon);          // [cordic]
@@ -157,7 +157,7 @@ class FANET_Packet
     setTurnRate(Byte+Ofs+11, Turn*2/5); } // [0.25deg/s]
 
   void setQNE(int32_t StdAltitude)    // [m] only for air-position
-  { uint8_t Ofs=MsgOfs();
+  { uint8_t Ofs=getMsgOfs();
     int32_t Alt=getAltitude(Byte+Ofs+6);
     if(Len<(Ofs+13)) Len=Ofs+13;
     setQNE(Byte+Ofs+12, StdAltitude-Alt); }
@@ -165,7 +165,7 @@ class FANET_Packet
   //                    [0..15]         [0..1]  [FANET cordic]  [FANET cordic]
   void setGndPos(uint8_t Status, uint8_t Track, int32_t Lat, int32_t Lon)
   { setHeader(7);
-    uint8_t Ofs=MsgOfs();
+    uint8_t Ofs=getMsgOfs();
     Len=11;
     setLat(Byte+Ofs, Lat);
     setLon(Byte+Ofs+3, Lon);
@@ -192,13 +192,13 @@ class FANET_Packet
   { return 0; }
 
   int DecodePosition(float &Lat, float &Lon, int &Alt)
-  { uint8_t Idx=MsgOfs();
-    if(Type()==1)
+  { uint8_t Idx=getMsgOfs();
+    if(getMsgType()==1)
     { Lat = FloatCoord(getLat(Byte+Idx));
       Lon = FloatCoord(getLon(Byte+Idx+3));
       Alt = getAltitude(Byte+Idx+6);
       return 3; }
-    if(Type()==7)
+    if(getMsgType()==7)
     { Lat = FloatCoord(getLat(Byte+Idx));
       Lon = FloatCoord(getLon(Byte+Idx+3));
       Alt = 0;
@@ -207,25 +207,25 @@ class FANET_Packet
 
   int Print(char *Out) const
   { int OutLen=0;
-    OutLen+=sprintf(Out+OutLen, "[%2d:%d:%2d] FNT%06X", Len, Type(), MsgLen(), getAddr());
+    OutLen+=sprintf(Out+OutLen, "[%2d:%d:%2d] FNT%06X", Len, getMsgType(), MsgLen(), getAddr());
     Out[OutLen]=0; return OutLen; }
 
   void Print(const char *Name=0) const
   { if(Name) printf("%s ", Name);
-    printf("[%2d:%d:%2d] FNT%06X", Len, Type(), MsgLen(), getAddr());
-    if(Type()==2)                                                      // Name
+    printf("[%2d:%d:%2d] FNT%06X", Len, getMsgType(), MsgLen(), getAddr());
+    if(getMsgType()==2)                                                      // Name
     { printf(" ");
-      for(uint8_t Idx=MsgOfs(); Idx<Len; Idx++)
+      for(uint8_t Idx=getMsgOfs(); Idx<Len; Idx++)
         printf("%c", Byte[Idx]);
       printf("\n"); return; }
-    if(Type()==3)                                                      // Message
-    { uint8_t Idx=MsgOfs();
+    if(getMsgType()==3)                                                      // Message
+    { uint8_t Idx=getMsgOfs();
       printf(" Msg%02X: ", Byte[Idx++]);
       for( ; Idx<Len; Idx++)
         printf("%c", Byte[Idx]);
       printf("\n"); return; }
-    if(Type()==4)                                                    // Service, mostly meteo
-    { uint8_t Idx=MsgOfs(); uint8_t Service=Byte[Idx++];
+    if(getMsgType()==4)                                                    // Service, mostly meteo
+    { uint8_t Idx=getMsgOfs(); uint8_t Service=Byte[Idx++];
       int32_t Lat=getLat(Byte+Idx); Idx+=3;                          // [FANET cordic]
       int32_t Lon=getLon(Byte+Idx); Idx+=3;                          // [FANET cordic]
       printf(" [%+09.5f,%+010.5f] s%02X", FloatCoord(Lat), FloatCoord(Lon), Service);
@@ -241,8 +241,8 @@ class FANET_Packet
       { printf(" %3.1fhPa", 0.1*getPressure(Byte+Idx)); Idx+=2; }
       if(Service&0x02) printf(" %1.0f%%", (100.0/15)*Byte[Idx++]);   // charge state
       printf("\n"); return; }
-    if(Type()==1)                                                    // airborne position
-    { uint8_t Idx=MsgOfs(); uint8_t AcftType=Byte[Idx+7]>>4;
+    if(getMsgType()==1)                                                    // airborne position
+    { uint8_t Idx=getMsgOfs(); uint8_t AcftType=Byte[Idx+7]>>4;
       int32_t Lat=getLat(Byte+Idx);                                  // [FANET cordic]
       int32_t Lon=getLon(Byte+Idx+3);                                // [FANET cordic]
       uint16_t Alt=getAltitude(Byte+Idx+6);                          // [m]
@@ -258,14 +258,14 @@ class FANET_Packet
       { int16_t QNE = getQNE(Byte[Idx+12]);
         printf(" %+dm", QNE); }
       printf("\n"); return; }
-    if(Type()==7)                                                    // ground position
-    { uint8_t Idx=MsgOfs(); uint8_t Status=Byte[Idx+6];
+    if(getMsgType()==7)                                                    // ground position
+    { uint8_t Idx=getMsgOfs(); uint8_t Status=Byte[Idx+6];
       int32_t Lat=getLat(Byte+Idx);                                  // [FANET cordic]
       int32_t Lon=getLon(Byte+Idx+3);                                // [FANET cordic]
       printf(" [%+09.5f,%+010.5f] s%02X", FloatCoord(Lat), FloatCoord(Lon), Status);
       printf("\n"); return; }
-    if(Type()==8)                                                    // Hardware/Software
-    { uint8_t Idx=MsgOfs();
+    if(getMsgType()==8)                                                    // Hardware/Software
+    { uint8_t Idx=getMsgOfs();
       uint8_t Hw = Byte[Idx];
       uint16_t Fw = Byte[Idx+2]; Fw<<=8; Fw|=Byte[Idx+1];
       printf(" Hw%02X Fw%02d.%02d.%04d%c", Hw, Fw&0x1F, (Fw>>5)&0x0F, 2019+((Fw>>9)&0x3F), Fw&0x8000?'d':'r');
@@ -350,7 +350,7 @@ class FANET_RxPacket: public FANET_Packet
    int PrintJSON(char *JSON, uint8_t AddrType=0) const
    { const uint8_t *Msg = this->Msg();
      uint8_t MsgLen = this->MsgLen();
-     uint8_t Type = this->Type();
+     uint8_t Type = this->getMsgType();
      if(Type!=1 && Type!=7) { JSON[0]=0; return 0; }
      int Len=0;
      JSON[Len++]='{';
@@ -425,7 +425,7 @@ class FANET_RxPacket: public FANET_Packet
      JSON[Len++] = '0'+AddrType;
      const uint8_t *Msg = this->Msg();
      uint8_t  MsgLen = this->MsgLen();
-     uint8_t Type = this->Type();
+     uint8_t Type = this->getMsgType();
      uint32_t Time = SlotTime(); // sTime; if(msTime<100) Time--;
      Len+=Format_String(JSON+Len, ",\"time\":");
      Len+=Format_UnsDec(JSON+Len, Time);
@@ -530,7 +530,7 @@ class FANET_RxPacket: public FANET_Packet
    { bool Report=0;
      if(AddrType==0) AddrType = getAddrType();                 // 2 (FLARM) or 3 (OGN)
      int Len=0;
-     bool isPosition = Type()==1 || Type()==4 || Type()==7;
+     bool isPosition = getMsgType()==1 || getMsgType()==4 || getMsgType()==7;
      Len+=Format_String(Out+Len, "FNT");
      Len+=Format_Hex(Out+Len, Byte[1]);
      Len+=Format_Hex(Out+Len, Byte[3]);
@@ -541,7 +541,7 @@ class FANET_RxPacket: public FANET_Packet
      Out[Len++]='h';
      const uint8_t *Msg = this->Msg();
      uint8_t  MsgLen = this->MsgLen();
-     switch(Type())
+     switch(getMsgType())
      { case 2:                                 // Name: pilot or weather station
        { Len+=Format_String(Out+Len, " Name=\"");
          for(int Idx=0; Idx<MsgLen; Idx++)
