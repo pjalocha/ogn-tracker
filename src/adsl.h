@@ -262,7 +262,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
        Out[Len]=0; }
      return Len; }
 
-   uint8_t getInfo(char *Value, uint8_t Type=5)
+   uint8_t getInfo(char *Value, uint8_t Type=5) const
    { if(Telemetry.Header.TelemType!=1) return 0;    // if not info packet then give up
      if(Info.Header.InfoType!=Type) return 0;       // if not desired info-type then give up
      strncpy(Value, Info.Msg, 14);                  // copy up to 14 characters

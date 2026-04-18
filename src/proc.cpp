@@ -246,7 +246,7 @@ static bool getTelemSatPPS(ADSL_Packet &Packet) { return 0; }
 
 static bool getTelemSatSNR(ADSL_Packet &Packet)
 { Packet.Init(0x42);
-  Packet.setAddress    (Parameters.Address);
+  Packet.setAddress(Parameters.Address);
   Packet.setAddrTypeOGN(Parameters.AddrType);
   Packet.setRelay(0);
   Packet.Telemetry.Header.TelemType=0x3;                            // 3 = GPS telemetry
@@ -881,6 +881,44 @@ static void DecodeRxPacket(FSK_RxPacket *RxPkt)
     return; }
   return; }
 
+// convert FANET air-position packet into OGN position packet
+static int FNT2OGN(OGN1_Packet &OGN, const FANET_Packet &FNT, uint8_t Sec=63)
+{ if(FNT.getMsgType()!=1) return 0;                   // we can ony convert airborne position packets
+  OGN.Clear();
+  OGN.HeaderWord=0;
+  OGN.Header.Address =FNT.getAddr();
+  OGN.Header.AddrType=FNT.getAddrType();
+  OGN.calcAddrParity();
+  OGN.Position.FixQuality=2;
+  OGN.Position.FixMode=1;
+  OGN.EncodeDOP(0);
+  OGN.Position.Time=Sec;
+  uint8_t Idx=FNT.getMsgOfs(); uint8_t AcftType=FNT.Byte[Idx+7]>>4;
+  OGN.Position.AcftType=AcftType_FNTtoOGN(AcftType);
+  OGN.EncodeLatitude(Coord_FNTtoOGN(FNT.getLat(FNT.Byte+Idx)));
+  OGN.EncodeLongitude(Coord_FNTtoOGN(FNT.getLon(FNT.Byte+Idx+3)));
+  int16_t Alt = FNT.getAltitude(FNT.Byte+Idx+6);
+  OGN.EncodeAltitude(Alt);
+  OGN.EncodeSpeed((FNT.getSpeed(FNT.Byte[Idx+8])*89+32)>>6);
+  OGN.EncodeClimbRate(FNT.getClimb(FNT.Byte[Idx+9]));
+  OGN.Position.Heading = (uint16_t)FNT.Byte[Idx+10]<<2;
+  if((Idx+11)<FNT.Len) OGN.EncodeTurnRate(FNT.getTurnRate(FNT.Byte[Idx+11])*10/4);
+                else   OGN.clrTurnRate();
+  if((Idx+12)<FNT.Len)
+  { int16_t dAlt = FNT.getQNE(FNT.Byte[Idx+12]);
+    Alt+=dAlt;
+    OGN.EncodeStdAltitude(Alt); }
+  else OGN.clrBaro();
+  return 1; }
+
+static void DecodeRxPacket(FANET_RxPacket *RxPkt)
+{ uint8_t RxPacketIdx  = OGN_RelayQueue.getNew();
+  OGN_RxPacket<OGN_Packet> *RxPacket = OGN_RelayQueue[RxPacketIdx];
+  uint32_t SlotTime = RxPkt->SlotTime();
+  if(FNT2OGN(RxPacket->Packet, *RxPkt, SlotTime%60)<=0) return;
+  RxPacket->RxRSSI = -2*RxPkt->RSSI;
+  ProcessRxOGN(RxPacket, RxPacketIdx, SlotTime); }
+
 // -------------------------------------------------------------------------------------------------------------------
 
 #ifdef __cplusplus
@@ -927,6 +965,12 @@ void vTaskPROC(void* pvParameters)
 #endif
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
       FSK_RxFIFO.Read(); }                                              // remove this packet from the queue
+
+    for( ; ; )
+    { FANET_RxPacket *RxPkt = FNT_RxFIFO.getRead();                     // check for new received packets
+      if(RxPkt==0) break;                                               // if there is a new received packet
+      DecodeRxPacket(RxPkt);                                            // decode and process the received packet
+      FNT_RxFIFO.Read(); }                                              // remove this packet from the queue
 
     static uint32_t PrevSlotTime=0;                                     // remember previous time slot to detect a change
     uint32_t     Time;                                                  // [sec] time slot
