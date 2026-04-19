@@ -12,6 +12,8 @@ void AddPath(char *Name, const char *FileName, const char *Path);
 extern bool     FlashLog_SaveReq;
 extern uint32_t FlashLog_FileTime;                            // [sec] start time of the current log file
 extern char     FlashLog_FileName[32];                        // current log file name if open
+extern uint32_t FlashLog_FileFlush;                           // [bytes]
+extern  int     FlashLog_Files;                               //
 
 bool FlashLog_isOpen(void);
 int  FlashLog_FullFileName(char *FileName, uint32_t Time);    // create full name (including the path) of the log file starting from Time

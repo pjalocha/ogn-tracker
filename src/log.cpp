@@ -35,9 +35,10 @@ static const uint32_t FlashLog_SaveSize = 4096;   // [bytes] reopen the file eve
 
        bool     FlashLog_SaveReq=0;               // request to save the log right away, like after landing or before shutdown
        uint32_t FlashLog_FileTime=0;              // [sec] UTC time corresponding to the log file
-       char     FlashLog_FileName[32];            // current log file name if open
+       char     FlashLog_FileName[32] = { 0 };    // current log file name if open
 static FILE    *FlashLog_File=0;                  // current log file if open
-static uint32_t FlashLog_FileFlush=0;             // track where the log file has been forced to be written to flash
+       uint32_t FlashLog_FileFlush=0;             // [bytes] track where the log file has been forced to be written to flash
+        int     FlashLog_Files=0;                 // number of files
 
        bool     FlashLog_isOpen(void) { return FlashLog_File; } // is a log file open now ?
 
@@ -120,6 +121,7 @@ int FlashLog_FindOldestFile(uint32_t &Oldest, uint32_t After) // find the oldest
     if(Time<Oldest) Oldest=Time;                               // search for oldest start time
     Files++; }
   closedir(Dir);
+  FlashLog_Files=Files;
   return Files; }                                              // return number of log files
 
 int FlashLog_ListFiles(void)                                  // list log files sorted by time
@@ -133,7 +135,7 @@ int FlashLog_ListFiles(void)                                  // list log files 
   for( ; ; )
   { vTaskDelay(1);                                             // not to overload the priority level
     uint32_t Time = 0;
-    FlashLog_FindOldestFile(Time, PrevTime);                  // find the next oldest file
+    FlashLog_FindOldestFile(Time, PrevTime);                   // find the next oldest file
     if(Time==0xFFFFFFFF) break;                                // if none found then stop the list
     PrevTime=Time;
     FlashLog_FullFileName(FullName, Time);
@@ -277,6 +279,7 @@ static int FlashLog_Clean(size_t MinFree=0)                          // clean ol
   xSemaphoreGive(CONS_Mutex);
 #endif
   if(unlink(FullName)<0) return -1;                                  // remove the oldest file
+  FlashLog_Files=Files-1;
   return 1; }
 
 static int FlashLog_Clean(size_t MinFree, int Loops)                // repeat the clean procedure several times
@@ -308,7 +311,7 @@ static void FlashLog_Reopen(void)                                   // force clo
 { if(FlashLog_File)                                                 // if log File is open
   { fclose(FlashLog_File);                                          // close it
     FlashLog_File = fopen(FlashLog_FileName, "ab");                 // open it again for append with same filename
-    FlashLog_FileFlush = ftell(FlashLog_File); }                    // track how much has been pysically written
+    FlashLog_FileFlush = ftell(FlashLog_File); }                    // track how much has been physically written
   FlashLog_SaveReq=0; }                                             // clear q possible request to save the file
 
 static int FlashLog_Record(OGN_LogPacket<OGN_Packet> *Packet, int Packets, uint32_t Time)      // log a batch of OGN packets
@@ -372,6 +375,9 @@ void vTaskLOG(void* pvParameters)
   FlashLog_FIFO.Clear();
 
 // #ifdef DEBUG_PRINT
+  uint32_t Oldest;
+  int Files=FlashLog_FindOldestFile(Oldest, 0);
+
   if(xSemaphoreTake(CONS_Mutex, 200))
   { Format_String(CONS_UART_Write, "TaskLOG() ");
 #ifdef WITH_SPIFFS
@@ -383,7 +389,8 @@ void vTaskLOG(void* pvParameters)
         Format_String(CONS_UART_Write, "kB total, "); }
     }
 #endif
-    Format_String(CONS_UART_Write, "\n");
+    Format_SignDec(CONS_UART_Write, Files, 1, 0, 1);
+    Format_String(CONS_UART_Write, " files \n");
     xSemaphoreGive(CONS_Mutex); }
 // #endif // DEBUG_PRINT
 

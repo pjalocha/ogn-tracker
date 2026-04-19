@@ -4,6 +4,7 @@
 #include "ogn-radio.h"
 #include "proc.h"
 #include "gps.h"
+#include "log.h"
 
 #ifdef WITH_ST7735
 
@@ -323,6 +324,42 @@ int TFT_DrawBaro(const GPS_Position *GPS)
   Vert+=16;
   TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
   return 1; }
+
+static void ClearLine(int Vert, int Height=14, int VertOfs=11)
+{ TFT.fillRect(0, Vert-VertOfs, TFT.width(), Height, ST77XX_DARKBLUE); }
+
+#ifdef WITH_SPIFFS
+int TFT_DrawLog(const GPS_Position *GPS)
+{ char Line[32];
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(&FreeMono9pt7b);
+  TFT.setTextSize(1);
+  int Vert=16;
+
+  size_t Total, Used;
+  int Err=SPIFFS_Info(Total, Used);
+  if(Err==0)
+  { sprintf(Line, "Used:%5dkB", (Used+512)>>10);
+    ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+    sprintf(Line, "Free:%5dkB", (Total-Used+512)>>10);
+    ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+    Line[0]=0;
+    // if(FlashLog_FileName[0]) sprintf(Line, "%s", FlashLog_FileName+strlen(FlashLog_Path)+1);
+    if(FlashLog_FileTime) { sprintf(Line, "File: "); Format_HHMMSS(Line+6, FlashLog_FileTime); Line[6+6]=0; }
+    ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+    Line[0]=0;
+    if(FlashLog_FileFlush) sprintf(Line, "Size:%5dkB", (FlashLog_FileFlush+512)>>10);
+    ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+    Line[0]=0;
+    if(FlashLog_Files>0) sprintf(Line, "%d log files", FlashLog_Files);
+    ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14; }
+  else
+  { sprintf(Line, "Log:<info-error>");
+    ClearLine(Vert, 14*5); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14; }
+  return 1; }
+#else
+int TFT_DrawLog(const GPS_Position *GPS) { return 0; }
+#endif
 
 #ifdef WITH_LORAWAN
 int TFT_DrawLoRaWAN(const GPS_Position *GPS)
