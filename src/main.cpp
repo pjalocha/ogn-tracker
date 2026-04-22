@@ -1089,6 +1089,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   TFT_DrawID(StartAP);
 #endif
 
+#ifdef WITH_FLASHER
+  Flasher_Init();
+  Flasher_Play(0x22);
+#endif
+
 #ifdef WITH_BEEPER
   Beep_Init();
   Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
@@ -1411,6 +1416,9 @@ void loop()
   vTaskDelay(1);
 #ifdef WITH_BEEPER
   Play_TimerCheck(1);              // handle playing notes on the buzzer
+#endif
+#ifdef WITH_FLASHER
+  Flasher_TimerCheck(1);           // handle playing pulses on the flasher LEDs
 #endif
   OGN_LED_Flash();                 // flash LEDs as requested by Radio Tx/Rx
 #ifdef Button_Pin

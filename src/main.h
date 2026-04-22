@@ -80,6 +80,8 @@ uint32_t getUniqueAddress(void);
 const uint8_t KNOB_Tick = 15;
 #include "play.h"
 
+#include "flasher.h"
+
 extern FlashParameters Parameters;
 
 extern SemaphoreHandle_t CONS_Mutex;
