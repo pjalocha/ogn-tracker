@@ -589,6 +589,9 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       GDL_REPORT.Send(CONS_UART_Write, 20);                                           // transmit as traffic position report (not own-ship)
       xSemaphoreGive(CONS_Mutex); }
 #endif
+#ifdef WITH_FLASHER
+    Flasher_Play(Warn>1?Flasher_PattTriple:Flasher_PattDouble);
+#endif
 #ifdef WITH_BEEPER
     if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
