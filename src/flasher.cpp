@@ -1,6 +1,7 @@
 #include "main.h"
 
 #include "flasher.h"
+#include "gps.h"
 #include <fifo.h>
 
 #ifdef WITH_FLASHER
@@ -20,7 +21,8 @@ void Flasher_ON(bool ON)
 #endif
 }
 
-const  uint8_t Flasher_BitPeriod = 10;   // [ms]
+const  uint8_t Flasher_BitPeriod       = 10;   // [ms]
+const uint32_t Flasher_IdleFlashPeriod = 30; // [sec]
 
 static uint32_t Flasher_LastActive = 0;
 static uint32_t Flasher_Pattern   =  0;
@@ -41,7 +43,8 @@ void Flasher_TimerCheck(uint8_t Ticks)
     { Flasher_PattBits=32; Flasher_LastActive=msTime; }
     else
     { uint32_t Idle=msTime-Flasher_LastActive;
-      if(Idle>=10000) { Flasher_Pattern=Flasher_PattDouble; Flasher_PattBits=32; Flasher_LastActive=msTime; }
+      if(Flight.inFlight() && Idle>=Flasher_IdleFlashPeriod*1000)
+      { Flasher_Pattern=Flasher_PattDouble; Flasher_PattBits=32; Flasher_LastActive=msTime; }
     }
   }
   if(Flasher_PattBits>0) { ON = Flasher_Pattern&0x80000000; Flasher_Pattern<<=1; Flasher_PattBits--; }

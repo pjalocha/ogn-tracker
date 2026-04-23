@@ -1096,6 +1096,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_BEEPER
   Beep_Init();
+/*
   Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
   Play(Play_Vol_1 | Play_Oct_0 | 0x08, 250);
   Play(Play_Vol_0 | Play_Oct_0 | 0x00, 100);
@@ -1103,6 +1104,8 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   Play_Morse('O');
   Play_Morse('G');
   Play_Morse('N');
+*/
+  Play_Morse('S');
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
@@ -1444,8 +1447,11 @@ void loop()
   {
 #ifdef WITH_OLED
     OLED.clearBuffer();
-    OLED_DrawGPS(OLED.getU8g2(), GPS);
-    OLED_DrawStatusBar(OLED.getU8g2(), GPS);
+    if(GPS->isDateValid())
+    { OLED_DrawGPS(OLED.getU8g2(), GPS);
+      OLED_DrawStatusBar(OLED.getU8g2(), GPS); }
+    else
+      OLED_DrawLogo(OLED.getU8g2());
     if(xSemaphoreTake(I2C_Mutex, 100))
     { // uint32_t Time=millis();
       OLED.sendBuffer();                // takes about 40 ms
