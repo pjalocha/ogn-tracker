@@ -20,7 +20,7 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.16"
+#define VERSION "0.1.17"
 #endif
 
 // #define SOFT_NAME "dev-14.02" // signal development version
@@ -160,6 +160,14 @@ uint16_t BatterySenseRaw(int Samples=4); // [mV]
 int  SPIFFS_Register(void);
 int  SPIFFS_Info(size_t &Total, size_t &Used, const char *Label=0);
 extern bool SPIFFS_Mounted;
+#endif
+
+#ifdef WITH_SD
+esp_err_t SD_Mount(void);
+void      SD_Unmount();
+bool      SD_isMounted();
+int       SD_getSectors(void);
+int       SD_getSectorSize(void);
 #endif
 
 typedef union

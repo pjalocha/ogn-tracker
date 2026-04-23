@@ -66,14 +66,15 @@ uint32_t FlashLog_ReadShortFileTime(const char *FileName)     //
 { return FlashLog_ReadShortFileTime(FileName, strlen(FileName)); }
 
 #ifdef WITH_SD
+static uint8_t FlashLog_CopyBuffer[2048];
+
 int FlashLog_CopyToSD(bool Remove)                            // copy log files to SD card
 { int Files=0;
   struct stat DstStat;
   struct utimbuf DstTime;
   char SrcName[32];                                           // full name of the source file
   char DstName[32];                                           // full name of the destination file
-  const int BuffSize=2048;                                    //
-  uint8_t Buffer[BuffSize];                                   // buffer to copy from source to destination
+  const int BuffSize=sizeof(FlashLog_CopyBuffer);             //
   DIR *Dir=opendir(FlashLog_Path); if(!Dir) return -1;        // open directory, give up if not possible
   for( ; ; )
   { vTaskDelay(1);                                            // give some time to parallel tasks
@@ -93,8 +94,8 @@ int FlashLog_CopyToSD(bool Remove)                            // copy log files 
     FILE *SrcFile = fopen(SrcName, "rb");                     // open source file
     if(SrcFile==0) { fclose(DstFile); continue; }             // if not possible then skip to next source
     for( ; ; )
-    { int Read=fread(Buffer, 1, BuffSize, SrcFile); if(Read<=0) break; // keep copying
-      int Write=fwrite(Buffer, 1, Read, DstFile); if(Read<BuffSize || Write<Read) break; } // until EOF
+    { int Read=fread(FlashLog_CopyBuffer, 1, BuffSize, SrcFile); if(Read<=0) break; // keep copying
+      int Write=fwrite(FlashLog_CopyBuffer, 1, Read, DstFile); if(Read<BuffSize || Write<Read) break; } // until EOF
     fclose(SrcFile);                                          // close source file
     fclose(DstFile);                                          // close destination file
     if(stat(DstName, &DstStat)>=0)                            // get file attributes (maybe not really needed)

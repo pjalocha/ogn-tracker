@@ -598,7 +598,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 #endif
 #endif // WITH_LOOKOUT
 
-     bool Signif = PrevRxPacket==0;
+     bool Signif = Warn || PrevRxPacket==0;
      if(!Signif) Signif=OGN_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID from the relay queue
 #ifdef WITH_APRS
      if(Signif) APRSrx_FIFO.Write(*RxPacket);                                        // APRS queue for received packets
@@ -732,7 +732,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #endif
 #endif // WITH_LOOKOUT
 
-    bool Signif = PrevRxPacket==0;
+    bool Signif = Warn || PrevRxPacket==0;
     if(!Signif) Signif=ADSL_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID fr>
 #ifdef WITH_LOG
     if(Signif || Warn) FlashLog(RxPacket, RxTime);                                      // log only significant packets

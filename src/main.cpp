@@ -87,8 +87,18 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#ifdef WITH_SPIFFS
 #include "esp_vfs_fat.h"
 #include "esp_spiffs.h"
+#endif
+
+#ifdef WITH_SD
+#include "esp_vfs_fat.h"
+#include "driver/sdmmc_host.h"
+#include "driver/spi_common.h"
+#include "driver/sdspi_host.h"
+#include "sdmmc_cmd.h"
+#endif
 
 #ifdef WITH_EPAPER
 #include "epd.h"
@@ -106,6 +116,10 @@
 #include "USB.h"
 #include "USBMSC.h"
 // #include "USBCDC.h"
+#endif
+
+#ifdef WITH_SDLOG
+#include "sdlog.h"
 #endif
 
 // =======================================================================================================
@@ -206,6 +220,68 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
   return esp_spiffs_info(Label, &Total, &Used); }
 
 #endif
+#endif
+
+#ifdef WITH_SD
+
+static sdmmc_host_t        SD_Host = SDSPI_HOST_DEFAULT();
+static const char         *SD_BasePath = "/sdcard";
+static spi_bus_config_t    SD_BusConfig =
+  { .mosi_io_num = SD_PinMOSI,
+    .miso_io_num = SD_PinMISO,
+    .sclk_io_num = SD_PinSCK,
+    .quadwp_io_num = -1,
+    .quadhd_io_num = -1,
+    .data4_io_num = -1,
+    .data5_io_num = -1,
+    .data6_io_num = -1,
+    .data7_io_num = -1,
+    .max_transfer_sz = 4000,
+    .flags = 0,
+    .intr_flags = 0 };
+static sdspi_device_config_t SD_SlotConfig = SDSPI_DEVICE_CONFIG_DEFAULT();
+
+static esp_vfs_fat_sdmmc_mount_config_t SD_MountConfig =
+  { .format_if_mount_failed = false,
+    .max_files = 5,
+    /* .allocation_unit_size = 16 * 1024 */ };
+
+sdmmc_card_t *SD_Card = 0;
+static bool   SD_BusReady = false;
+
+bool      SD_isMounted(void) { return SD_Card; }
+int       SD_getSectors(void) { return SD_Card->csd.capacity; }
+int       SD_getSectorSize(void) { return SD_Card->csd.sector_size; }
+
+void SD_Unmount(void)
+{ if(SD_Card)
+  { esp_vfs_fat_sdcard_unmount(SD_BasePath, SD_Card);
+    SD_Card=0; }
+  if(SD_BusReady)
+  { spi_bus_free((spi_host_device_t)SD_Host.slot);
+    SD_BusReady=false; } }
+
+esp_err_t SD_Mount(void)
+{ esp_err_t Ret = esp_vfs_fat_sdspi_mount(SD_BasePath, &SD_Host, &SD_SlotConfig, &SD_MountConfig, &SD_Card);
+  if(Ret!=ESP_OK) SD_Unmount();
+  return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
+
+static esp_err_t SD_Init(void)
+{ SD_Host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
+  SD_Host.slot = SPI3_HOST;
+  SD_Host.max_freq_khz = SDMMC_FREQ_PROBING;
+  SD_SlotConfig = (sdspi_device_config_t)SDSPI_DEVICE_CONFIG_DEFAULT();
+  SD_SlotConfig.host_id   = (spi_host_device_t)SD_Host.slot;
+  SD_SlotConfig.gpio_cs   = (gpio_num_t)SD_PinCS;
+  esp_err_t Ret = spi_bus_initialize((spi_host_device_t)SD_Host.slot, &SD_BusConfig, SD_SPI_DMA);
+  if(Ret!=ESP_OK)
+  { Serial.printf("SD spi_bus_initialize failed (%d)\n", Ret);
+    return Ret; }
+  SD_BusReady = true;
+  Ret = SD_Mount();
+  Serial.printf("SD mount(%d)\n", Ret);
+  return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
+
 #endif
 
 #ifdef WITH_USBMSC
@@ -995,6 +1071,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     // GNSS VDD 3300mV
     PMU->setPowerChannelVoltage(XPOWERS_ALDO4, 3300);
     PMU->enablePowerOutput(XPOWERS_ALDO4);
+#ifdef WITH_SD
+    // SD card VDD 3300mV
+    PMU->setPowerChannelVoltage(XPOWERS_BLDO1, 3300);
+    PMU->enablePowerOutput(XPOWERS_BLDO1);
+#endif
 #endif //WITH_TBEAMS3
     // set charging LED flashing
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
@@ -1094,18 +1175,23 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   Flasher_Play(Flasher_PattTriple);
 #endif
 
+#ifdef WITH_SD
+  SD_Init();
+#endif
+
 #ifdef WITH_BEEPER
   Beep_Init();
-/*
+#ifdef WITH_BEEPER_GEN
+  Play_Morse('S');
+#else
   Play(Play_Vol_1 | Play_Oct_0 | 0x05, 250);
   Play(Play_Vol_1 | Play_Oct_0 | 0x08, 250);
   Play(Play_Vol_0 | Play_Oct_0 | 0x00, 100);
-  Play_Morse(' ');
-  Play_Morse('O');
-  Play_Morse('G');
-  Play_Morse('N');
-*/
-  Play_Morse('S');
+#endif
+  // Play_Morse(' ');
+  // Play_Morse('O');
+  // Play_Morse('G');
+  // Play_Morse('N');
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");
@@ -1116,8 +1202,13 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     xSemaphoreGive(CONS_Mutex); }
   PrintPOGNS();
 
+#ifdef WITH_SDLOG
+    Log_Mutex = xSemaphoreCreateMutex();
+    xTaskCreate(vTaskSDLOG, "SDLOG",   5000, NULL, 0, NULL);  // log data to SD card
+#endif
+
 #ifdef WITH_LOG
-  xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash
+  xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash / SD copy needs extra stack
 #endif
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  5000, NULL, 1, NULL);  // read data from GPS
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)

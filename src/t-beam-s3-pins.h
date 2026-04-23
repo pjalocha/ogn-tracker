@@ -40,3 +40,4 @@
 #define SD_PinSCK  36
 #define SD_PinMISO 37
 
+#define SD_SPI_DMA  SPI_DMA_CH_AUTO
