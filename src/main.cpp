@@ -1091,7 +1091,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_FLASHER
   Flasher_Init();
-  Flasher_Play(0x22);
+  Flasher_Play(0x01000100);
 #endif
 
 #ifdef WITH_BEEPER
