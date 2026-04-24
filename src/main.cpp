@@ -504,6 +504,42 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 
 #endif
 
+#ifdef WITH_OLED
+
+const  uint8_t  OLED_Pages      = 4;       // eight LCD pages
+static uint8_t  OLED_Page       = 0;       // page currently on display
+static uint8_t  OLED_PageChange = 0;       // signal the page has been changed
+static uint8_t  OLED_PageOFF    = 0;       // Backlight to be OFF
+#ifdef WITH_OLED_DIM
+static uint32_t OLED_PageActive = 0;       // [ms] last time the page was active (button pressed)
+const  uint32_t OLED_PageTimeout = (uint32_t)60000*WITH_OLED_DIM;  // [ms] timeout to turn off the TFT backlight
+#endif
+
+static void OLED_NextPage(void)
+{ OLED_Page++;
+  if(OLED_Page>=OLED_Pages) OLED_Page=0;
+  OLED_PageChange=1; }
+
+static int OLED_DrawPage(const GPS_Position *GPS)
+{ OLED.clearBuffer();
+  switch(OLED_Page)
+  { case 0: OLED_DrawID  (OLED.getU8g2(), GPS); break;
+    case 1: OLED_DrawGPS (OLED.getU8g2(), GPS); break;
+    case 2: OLED_DrawBaro(OLED.getU8g2(), GPS); break;
+    case 3: OLED_DrawRF  (OLED.getU8g2(), GPS); break; }
+  // if(GPS->isDateValid())
+  // { OLED_DrawGPS(OLED.getU8g2(), GPS);
+  //   OLED_DrawStatusBar(OLED.getU8g2(), GPS); }
+  // else
+  //   OLED_DrawLogo(OLED.getU8g2());
+  OLED_DrawStatusBar(OLED.getU8g2(), GPS);
+  if(xSemaphoreTake(I2C_Mutex, 50))
+  { OLED.sendBuffer();
+    xSemaphoreGive(I2C_Mutex); }
+  return 1; }
+
+#endif
+
 // =======================================================================================================
 // ADC to sense battery voltage
 
@@ -578,7 +614,7 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 
 // =======================================================================================================
 
-#ifdef Button2_Pin
+#ifdef Button2_Pin                       // the "option" button, only on ThinkNode-M5
 static Button2 OptButton(Button2_Pin);
 static bool OptButton_isPressed(void) { return digitalRead(Button2_Pin)==0; }
 
@@ -595,7 +631,7 @@ static void OptButton_Init(void)
 }
 #endif
 
-#ifdef Button_Pin
+#ifdef Button_Pin                       // primary button to switch display pages
 static Button2 Button(Button_Pin);
 static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
@@ -606,9 +642,17 @@ static void Button_Single(Button2 Butt) // callback when a single press on the b
     TFT_PageOFF=0;
   else
     TFT_NextPage();
-
   #ifdef WITH_TFT_DIM
   TFT_PageActive=millis();
+  #endif
+#endif
+#ifdef WITH_OLED
+  if(OLED_PageOFF)
+    OLED_PageOFF=0;
+  else
+    OLED_NextPage();
+  #ifdef WITH_OLED_DIM
+  OLED_PageActive=millis();
   #endif
 #endif
 }
@@ -1177,6 +1221,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_SD
   SD_Init();
+  if(SD_isMounted())                       // if SD card succesfully mounted at startup
+  { Parameters.SaveToFlash=0;
+    if(Parameters.ReadFromFile("/sdcard/TRACKER.CFG")>0)    // try to read parameters from the TRACKER.CFG file
+    { if(Parameters.SaveToFlash) Parameters.WriteToNVS(); } // if succesfull and SaveToFlash==1 then save them to flash
+  }
 #endif
 
 #ifdef WITH_BEEPER
@@ -1534,8 +1583,14 @@ void loop()
   { TFT_PageChange=0;
     if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
 #endif
+#ifdef WITH_OLED
+  if(OLED_PageChange)
+  { OLED_PageChange=0;
+    if(OLED_DrawPage(GPS)==0) OLED_NextPage(); }
+#endif
   if(GPS!=PrevGPS)
   {
+/*
 #ifdef WITH_OLED
     OLED.clearBuffer();
     if(GPS->isDateValid())
@@ -1548,6 +1603,20 @@ void loop()
       OLED.sendBuffer();                // takes about 40 ms
       // Time=millis()-Time; Serial.printf("OLED.sendBuffer():%ums\n", Time);
       xSemaphoreGive(I2C_Mutex); }
+#endif
+*/
+#ifdef WITH_OLED
+    OLED_PageChange=1;
+#ifdef WITH_OLED_DIM
+    uint32_t msTime = millis();
+    if(BatteryVoltageRate>0x10) OLED_PageActive = msTime;
+    uint32_t Age = msTime-OLED_PageActive;
+    OLED_PageOFF = Age>TFT_PageTimeout;
+#else
+    OLED_PageOFF = 0;
+#endif
+    // if(OLED_PageOFF) OLED_BL(0);
+    //            else  OLED_BL(128);
 #endif
 #ifdef WITH_ST7735
     TFT_PageChange=1;

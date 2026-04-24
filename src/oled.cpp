@@ -8,6 +8,8 @@
 #include "proc.h"
 #include "format.h"
 
+#include "ogn-radio.h"
+
 #ifdef WITH_OLED
 
 static char Line[32];
@@ -161,54 +163,105 @@ void OLED_DrawGPS(u8g2_t *OLED, const GPS_Position *GPS)  // GPS time, position,
   Line[Len]=0;
   u8g2_DrawStr(OLED, 0, 60, Line); }
 
+void OLED_DrawID(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[128];
+  u8g2_SetFont(OLED, u8g2_font_9x15_tr);
+  Parameters.Print(Line); Line[10]=0;
+  u8g2_DrawStr(OLED, 26, 25, Line);
+  // u8g2_SetFont(OLED, u8g2_font_10x20_tr);
+  u8g2_SetFont(OLED, u8g2_font_7x13_tf);
+  u8g2_DrawStr(OLED, 0, 24, "ID:");
+  if(Parameters.Pilot[0] || Parameters.Reg[0])
+  { strcpy(Line, "Pilot: "); strcat(Line, Parameters.Pilot);
+    u8g2_DrawStr(OLED, 0, 37, Line);
+    strcpy(Line, "Reg: "); strcat(Line, Parameters.Reg);
+    u8g2_DrawStr(OLED, 0, 49, Line); }
+  else
+  { u8g2_DrawStr(OLED, 20, 37, "OGN-Tracker");
+    u8g2_DrawStr(OLED,  0, 49, "(c) Pawel Jalocha"); }
+ u8g2_SetFont(OLED, u8g2_font_6x12_tr);
+  uint64_t ID=getUniqueID();
+  uint8_t Len=Format_String(Line, "#");
+  Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
+  Len+=Format_Hex(Line+Len, (uint32_t)ID);
+  // Line[Len++]=' ';
+  // Line[Len++]='v';
+    Len+=Format_String(Line+Len," " VERSION);
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 62, Line); }
 
-/*
-void OLED_PutLine(u8g2_t *OLED, uint8_t LineIdx, const char *Line)
-{ if(Line==0) return;
-  // u8g2_SetFont(OLED, u8g2_font_5x8_tr);
-  u8g2_SetFont(OLED, u8g2_font_amstrad_cpc_extended_8r);
-  u8g2_DrawStr(OLED, 0, (LineIdx+1)*8, Line); }
-
-void OLED_DrawPosition(u8g2_t *OLED, const GPS_Position *GPS, uint8_t LineIdx)
-{ if(GPS && GPS->isValid())
-  { Line[0]=' ';
-    Format_SignDec(Line+1,  GPS->Latitude /60, 6, 4); Line[9]=' ';
-    int32_t Alt = (GPS->Altitude+5)/10;
-    if(Alt>=0) Format_UnsDec(Line+10, (uint32_t)Alt, 5, 0);
-    else { Format_SignDec(Line+10, Alt, 4, 0); }
-    Line[15]='m';
-    OLED_PutLine(OLED, LineIdx  , Line);
-    Format_SignDec(Line,    GPS->Longitude/60, 7, 4);
-    Format_SignDec(Line+10, (int32_t)GPS->ClimbRate,    4, 1);
-    OLED_PutLine(OLED, LineIdx+1, Line);
-    Format_UnsDec (Line   , (uint32_t)GPS->Speed, 4, 1); Format_String(Line+5, "m/s  ");
-    Format_UnsDec (Line+10, (uint32_t)GPS->Heading, 4, 1); Line[15]='^';
-    OLED_PutLine(OLED, LineIdx+2, Line);
-    Format_String(Line, "0D/00sat DOP00.0");
-    Line[0]+=GPS->FixMode; Format_UnsDec(Line+3, (uint32_t)GPS->Satellites, 2);
-    Format_UnsDec(Line+12, (uint32_t)GPS->HDOP, 3, 1);
-    OLED_PutLine(OLED, LineIdx+3, Line);
-  }
-  if(GPS && GPS->isDateValid())
-  { Format_UnsDec (Line   , (uint32_t)GPS->Day,   2, 0); Line[2]='.';
-    Format_UnsDec (Line+ 3, (uint32_t)GPS->Month, 2, 0); Line[5]='.';
-    Format_UnsDec (Line+ 6, (uint32_t)GPS->Year , 2, 0); Line[8]=' '; Line[9]=' '; }
-  else Format_String(Line, "          ");
-  if(GPS && GPS->isTimeValid())
-  { Format_UnsDec (Line+10, (uint32_t)GPS->Hour,  2, 0);
-    Format_UnsDec (Line+12, (uint32_t)GPS->Min,   2, 0);
-    Format_UnsDec (Line+14, (uint32_t)GPS->Sec,   2, 0);
-  } else Line[10]=0;
-  OLED_PutLine(OLED, LineIdx+4, Line);
-  Line[0]=0;
+void OLED_DrawBaro(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_7x13_tf);              // 5 lines, 12 pixels/line
+  uint8_t Len=Format_String(Line+Len, "BME280 ");
   if(GPS && GPS->hasBaro)
-  { Format_String(Line   , "0000.0hPa 00000m");
-    Format_UnsDec(Line   , GPS->Pressure/40, 5, 1);
-    int32_t Alt = (GPS->StdAltitude+5)/10;
-    if(Alt>=0) Format_UnsDec(Line+10, (uint32_t)Alt, 5, 0);
-    else { Line[10]='-'; Format_UnsDec(Line+11, (uint32_t)(-Alt), 5, 0); }
-  }
-  OLED_PutLine(OLED, LineIdx+5, Line); }
-*/
+  { Len+=Format_UnsDec(Line+Len, GPS->Pressure/4, 5, 2);
+    Len+=Format_String(Line+Len, "hPa "); }
+  else Len+=Format_String(Line+Len, "----.--hPa ");
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 24, Line);
+  Len=0;
+  if(GPS && GPS->hasBaro)
+  { Len+=Format_SignDec(Line+Len, GPS->StdAltitude, 5, 1);
+    Len+=Format_String(Line+Len, "m ");
+    Len+=Format_SignDec(Line+Len, GPS->ClimbRate, 2, 1);
+    Len+=Format_String(Line+Len, "m/s "); }
+  else
+  { Len+=Format_String(Line+Len, "-----.-m");
+    Len+=Format_String(Line+Len, " --.-m/s "); }
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 36, Line);
+  Len=0;
+  if(GPS && GPS->hasBaro)
+  { Len+=Format_SignDec(Line+Len, GPS->Temperature, 2, 1);
+    Line[Len++]=0xB0;
+    Line[Len++]='C';
+    Line[Len++]=' ';
+    Len+=Format_SignDec(Line+Len, GPS->Humidity, 2, 1);
+    Line[Len++]='%'; }
+  else Len+=Format_String(Line+Len, "---.- C --.-% ");
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 48, Line);
+  if(GPS && GPS->hasBaro)
+  { float Dew = DewPoint(0.1f*GPS->Temperature, 0.1f*GPS->Humidity);
+    sprintf(Line, "%+5.1f C dew point", Dew);
+    Line[5]=0xB0;
+    u8g2_DrawStr(OLED, 0, 60, Line); }
+}
+
+void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
+{
+  char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_7x13_tf);            // 5 lines. 12 pixels/line
+  uint8_t Len=0;
+#ifdef WITH_SX1262
+  Len+=Format_String(Line+Len, "SX1262");
+#endif
+#ifdef WITH_SX1276
+  Len+=Format_String(Line+Len, "SX1276");
+#endif
+  Line[Len++]=':';
+  Len+=Format_SignDec(Line+Len, (int16_t)Parameters.TxPower);              // Tx power
+  Len+=Format_String(Line+Len, "dBm");
+  Line[Len++]=' ';
+  Len+=Format_SignDec(Line+Len, (int32_t)Parameters.RFchipFreqCorr, 2, 1); // frequency correction
+  Len+=Format_String(Line+Len, "ppm");
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 24, Line);
+  sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
+  u8g2_DrawStr(OLED, 0, 36, Line);
+  uint32_t Sum=0;
+  for(int Idx=0; Idx<8; Idx++)
+    Sum+=Radio_RxCount[Idx];
+  sprintf(Line, "Rx: %d pkts", Sum);
+  u8g2_DrawStr(OLED, 0, 48, Line);
+  Len=0;
+  Len+=Format_String(Line+Len, Radio_FreqPlan.getPlanName());               // name of the frequency plan
+  Line[Len++]=' ';
+  Len+=Format_UnsDec(Line+Len, (uint32_t)(Radio_FreqPlan.getCenterFreq()/100000), 3, 1); // center frequency
+  Len+=Format_String(Line+Len, "MHz");
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 60, Line); }
+
 
 #endif // WITH_OLED

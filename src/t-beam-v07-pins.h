@@ -1,5 +1,7 @@
 #pragma once
 
+#define Button_Pin    38 // user button: LOW when pushed
+
 // GPS
 #define GPS_UART UART_NUM_1  // UART for GPS
 #define GPS_PinTx     15 // Tx-Data
