@@ -118,7 +118,7 @@ void OLED_DrawSatSNR(u8g2_t *OLED, const GPS_Position *GPS)
 
   int Vert=24;
   for(uint8_t Sys=1; Sys<=4; Sys++)
-  { int Len=sprintf(Line, "%s:%d:%d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
+  { int Len=sprintf(Line, "%s:%2d:%2d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
     uint8_t SNR=GPS_SatMon.VisSNR[Sys];
     if(SNR>0) Len+=sprintf(Line+Len, " %4.1fdB", 0.25*SNR);
          // else Len+=sprintf(Line+Len, " --.-dB");
@@ -280,5 +280,29 @@ void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
   Line[Len]=0;
   u8g2_DrawStr(OLED, 0, 60, Line); }
 
+void OLED_DrawRelayOGN(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_6x12_tr);         // small font
+  uint8_t LineIdx=1;
+  for( uint8_t Idx=0; Idx<RelayQueueSize; Idx++)
+  { OGN_RxPacket<OGN_Packet> *Packet = OGN_RelayQueue.Packet+Idx; if(Packet->Alloc==0) continue;
+    if(Packet->Packet.Header.NonPos) continue;
+    uint32_t Dist= IntDistance(Packet->LatDist, Packet->LonDist);      // [m]
+    uint32_t Dir = IntAtan2(Packet->LonDist, Packet->LatDist);         // [16-bit cyclic]
+    Dir &= 0xFFFF; Dir = (Dir*360)>>16;                                // [deg]
+    uint8_t Len=0;
+    Len+=Format_String(Line+Len, Parameters.AcftTypeName(Packet->Packet.Position.AcftType));
+    Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, (uint32_t)Packet->Packet.DecodeAltitude(), 4); // [m] altitude
+    Line[Len++]='m'; Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, Dir, 3);                             // [deg] direction to target
+    Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, (Dist+50)/100, 3, 1);                // [km] distance to target
+    Len+=Format_String(Line+Len, "km");
+    Line[Len]=0;
+    u8g2_DrawStr(OLED, 0, (LineIdx+3)*8, Line);
+    LineIdx++; if(LineIdx>=8) break;
+  }
+}
 
 #endif // WITH_OLED
