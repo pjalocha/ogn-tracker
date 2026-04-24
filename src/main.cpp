@@ -506,7 +506,7 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 
 #ifdef WITH_OLED
 
-const  uint8_t  OLED_Pages      = 4;       // eight LCD pages
+const  uint8_t  OLED_Pages      = 5;       // eight LCD pages
 static uint8_t  OLED_Page       = 0;       // page currently on display
 static uint8_t  OLED_PageChange = 0;       // signal the page has been changed
 static uint8_t  OLED_PageOFF    = 0;       // Backlight to be OFF
@@ -525,8 +525,9 @@ static int OLED_DrawPage(const GPS_Position *GPS)
   switch(OLED_Page)
   { case 0: OLED_DrawID  (OLED.getU8g2(), GPS); break;
     case 1: OLED_DrawGPS (OLED.getU8g2(), GPS); break;
-    case 2: OLED_DrawBaro(OLED.getU8g2(), GPS); break;
-    case 3: OLED_DrawRF  (OLED.getU8g2(), GPS); break; }
+    case 2: OLED_DrawSatSNR(OLED.getU8g2(), GPS); break;
+    case 3: OLED_DrawBaro(OLED.getU8g2(), GPS); break;
+    case 4: OLED_DrawRF  (OLED.getU8g2(), GPS); break; }
   // if(GPS->isDateValid())
   // { OLED_DrawGPS(OLED.getU8g2(), GPS);
   //   OLED_DrawStatusBar(OLED.getU8g2(), GPS); }
@@ -1201,11 +1202,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_OLED
   OLED.begin();
-#ifdef WITH_TBEAMS3
-  OLED.setDisplayRotation(U8G2_R2);
-#else
+// #ifdef WITH_TBEAMS3
+//   OLED.setDisplayRotation(U8G2_R2);
+// #else
   OLED.setDisplayRotation(U8G2_R0);
-#endif
+// #endif
   OLED.clearBuffer();
   OLED_DrawLogo(OLED.getU8g2(), 0);
   OLED.sendBuffer();

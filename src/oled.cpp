@@ -110,6 +110,23 @@ void OLED_DrawStatusBar(u8g2_t *OLED, const GPS_Position *GPS)   // status bar o
   u8g2_DrawStr(OLED, 52, 10, Line);
   Sec++; if(Sec>=3) Sec=0; }
 
+void OLED_DrawSatSNR(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+
+  // u8g2_SetFont(OLED, u8g2_font_ncenB14_tr);
+  u8g2_SetFont(OLED, u8g2_font_7x13_tf);              // 5 lines, 12 pixels/line
+
+  int Vert=24;
+  for(uint8_t Sys=1; Sys<=4; Sys++)
+  { int Len=sprintf(Line, "%s:%d:%d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
+    uint8_t SNR=GPS_SatMon.VisSNR[Sys];
+    if(SNR>0) Len+=sprintf(Line+Len, " %4.1fdB", 0.25*SNR);
+         // else Len+=sprintf(Line+Len, " --.-dB");
+    Line[Len]=0;
+    u8g2_DrawStr(OLED, 0, Vert, Line);
+    Vert+=12; }
+}
+
 void OLED_DrawGPS(u8g2_t *OLED, const GPS_Position *GPS)  // GPS time, position, altitude
 { // u8g2_SetFont(OLED, u8g2_font_ncenB14_tr);
   u8g2_SetFont(OLED, u8g2_font_7x13_tf);              // 5 lines, 12 pixels/line
