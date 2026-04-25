@@ -21,6 +21,7 @@ const uint8_t RelayQueueSize = 16;
 #endif
 
 extern Relay_PrioQueue<OGN_RxPacket<OGN_Packet>, RelayQueueSize> OGN_RelayQueue;       // received packets and candidates to be relayed
+extern Relay_PrioQueue<ADSL_RxPacket, RelayQueueSize>           ADSL_RelayQueue;       // received ADSL packets and candidates to be relayed
 
 #ifdef __cplusplus
   extern "C"

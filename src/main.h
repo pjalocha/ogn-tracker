@@ -3,6 +3,14 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+#ifdef WITH_XPOWERS
+#include "XPowersLib.h"
+#endif
+
+#ifdef WITH_AXP
+#include <axp20x.h>
+#endif
+
 #ifdef WITH_USBMSC
 #include "USBCDC.h"
 extern USBCDC USBSerial;
@@ -117,6 +125,14 @@ void LED_OGN_TX(uint8_t ms);
 void LED_PCB_On   (bool ON=1);           // LED on the PCB for vizual indications
 void LED_PCB_Off  (void);
 void LED_PCB_Flash(uint8_t Time=100);    // Flash the PCB LED for a period of [ms]
+
+#ifdef WITH_XPOWERS
+extern XPowersLibInterface *PMU;
+#endif
+
+#ifdef WITH_AXP
+extern AXP20X_Class AXP;
+#endif
 
 int  CONS_UART_Read       (uint8_t &Byte); // non-blocking
 void CONS_UART_Write      (char     Byte); // blocking

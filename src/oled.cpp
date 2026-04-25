@@ -247,8 +247,7 @@ void OLED_DrawBaro(u8g2_t *OLED, const GPS_Position *GPS)
 }
 
 void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
-{
-  char Line[32];
+{ char Line[32];
   u8g2_SetFont(OLED, u8g2_font_7x13_tf);            // 5 lines. 12 pixels/line
   uint8_t Len=0;
 #ifdef WITH_SX1262
@@ -261,8 +260,9 @@ void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
   Len+=Format_SignDec(Line+Len, (int16_t)Parameters.TxPower);              // Tx power
   Len+=Format_String(Line+Len, "dBm");
   Line[Len++]=' ';
-  Len+=Format_SignDec(Line+Len, (int32_t)Parameters.RFchipFreqCorr, 2, 1); // frequency correction
-  Len+=Format_String(Line+Len, "ppm");
+  if(Parameters.RFchipFreqCorr!=0)
+  { Len+=Format_SignDec(Line+Len, (int32_t)Parameters.RFchipFreqCorr, 2, 1); // frequency correction
+    Len+=Format_String(Line+Len, "ppm"); }
   Line[Len]=0;
   u8g2_DrawStr(OLED, 0, 24, Line);
   sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
@@ -279,6 +279,23 @@ void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
   Len+=Format_String(Line+Len, "MHz");
   Line[Len]=0;
   u8g2_DrawStr(OLED, 0, 60, Line); }
+
+void OLED_DrawRFcounts(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_6x12_tr);         // small font
+  int Vert=24;
+  // sprintf(Line, "FLR: %d", Radio_RxCount[0]);
+  // u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+  sprintf(Line, "OGN: %d", Radio_RxCount[1]);
+  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+  sprintf(Line, "MDR: %d", Radio_RxCount[2]);
+  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+  sprintf(Line, "LDR: %d", Radio_RxCount[5]);
+  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+  sprintf(Line, "HDR: %d", Radio_RxCount[6]);
+  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+  sprintf(Line, "FNT: %d", Radio_RxCount[4]);
+  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9; }
 
 void OLED_DrawRelayOGN(u8g2_t *OLED, const GPS_Position *GPS)
 { char Line[32];
@@ -303,6 +320,70 @@ void OLED_DrawRelayOGN(u8g2_t *OLED, const GPS_Position *GPS)
     u8g2_DrawStr(OLED, 0, (LineIdx+3)*8, Line);
     LineIdx++; if(LineIdx>=8) break;
   }
+}
+
+void OLED_DrawRelayADSL(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_6x12_tr);         // small font
+  uint8_t LineIdx=1;
+  for( uint8_t Idx=0; Idx<RelayQueueSize; Idx++)
+  { ADSL_RxPacket *Packet = ADSL_RelayQueue.Packet+Idx; if(Packet->Alloc==0) continue;
+    if(!Packet->Packet.isPosition()) continue;
+    uint32_t Dist= IntDistance(Packet->LatDist, Packet->LonDist);      // [m]
+    uint32_t Dir = IntAtan2(Packet->LonDist, Packet->LatDist);         // [16-bit cyclic]
+    Dir &= 0xFFFF; Dir = (Dir*360)>>16;                                // [deg]
+    uint8_t Len=0;
+    Len+=Format_String(Line+Len, Parameters.AcftTypeName(Packet->Packet.getAcftTypeOGN()));
+    Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, (uint32_t)Packet->Packet.getAlt(), 4); // [m] altitude /// take care of negative !
+    Line[Len++]='m'; Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, Dir, 3);                             // [deg] direction to target
+    Line[Len++]=' ';
+    Len+=Format_UnsDec(Line+Len, (Dist+50)/100, 3, 1);                // [km] distance to target
+    Len+=Format_String(Line+Len, "km");
+    Line[Len]=0;
+    u8g2_DrawStr(OLED, 0, (LineIdx+3)*8, Line);
+    LineIdx++; if(LineIdx>=8) break;
+  }
+}
+
+void OLED_DrawPower(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_7x13_tf);              // 5 lines, 12 pixels/line
+  uint8_t Len=Format_String(Line+Len, " USB       Batt ");
+  Line[Len]=0;
+  u8g2_DrawStr(OLED, 0, 24, Line);
+  int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
+  Len=Format_SignDec(Line, BattVolt, 4, 3); Line[Len++]='V'; Line[Len]=0;
+  u8g2_DrawStr(OLED, 64, 36, Line);
+#ifdef WITH_AXP
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
+  { if(xSemaphoreTake(I2C_Mutex, 10))
+    { sprintf(Line, "%5.3fV", 0.001f*AXP.getVbusVoltage());
+      u8g2_DrawStr(OLED,  0, 36, Line);
+      sprintf(Line, "%5.3fA", 0.001f*AXP.getVbusCurrent());
+      u8g2_DrawStr(OLED,  0, 48, Line);
+      int32_t BattCurr = AXP.getBattChargeCurrent()-AXP.getBattDischargeCurrent();
+      sprintf(Line, "%5.3fA", 0.001f*BattCurr);
+      u8g2_DrawStr(OLED, 64, 48, Line);
+      // int BattLev = PMU->getBattPercent(); // only AXP202
+      xSemaphoreGive(I2C_Mutex); }
+  }
+#endif
+#ifdef WITH_XPOWERS
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP210)
+  { if(xSemaphoreTake(I2C_Mutex, 10))
+    { sprintf(Line, "%5.3fV", 0.001f*PMU->getVbusVoltage());
+      u8g2_DrawStr(OLED,  0, 36, Line);
+      int BattLev = PMU->getBatteryPercent();
+      if(BattLev>=0) sprintf(Line, "   %3d%%", BattLev);
+               else  sprintf(Line, "   ---%%");
+      u8g2_DrawStr(OLED, 64, 48, Line);
+      xSemaphoreGive(I2C_Mutex); }
+  }
+#endif // WITH_XPOWERS
+
+
 }
 
 #endif // WITH_OLED

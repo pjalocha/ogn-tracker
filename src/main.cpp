@@ -44,14 +44,6 @@
 #include "ap.h"
 #endif
 
-#ifdef WITH_XPOWERS
-#include "XPowersLib.h"
-#endif
-
-#ifdef WITH_AXP
-#include <axp20x.h>
-#endif
-
 #ifdef WITH_RTC
 #include "driver/rtc_io.h"
 #include "soc/rtc.h"
@@ -390,7 +382,7 @@ XPowersLibInterface *PMU = 0;
 #endif
 
 #ifdef WITH_AXP
-static AXP20X_Class AXP;
+AXP20X_Class AXP;
 #endif
 
 uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprimize, 2=full power
@@ -506,7 +498,7 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 
 #ifdef WITH_OLED
 
-const  uint8_t  OLED_Pages      = 6;       // number of OLED pages
+const  uint8_t  OLED_Pages      = 9;       // number of OLED pages
 static uint8_t  OLED_Page       = 0;       // page currently on display
 static uint8_t  OLED_PageChange = 0;       // signal the page has been changed
 static uint8_t  OLED_PageOFF    = 0;       // Backlight to be OFF
@@ -529,7 +521,10 @@ static int OLED_DrawPage(const GPS_Position *GPS)
     case 2: OLED_DrawSatSNR  (OLED.getU8g2(), GPS); break;
     case 3: OLED_DrawBaro    (OLED.getU8g2(), GPS); break;
     case 4: OLED_DrawRF      (OLED.getU8g2(), GPS); break;
-    case 5: OLED_DrawRelayOGN(OLED.getU8g2(), GPS); break; }
+    case 5: OLED_DrawRFcounts(OLED.getU8g2(), GPS); break;
+    case 6: OLED_DrawPower   (OLED.getU8g2(), GPS); break;
+    case 7: OLED_DrawRelayOGN(OLED.getU8g2(), GPS); break;
+    case 8: OLED_DrawRelayADSL(OLED.getU8g2(), GPS); break; }
   OLED_DrawStatusBar(OLED.getU8g2(), GPS);
   if(xSemaphoreTake(I2C_Mutex, 50))
   { OLED.sendBuffer();

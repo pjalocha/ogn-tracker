@@ -16,7 +16,10 @@ void OLED_DrawSatSNR   (u8g2_t *OLED, const GPS_Position *GPS=0);  // GNSS SNR
 void OLED_DrawID       (u8g2_t *OLED, const GPS_Position *GPS=0);
 void OLED_DrawBaro     (u8g2_t *OLED, const GPS_Position *GPS=0);
 void OLED_DrawRF       (u8g2_t *OLED, const GPS_Position *GPS=0);
+void OLED_DrawRFcounts (u8g2_t *OLED, const GPS_Position *GPS=0);
 void OLED_DrawRelayOGN (u8g2_t *OLED, const GPS_Position *GPS=0);
+void OLED_DrawRelayADSL(u8g2_t *OLED, const GPS_Position *GPS=0);
+void OLED_DrawPower    (u8g2_t *OLED, const GPS_Position *GPS=0);
 
 #endif // WITH_OLED
 
