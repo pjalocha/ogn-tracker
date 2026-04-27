@@ -390,7 +390,7 @@ void vTaskLOG(void* pvParameters)
         Format_String(CONS_UART_Write, "kB total, "); }
     }
 #endif
-    Format_SignDec(CONS_UART_Write, Files, 1, 0, 1);
+    Format_SignDec(CONS_UART_Write, (int32_t)Files, 1, 0, 1);
     Format_String(CONS_UART_Write, " files \n");
     xSemaphoreGive(CONS_Mutex); }
 // #endif // DEBUG_PRINT
