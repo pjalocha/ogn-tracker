@@ -25,18 +25,18 @@
 #ifdef WITH_PAW
  FIFO<PAW_Packet,               4> PAW_TxFIFO;              // PilotAware packets to be transmitted
 #endif
+
 #ifdef WITH_FANET
  FIFO<FANET_Packet,             4> FNT_TxFIFO;              // FANET packets to be transmitted
+ FIFO<FANET_RxPacket,           4> FNT_RxFIFO;              // received FANET packets
 #endif
+
 #ifdef WITH_MESHT
  FIFO<MESHT_Packet,             4> MSH_TxFIFO;
 #endif
 
- // queues for received packets
+ // queue for received packets
  FIFO<FSK_RxPacket,             8> FSK_RxFIFO;              // received packets of OGN, ADS-L, LDR
-#ifdef WITH_FANET
- FIFO<FANET_RxPacket,           4> FNT_RxFIFO;              // received FANET packets
-#endif
 
  QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
 
@@ -509,7 +509,8 @@ static void Radio_TxSysID(uint8_t SysID, const uint8_t *Packet, uint8_t PktLen)
 // TX/RX slot for a Manchester-encoded protocol
 static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, const uint8_t *TxPacket, uint8_t TxSysID,
                       uint8_t RxChannel, uint8_t RxSysID, TimeSync &TimeRef)
-{ uint8_t TxPktLen;
+{ // Serial.printf("Radio_Slot(#%d, %1.0fdBm, %dms, , %d, #%d, %d, )\n", TxChannel, TxPower, msTimeLen, TxSysID, RxChannel, RxSysID);
+  uint8_t TxPktLen;
   uint8_t RxPktLen;
   const uint8_t *TxSYNC;
   const uint8_t *RxSYNC;
@@ -539,10 +540,10 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   Radio.startReceive();                                             // start receiving
   XorShift64(Random.Word);                                          // randomize
   if(TxPacket)                                                      // if there is packet to be sent out
-  { int TxTime;
-    if (msTimeLen == 50 || msTimeLen == 150) msTimeLen++;           // FIXME: dirty fix against div by zero
-    if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-150); }
-            else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
+  { int TxTime = Random.RX%msTimeLen;
+    // if (msTimeLen == 50 || msTimeLen == 150) msTimeLen++;           // FIXME: dirty fix against div by zero
+    // if(SameChan) { TxTime = 20+Random.RX%(msTimeLen-150); }
+    //         else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     if(TxTime>5)
       PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
 // #ifdef WITH_LBT
@@ -814,6 +815,8 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
 template <class Type>
  void Swap(Type &A, Type &B) { Type C=A; A=B; B=C; }
 
+static char Line[256];
+
 void Radio_Task(void *Parms)
 {
 
@@ -891,7 +894,6 @@ void Radio_Task(void *Parms)
 #endif
 
   TimeSync &TimeRef = GPS_TimeSync;
-  char Line[160];
 
   int Len=sprintf(Line, "RF chip %s%s detected", Radio_ChipType, HardwareStatus.Radio?"":" NOT");
   if(xSemaphoreTake(CONS_Mutex, 20))
@@ -902,23 +904,17 @@ void Radio_Task(void *Parms)
   { if(!HardwareStatus.Radio) { delay(1000); continue; }
 
     int PktCount=0;
-    // char Line[120];
 
+    // TimeSync TimeRef;
     // xQueueReceive(Radio_SlotMsg, &TimeRef, 2000);              // wait for "new time slot" from the GPS
 
     // uint32_t msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
+    // if(msTime>=1000) msTime-=1000;                             // [ms] correct if there was no PPS update
     uint32_t msTime = TimeRef.getFracTime(millis());
-    // Serial.printf("Pre-slot: %dms\n", msTime);
-/*
-    uint32_t Wait=0;
-    if(msTime>800)
-    { Wait=1400-msTime; }
-    else if(msTime<250)
-    { Wait=400-msTime;
-      // Serial.printf("Pre-slot: %d [sec]  %d Wait:%d [ms]\n", TimeRef.UTC, msTime, Wait);
-      // if(Wait>400) Wait=400;
-    }
-*/
+    uint32_t msTimeLeft = 0;
+    if(400>msTime) msTimeLeft=400-msTime;                      // [ms] time left for the uplink slot
+    // Serial.printf("Uplink-slot: %d [sec] %3d Left:%3d [ms]\n", TimeRef.UTC, msTime, msTimeLeft);
+
     // msTime = millis()-TimeRef.sysTime;
     // msTime = TimeRef.getFracTime(millis());
 
@@ -957,10 +953,11 @@ void Radio_Task(void *Parms)
       if(FNTpacket) FNT_TxFIFO.Read();
       XorShift64(Random.Word);
       int32_t msSlot = 400-msTime;                               //
-      // Serial.printf("Pre-slot: %ds @%dms Left:%dms\n", TimeRef.UTC, msTime, msSlot);
+      // Serial.printf("FNT: %ds @%dms Left:%dms (%d)\n", TimeRef.UTC, msTime, msSlot, FNT_TxFIFO.Full());
       if(msSlot>40) PktCount+=Radio_FANETslot(BW, FreqFNT, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
     }
-
+    else
+    { if(msTimeLeft>0) vTaskDelay(msTimeLeft); }
     // if(msTime<350)
     // { uint32_t msSlot = 380-msTime;
     //   uint32_t Freq = Radio_FreqPlan.getFreqFNT(TimeRef.UTC);
@@ -968,9 +965,40 @@ void Radio_Task(void *Parms)
     //   else vTaskDelay(msSlot); }
     // else
 #else
-    if(Wait>0) vTaskDelay(Wait);
+    uint32_t FreqHDR = Radio_FreqPlan.getFreqOBAND();
+    if(FreqHDR)
+    { uint8_t RxSysID = Radio_SysID_HDR;
+      uint8_t RxChannel = 2;
+      uint8_t RxPktLen;
+      const uint8_t *RxSYNC;
+      int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID);
+      float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);
+      uint32_t msStart = millis();                                      // [ms] note then slot starts
+      Radio.standby();
+      Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);
+      Radio_setFrequency(RxFreq);
+      Radio.startReceive();
+      for( ; ; )
+      { vTaskDelay(1);
+        PktCount+=Radio_Receive(RxPktLen, RxSysID, RxChannel, TimeRef);
+        if(ADSL_TxFIFO.Full()) break;                                  // break when an ADS-L packet appears
+        uint32_t Now = millis();
+        uint32_t msTime = Now-msStart;                                 // [ms] time since start
+        if(msTime>=msTimeLeft) break; }
+      Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI);
+      const ADSL_Packet *AdslPacket = ADSL_TxFIFO.getRead();
+      if(AdslPacket)
+      { const uint8_t *TxPkt = &(AdslPacket->Version);
+        uint32_t Now = millis();
+        uint32_t msTime = Now-TimeRef.sysTime;
+        // Serial.printf("Slot:uplitx: %10u:%8u %4ums (%d)\n", TimeRef.UTC, TimeRef.sysTime, msTime, PktCount);
+        if(msTime<400)
+          PktCount+=Radio_Slot(RxChannel, Parameters.TxPower+13, 400-msTime, TxPkt, RxSysID, RxChannel, RxSysID, TimeRef);
+      }
+    }
+    else
+    { if(msTimeLeft>0) vTaskDelay(msTimeLeft); }
 #endif // WITH_FANET
-//      if(msTime<380) vTaskDelay(380-msTime);
 
     // if(xSemaphoreTake(CONS_Mutex, 20))
     // { Serial.printf("Radio: %10d:%8d %4dms\n", TimeRef.UTC, TimeRef.sysTime, msTime);
@@ -1040,17 +1068,17 @@ void Radio_Task(void *Parms)
       if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
          else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
     }
-    uint32_t Now = millis();
-    msTime = Now-TimeRef.sysTime;                // [ms] time since PPS
-    if(msTime>=1000) msTime-=1000;
+    // uint32_t Now = millis();
+    // msTime = Now-TimeRef.sysTime;                // [ms] time since PPS
+    // if(msTime>=1000) msTime-=1000;
+    msTime = TimeRef.getFracTime(millis());
     uint32_t SlotLen = 900-msTime;                    // [ms] make the first slot longer, closer to ADS-L primary slot
          if(SlotLen>800) SlotLen=800;
     else if(SlotLen<200) SlotLen=200;
     // Serial.printf("Slot #0: %3d:%3d\n", msTime, SlotLen);
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
-    Now = millis();
-    msTime = Now-TimeRef.sysTime;                // [ms] time since PPS
+    msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
     SlotLen = 1200-msTime;
 #ifdef WITH_LORAWAN
     static uint8_t WAN_RxPacket[64];                  //

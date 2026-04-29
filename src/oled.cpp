@@ -286,15 +286,15 @@ void OLED_DrawRFcounts(u8g2_t *OLED, const GPS_Position *GPS)
   int Vert=24;
   // sprintf(Line, "FLR: %d", Radio_RxCount[0]);
   // u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-  sprintf(Line, "OGN: %d", Radio_RxCount[1]);
+  sprintf(Line, "OGN:%6d %8d", Radio_TxCount[1], Radio_RxCount[1]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-  sprintf(Line, "MDR: %d", Radio_RxCount[2]);
+  sprintf(Line, "MDR:%6d %8d", Radio_TxCount[2], Radio_RxCount[2]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-  sprintf(Line, "LDR: %d", Radio_RxCount[5]);
+  sprintf(Line, "LDR:%6d %8d", Radio_TxCount[5], Radio_RxCount[5]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-  sprintf(Line, "HDR: %d", Radio_RxCount[6]);
+  sprintf(Line, "HDR:%6d %8d", Radio_TxCount[6], Radio_RxCount[6]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-  sprintf(Line, "FNT: %d", Radio_RxCount[4]);
+  sprintf(Line, "FNT:%6d %8d", Radio_TxCount[4], Radio_RxCount[4]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9; }
 
 void OLED_DrawRelayOGN(u8g2_t *OLED, const GPS_Position *GPS)

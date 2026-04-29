@@ -881,6 +881,7 @@ static void DecodeRxPacket(FSK_RxPacket *RxPkt)
     return; }
   return; }
 
+#ifdef WITH_FANET
 // convert FANET air-position packet into OGN position packet
 static int FNT2OGN(OGN1_Packet &OGN, const FANET_Packet &FNT, uint8_t Sec=63)
 { if(FNT.getMsgType()!=1) return 0;                   // we can ony convert airborne position packets
@@ -918,6 +919,7 @@ static void DecodeRxPacket(FANET_RxPacket *RxPkt)
   if(FNT2OGN(RxPacket->Packet, *RxPkt, SlotTime%60)<=0) return;
   RxPacket->RxRSSI = -2*RxPkt->RSSI;
   ProcessRxOGN(RxPacket, RxPacketIdx, SlotTime); }
+#endif
 
 // -------------------------------------------------------------------------------------------------------------------
 
@@ -965,13 +967,13 @@ void vTaskPROC(void* pvParameters)
 #endif
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
       FSK_RxFIFO.Read(); }                                              // remove this packet from the queue
-
+#ifdef WITH_FANET
     for( ; ; )
     { FANET_RxPacket *RxPkt = FNT_RxFIFO.getRead();                     // check for new received packets
       if(RxPkt==0) break;                                               // if there is a new received packet
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
       FNT_RxFIFO.Read(); }                                              // remove this packet from the queue
-
+#endif
     static uint32_t PrevSlotTime=0;                                     // remember previous time slot to detect a change
     uint32_t     Time;                                                  // [sec] time slot
     TickType_t msTime;                                                  // [msec]
