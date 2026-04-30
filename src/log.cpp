@@ -404,7 +404,7 @@ void vTaskLOG(void* pvParameters)
   TickType_t PrevTick = 0;                                        // [ms] Time when packets stored the last time
   for( ; ; )
   { vTaskDelay(1);
-    bool Flying = Flight.inFlight();                              // if the aircraft flying ?
+    bool Flying = 1; /// Flight.inFlight();                              // if the aircraft flying ?
     size_t Packets = FlashLog_FIFO.Full();                        // how many packets in the queue ?
 #ifdef DEBUG_INFLIGHT
     { static bool PrevFlying = 0;
