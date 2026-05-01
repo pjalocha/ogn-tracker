@@ -617,7 +617,7 @@ static void GPS_BurstEnd(void)                                             // wh
   // GPS_TimeSync.Norm();
   if(GPS_TimeSync.UTC%10==7)
   { GPS_SatMon.PrintStats(Line);
-    if(Parameters.Verbose & 0b01 && xSemaphoreTake(CONS_Mutex, 10))
+    if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 10))
     { Serial.printf("%s\n", Line);
       xSemaphoreGive(CONS_Mutex); }
   }

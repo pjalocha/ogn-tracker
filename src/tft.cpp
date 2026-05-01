@@ -339,9 +339,9 @@ int TFT_DrawLog(const GPS_Position *GPS)
   size_t Total, Used;
   int Err=SPIFFS_Info(Total, Used);
   if(Err==0)
-  { sprintf(Line, "Used:%5dkB", (Used+512)>>10);
+  { sprintf(Line, "Used:%3.1fMB", (float)Used/0x100000);
     ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
-    sprintf(Line, "Free:%5dkB", (Total-Used+512)>>10);
+    sprintf(Line, "Free:%3.1fMB", (float)(Total-Used)/0x100000);
     ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
     Line[0]=0;
     // if(FlashLog_FileName[0]) sprintf(Line, "%s", FlashLog_FileName+strlen(FlashLog_Path)+1);

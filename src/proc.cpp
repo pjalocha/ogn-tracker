@@ -13,9 +13,6 @@
 
 #include "fifo.h"
 
-#ifdef WITH_FLASHLOG                  // log own track to unused Flash pages (STM32 only)
-#include "flashlog.h"
-#endif
 #ifdef WITH_SDLOG
 #include "sdlog.h"
 #endif
@@ -604,7 +601,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
      if(Signif) APRSrx_FIFO.Write(*RxPacket);                                        // APRS queue for received packets
 #endif
 #ifdef WITH_LOG
-     if(Signif || Warn) FlashLog(RxPacket, RxTime);                                          // log only significant packets
+     if((Signif && Flight.inFlight()) || Warn) FlashLog(RxPacket, RxTime);                                          // log only significant packets
 #endif
 #ifdef WITH_SDLOG
      if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
@@ -735,7 +732,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     bool Signif = Warn || PrevRxPacket==0;
     if(!Signif) Signif=ADSL_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID fr>
 #ifdef WITH_LOG
-    if(Signif || Warn) FlashLog(RxPacket, RxTime);                                      // log only significant packets
+    if((Signif && Flight.inFlight()) || Warn) FlashLog(RxPacket, RxTime);                                      // log only significant packets
 #endif
 /*
 #ifdef WITH_SDLOG
@@ -928,14 +925,6 @@ static void DecodeRxPacket(FANET_RxPacket *RxPkt)
 #endif
 void vTaskPROC(void* pvParameters)
 {
-#ifdef WITH_FLASHLOG
-  uint16_t kB = FlashLog_OpenForWrite();
-  if(xSemaphoreTake(CONS_Mutex, 25))
-  { Format_String(CONS_UART_Write, "TaskPROC: ");
-    Format_UnsDec(CONS_UART_Write, kB);
-    Format_String(CONS_UART_Write, "KB FlashLog\n");
-    xSemaphoreGive(CONS_Mutex); }
-#endif
   OGN_RelayQueue.Clear();
   ADSL_RelayQueue.Clear();
 
@@ -1261,15 +1250,6 @@ void vTaskPROC(void* pvParameters)
       }
 #endif // WITH_PFLAA
 #endif // WITH_LOOKOUT
-#ifdef WITH_FLASHLOG
-      bool Written=FlashLog_Process(PosPacket.Packet, PosTime);
-      // if(Written)
-      // { uint8_t Len=FlashLog_Print(Line);
-      //   xSemaphoreTake(CONS_Mutex, 25);
-      //   Format_String(CONS_UART_Write, Line);
-      //   xSemaphoreGive(CONS_Mutex);
-      // }
-#endif // WITH_FLASHLOG
       bool isSignif = OGN_isSignif(&(PosPacket.Packet), &PrevLoggedPacket);
       if(isSignif)
       {

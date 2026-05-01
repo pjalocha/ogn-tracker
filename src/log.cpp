@@ -402,22 +402,25 @@ void vTaskLOG(void* pvParameters)
 #endif
 
   TickType_t PrevTick = 0;                                        // [ms] Time when packets stored the last time
+  static bool PrevFlying = 0;
   for( ; ; )
   { vTaskDelay(1);
-    bool Flying = Flight.inFlight();                              // if the aircraft flying ?
+    bool Flying = 1; /// Flight.inFlight();                              // if the aircraft flying ?
+    bool Landed = PrevFlying && !Flying;                          // detect transition from airborne to ground
+    PrevFlying = Flying;
     size_t Packets = FlashLog_FIFO.Full();                        // how many packets in the queue ?
 #ifdef DEBUG_INFLIGHT
-    { static bool PrevFlying = 0;
-      if(Flying!=PrevFlying)
+    { static bool PrevFlyingDebug = 0;
+      if(Flying!=PrevFlyingDebug)
       { if(xSemaphoreTake(CONS_Mutex, 500))
         { // char *Addr = (char *)(&PrevFlying);
           Serial.printf("vTaskLOG() Flying:%d/%d SPIFFS_Mounted:%d\n",
-                   Flying, PrevFlying, SPIFFS_Mounted);
+                   Flying, PrevFlyingDebug, SPIFFS_Mounted);
           // for(int Idx=(-20); Idx<=20; Idx++)
           //   Serial.printf("%c", Addr[Idx]);
           // Serial.printf("\n");
           xSemaphoreGive(CONS_Mutex); }
-        PrevFlying=Flying; }
+        PrevFlyingDebug=Flying; }
     }
 #endif
     if(Flying && SPIFFS_Mounted)                                  // when flying
@@ -433,6 +436,11 @@ void vTaskLOG(void* pvParameters)
     } else                                                          // when not flying
     {
 #ifdef WITH_SPIFFS
+      if(Landed && SPIFFS_Mounted)                                  // after landing, flush the last packets before closing
+      { while(FlashLog_FIFO.Full()>0)
+        { if(Copy()<=0) break;
+          vTaskDelay(1); }
+      }
       if(FlashLog_File) { fclose(FlashLog_File); FlashLog_File=0; } // if file open then close it
       while(FlashLog_FIFO.Full()>=FlashLog_FIFO.Len/2)              // flush the packet queue but keep it half-full
       { FlashLog_FIFO.Read(); vTaskDelay(1); }

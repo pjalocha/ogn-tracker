@@ -1215,7 +1215,7 @@ void Radio_Task(void *Parms)
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     PktCountSum=0;
     SysLog_Line(Line, LineLen, 1, 25);
-    if(Parameters.Verbose & 0b01 && xSemaphoreTake(CONS_Mutex, 20))
+    if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
   }

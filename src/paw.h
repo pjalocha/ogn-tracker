@@ -87,7 +87,7 @@ class __attribute__((packed, aligned(4))) PAW_Packet
      Packet.Position.AcftType = AcftType;
      Packet.EncodeAltitude(Altitude);
      Packet.EncodeHeading(Heading*10);
-     Packet.EncodeSpeed(((uint32_t)Speed*527+512)>>10);    // [knot] => [0.1m/s]
+     Packet.EncodeSpeed(((uint32_t)Speed*5270+512)>>10);    // [knot] => [0.1m/s]
      Packet.EncodeLatitude(600000.0f*Latitude);
      Packet.EncodeLongitude(600000.0f*Longitude);
      Packet.Position.FixMode=1;
