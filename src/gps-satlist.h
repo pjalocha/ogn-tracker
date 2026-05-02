@@ -96,10 +96,15 @@ class GPS_Sat
      BurstGSV=0; BurstGSA=0;
      ClearStats(); }
 
+   template <class Type>
+    static Type Clip(Type Inp, Type Max)
+  { if(Inp>Max) return Max;
+    return Inp; }
+
    uint16_t getSysStatus(uint8_t Sys)
-   { uint16_t Stat = FixSats[Sys]; Stat<<=4;
-     Stat |= VisSats[Sys]; Stat<<=8;             // upper byte it FixSata (upper nibble) and VisSats (lower nibble)
-     Stat |= VisSNR[Sys];                        // lower byte = SNR
+   { uint16_t Stat = Clip(FixSats[Sys], (uint8_t)15); Stat<<=4;
+     Stat |= Clip(VisSats[Sys], (uint8_t)15); Stat<<=8;  // upper byte it FixSata (upper nibble) and VisSats (lower nibble)
+     Stat |= VisSNR[Sys];                                // lower byte = SNR
      return Stat; }
 
    void PrintSats(void) const
