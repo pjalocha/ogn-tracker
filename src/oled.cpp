@@ -183,11 +183,13 @@ void OLED_DrawGPS(u8g2_t *OLED, const GPS_Position *GPS)  // GPS time, position,
 void OLED_DrawID(u8g2_t *OLED, const GPS_Position *GPS)
 { char Line[128];
   u8g2_SetFont(OLED, u8g2_font_9x15_tr);
-  Parameters.Print(Line); Line[10]=0;
-  u8g2_DrawStr(OLED, 26, 25, Line);
+  sprintf(Line, "%s:%c:%06X", Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
+  u8g2_DrawStr(OLED, 0, 25, Line);
+  // Parameters.Print(Line); Line[10]=0;
+  // u8g2_DrawStr(OLED, 26, 25, Line);
   // u8g2_SetFont(OLED, u8g2_font_10x20_tr);
   u8g2_SetFont(OLED, u8g2_font_7x13_tf);
-  u8g2_DrawStr(OLED, 0, 24, "ID:");
+  // u8g2_DrawStr(OLED, 0, 24, "ID:");
   if(Parameters.Pilot[0] || Parameters.Reg[0])
   { strcpy(Line, "Pilot: "); strcat(Line, Parameters.Pilot);
     u8g2_DrawStr(OLED, 0, 37, Line);
@@ -195,7 +197,7 @@ void OLED_DrawID(u8g2_t *OLED, const GPS_Position *GPS)
     u8g2_DrawStr(OLED, 0, 49, Line); }
   else
   { u8g2_DrawStr(OLED, 20, 37, "OGN-Tracker");
-    u8g2_DrawStr(OLED,  0, 49, "(c) Pawel Jalocha"); }
+    u8g2_DrawStr(OLED,  0, 50, "(c) Pawel Jalocha"); }
  u8g2_SetFont(OLED, u8g2_font_6x12_tr);
   uint64_t ID=getUniqueID();
   uint8_t Len=Format_String(Line, "#");

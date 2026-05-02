@@ -606,8 +606,9 @@ static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t 
   Radio.explicitHeader();
   Radio.setCRC(true);
 #ifdef WITH_SX1262
-  Radio.setSyncWord((Sync&0xF0)|0x04, (Sync<<4)|0x04);
+  // Radio.setSyncWord((Sync&0xF0)|0x04, (Sync<<4)|0x04);
   // Radio.setSyncWord(Sync, 0x44);
+  Radio.setSyncWord(Sync);
 #endif
 #ifdef WITH_SX1276
   Radio.setSyncWord(Sync);
@@ -795,7 +796,8 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
   Radio.setCodingRate(4+CRa);
   Radio.invertIQ(!TX);                         // uplink without I/Q inversion, downlink with inversion
 #ifdef WITH_SX1262
-  Radio.setSyncWord(0x34, 0x44);
+  // Radio.setSyncWord(0x34, 0x44);
+  Radio.setSyncWord(0x34);
 #endif
 #ifdef WITH_SX1276
   Radio.setSyncWord(0x34);
