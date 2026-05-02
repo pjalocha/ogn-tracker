@@ -2,10 +2,12 @@
 #define __LORAWAN_H__
 
 #include <stdint.h>
+#include <string.h>
 
 #ifdef WITH_ESP32
 #include "nvs.h"
 #endif
+#include "format.h"
 
 #include "LoRaMacCrypto.h"
 
@@ -56,13 +58,13 @@ class LoRaWANnode
           bool Spare1 :1;
           bool Spare2 :1;
           bool ABP    :1;     // Activation-By-Personalization, not Over-The-Air-Activation and there is "join" phase
-        } ;
+        } __attribute__((packed)) ;
       } ;
       uint8_t  RxSilent;      // count non-receptions <- 112 bytes up to (and including) this point
       uint32_t LastSaved;     // [sec] when saved to EEPROM or other permament storage
       uint8_t  Dummy[8];      // just to fill up the space, could be used later
       uint32_t CRC32;         // 128 bytes up to here: fits into 1kbit EEPROM
-    } ;
+    } __attribute__((packed)) ;
   } ;
 
    // uint8_t  TxMAC[16];
@@ -102,17 +104,17 @@ class LoRaWANnode
 
    uint8_t incrChan(uint8_t Step=1)
    { Chan+=Step; if(Chan>=Chans) Chan-=Chans; return Chan; }
-
+/*
    int Save(FILE *File) { return fwrite(this, sizeof(LoRaWANnode), 1, File); } // save to a file
    int Save(const char *FileName)                                              // save to a file
    { FILE *File=fopen(FileName, "wb"); if(File==0) return 0;
-     int Written=Save(File); fclose(File); return Written; }
+     int Written=Save(File); fclose(File); return Written; }                   // return number of bytes saved
 
-   // int Restore(FILE *File) { return fread(this, sizeof(LoRaWANnode), 1, File); }
-   // int Restore(const char *FileName)
-   // { FILE *File=fopen(FileName, "rb"); if(File==0) return 0;
-   //   int Read=Restore(File); fclose(File); return Read; }
-
+   int Restore(FILE *File) { return fread(this, sizeof(LoRaWANnode), 1, File); } // restore from a file
+   int Restore(const char *FileName)
+   { FILE *File=fopen(FileName, "rb"); if(File==0) return 0;
+     int Read=Restore(File); fclose(File); return Read; }
+*/
    static int ReadHex(uint8_t *Data, int Len, const char *Inp)                 // read Len bytes from a hex string
    { int Bytes=0;
      for( ; Bytes<Len; )
@@ -296,18 +298,18 @@ class LoRaWANnode
 
   int WriteToFile(const char *Name)
   { setCRC();
-    FILE *File = fopen(Name, "wb"); if(File==0) return ESP_FAIL;
+    FILE *File = fopen(Name, "wb"); if(File==0) return -1;
     int Written = fwrite(this, 1, SaveBytes, File);
     fclose(File); return Written; }
 
   int ReadFromFile(const char *Name)
-  { FILE *File = fopen(Name, "rb"); if(File==0) return ESP_FAIL;
+  { FILE *File = fopen(Name, "rb"); if(File==0) return -1;
     int Read = fread(this, 1, SaveBytes, File);
     fclose(File);
-    if(!goodCRC()) return ESP_FAIL;
+    if(!goodCRC()) return -1;
     return Read; }
 
-// #ifdef WITH_ESP32
+#ifdef WITH_ESP32
   esp_err_t WriteToNVS(const char *Name="LoRaWAN", const char *NameSpace="TRACKER")
   { setCRC();
     nvs_handle Handle;
@@ -329,7 +331,7 @@ class LoRaWANnode
     nvs_close(Handle);
     if(!goodCRC()) return ESP_FAIL;
     return Err; }
-// #endif // WITH_ESP32
+#endif // WITH_ESP32
 
 // #ifdef RTLSDR_API
 //   int Read(RTLSDR &SDR) { return SDR.readEEPROM(Byte, 0x80, SaveBytes); }
