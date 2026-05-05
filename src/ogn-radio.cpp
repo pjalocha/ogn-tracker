@@ -817,6 +817,10 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
 template <class Type>
  void Swap(Type &A, Type &B) { Type C=A; A=B; B=C; }
 
+const int Slot1_Start =  450; // [ms]
+const int Slot2_Start =  800; // [ms]
+const int Slot2_End   = 1200; // [ms]
+
 static char Line[256];
 
 void Radio_Task(void *Parms)
@@ -914,7 +918,7 @@ void Radio_Task(void *Parms)
     // if(msTime>=1000) msTime-=1000;                             // [ms] correct if there was no PPS update
     uint32_t msTime = TimeRef.getFracTime(millis());
     uint32_t msTimeLeft = 0;
-    if(400>msTime) msTimeLeft=400-msTime;                      // [ms] time left for the uplink slot
+    if(Slot1_Start>msTime) msTimeLeft=Slot1_Start-msTime;                      // [ms] time left for the uplink slot
     // Serial.printf("Uplink-slot: %d [sec] %3d Left:%3d [ms]\n", TimeRef.UTC, msTime, msTimeLeft);
 
     // msTime = millis()-TimeRef.sysTime;
@@ -949,12 +953,12 @@ void Radio_Task(void *Parms)
       { PktCount+=Radio_FANETrxPacket(TimeRef);                  // any packet received ?
         if(FNT_TxFIFO.Full()) break;                             // when FANET packet to transmit, then stop this loop
         msTime = TimeRef.getFracTime(millis());
-        if(msTime>=400) break;
+        if(msTime>=Slot1_Start) break;
         vTaskDelay(1); }
       FANET_Packet *FNTpacket = FNT_TxFIFO.getRead();            // get the FANET packet to transmit
       if(FNTpacket) FNT_TxFIFO.Read();
       XorShift64(Random.Word);
-      int32_t msSlot = 400-msTime;                               //
+      int32_t msSlot = Slot1_Start-msTime;                               //
       // Serial.printf("FNT: %ds @%dms Left:%dms (%d)\n", TimeRef.UTC, msTime, msSlot, FNT_TxFIFO.Full());
       if(msSlot>40) PktCount+=Radio_FANETslot(BW, FreqFNT, Parameters.TxPower, msSlot, FNTpacket, TimeRef);
     }
@@ -994,8 +998,8 @@ void Radio_Task(void *Parms)
         uint32_t Now = millis();
         uint32_t msTime = Now-TimeRef.sysTime;
         // Serial.printf("Slot:uplitx: %10u:%8u %4ums (%d)\n", TimeRef.UTC, TimeRef.sysTime, msTime, PktCount);
-        if(msTime<400)
-          PktCount+=Radio_Slot(RxChannel, Parameters.TxPower+13, 400-msTime, TxPkt, RxSysID, RxChannel, RxSysID, TimeRef);
+        if(msTime<Slot1_Start)
+          PktCount+=Radio_Slot(RxChannel, Parameters.TxPower+13, Slot1_Start-msTime, TxPkt, RxSysID, RxChannel, RxSysID, TimeRef);
       }
     }
     else
@@ -1034,12 +1038,6 @@ void Radio_Task(void *Parms)
     bool EU = Radio_FreqPlan.Plan<=1;
     bool NZ = Radio_FreqPlan.Plan==4;
 
-    // uint32_t Hash = FreqPlan.HopChan1(TimeRef.UTC);
-    // XorShift32(Hash);
-    // Hash *= 48271;
-    // XorShift32(Hash);
-    // Hash *= 48271;
-
     const uint8_t *OGN_Pkt  = OgnPacket1  ? OgnPacket1->Byte()      : 0;  // OGN packet to be sent
     const uint8_t *ADSL_Pkt = AdslPacket1 ? &(AdslPacket1->Version) : 0;  // ADS-L packet to be sent
     int8_t  TxPwr = Parameters.TxPower;                                   //
@@ -1050,38 +1048,37 @@ void Radio_Task(void *Parms)
     uint8_t TxChan=0;
     uint8_t FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 0);     // what would be FLARM channel now
     uint8_t OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 0, 1);     // what would be OGN channel now
-    if(EU)
-    { int Alt = (GPS_Altitude+GPS_GeoidSepar+5)/10;   // [m] HAE
-      TxChan = ADSL_HopChannel(TimeRef.UTC%60, Alt);
-           if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
-      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
-      else if(TxChan==2)  { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
-      else                { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_HDR;  RxProt=Radio_SysID_HDR; TxChan=2; }
+    if(EU)                                                                // Europe
+    { int Alt = (GPS_Altitude+GPS_GeoidSepar+5)/10;                       // [m] HAE
+      TxChan = ADSL_HopChannel(TimeRef.UTC%60, Alt);                      // TxChan = 0..3
+      if(TxChan>2) TxChan=2;
+           if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }           // 0
+      else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }           // 1
+      else /* if(TxChan==2) */  { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }           // 2
+      // else                { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_HDR;  RxProt=Radio_SysID_HDR; TxChan=2; } // 3
     }
-    else if(NZ)
+    else if(NZ)                                                            // New Zealand
     { TxChan = Radio_FreqPlan.HopChan1(TimeRef.UTC);
            if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
       else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
       else    { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
     }
-    else
+    else                                                                   // US/Canda/Australia/South America
     { Odd = Count1s(TimeRef.UTC);
       TxPwr+=13; TxPkt=OGN_Pkt;
       if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
          else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
     }
-    // uint32_t Now = millis();
-    // msTime = Now-TimeRef.sysTime;                // [ms] time since PPS
-    // if(msTime>=1000) msTime-=1000;
+
     msTime = TimeRef.getFracTime(millis());
-    uint32_t SlotLen = 900-msTime;                    // [ms] make the first slot longer, closer to ADS-L primary slot
+    uint32_t SlotLen = Slot2_Start-msTime;            // [ms] make the first slot longer, closer to ADS-L primary slot
          if(SlotLen>800) SlotLen=800;
     else if(SlotLen<200) SlotLen=200;
     // Serial.printf("Slot #0: %3d:%3d\n", msTime, SlotLen);
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
     msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
-    SlotLen = 1200-msTime;
+    SlotLen = Slot2_End-msTime;
 #ifdef WITH_LORAWAN
     static uint8_t WAN_RxPacket[64];                  //
     static uint32_t WAN_RespTick=0;                   // [msec]
@@ -1105,7 +1102,7 @@ void Radio_Task(void *Parms)
     FLR_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 0);
     OGN_Chan  = Radio_FreqPlan.getChannel(TimeRef.UTC, 1, 1);
     if(EU || NZ)
-    { if(TxChan==2) TxChan=0;
+    { // if(TxChan==2) TxChan=0;
            if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }
       else if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }
       else    { if(EU) TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }
