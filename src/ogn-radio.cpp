@@ -956,7 +956,7 @@ void Radio_Task(void *Parms)
         if(msTime>=Slot1_Start) break;
         vTaskDelay(1); }
       FANET_Packet *FNTpacket = FNT_TxFIFO.getRead();            // get the FANET packet to transmit
-      if(FNTpacket) FNT_TxFIFO.Read();
+      if(FNTpacket) { FNT_TxFIFO.Read(); if(!Parameters.TxFNT) FNTpacket=0; }
       XorShift64(Random.Word);
       int32_t msSlot = Slot1_Start-msTime;                               //
       // Serial.printf("FNT: %ds @%dms Left:%dms (%d)\n", TimeRef.UTC, msTime, msSlot, FNT_TxFIFO.Full());
@@ -1026,14 +1026,16 @@ void Radio_Task(void *Parms)
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
     if(OgnPacket1) OGN_TxFIFO.Read();
     const OGN_TxPacket<OGN_Packet> *OgnPacket2 = OGN_TxFIFO.getRead();   // 2nd OGN packet (possibly NULL)
-    if(OgnPacket2) { OGN_TxFIFO.Read(); if(Random.RX&4) Swap(OgnPacket1, OgnPacket2); }  // randomly swap
-              else { OgnPacket2=OgnPacket1; }                                            // or 2nd = 1st
+    if(OgnPacket2) { OGN_TxFIFO.Read(); }
+    //           else { OgnPacket2=OgnPacket1; }
+    if(Random.RX&4) Swap(OgnPacket1, OgnPacket2);
 
     const ADSL_Packet *AdslPacket1 = ADSL_TxFIFO.getRead();              // 1st ADS-L packet (possibly empty)
     if(AdslPacket1) ADSL_TxFIFO.Read();
     const ADSL_Packet *AdslPacket2 = ADSL_TxFIFO.getRead();              // 2nd ADS-L packet (posisbly empty)
-    if(AdslPacket2) { ADSL_TxFIFO.Read(); if(Random.RX&8) Swap(AdslPacket1, AdslPacket2); } // randomly swap
-               else { AdslPacket2=AdslPacket1; }
+    if(AdslPacket2) { ADSL_TxFIFO.Read(); }
+    //            else { AdslPacket2=AdslPacket1; }
+    if(Random.RX&8) Swap(AdslPacket1, AdslPacket2);
 
     bool EU = Radio_FreqPlan.Plan<=1;
     bool NZ = Radio_FreqPlan.Plan==4;
