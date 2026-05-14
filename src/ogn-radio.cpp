@@ -515,6 +515,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   const uint8_t *TxSYNC;
   const uint8_t *RxSYNC;
   int TxSyncLen = FSK_RxPacket::SysSYNC(TxSYNC, TxPktLen, TxSysID); // get SYNC and packet length for the transmittion system
+  /// if(TxSyncLen==0 && TxSysID==Radio_SysID_HDR) TxSyncLen=24;        // a hack for variable HDR packet size
   int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID); // get SYNC and packet length for the reception system
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   if(RxSysID==Radio_SysID_LDR) RxPktLen+=7;                         // a hack !

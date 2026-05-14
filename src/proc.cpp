@@ -1324,12 +1324,12 @@ void vTaskPROC(void* pvParameters)
        *StatusPacket = StatPacket;                               // copy status packet into the Tx queue
         StatusPacket->Packet.Whiten();                           // whiten for transmission
         StatusPacket->calcFEC();                                 // calc. the FEC code
-        OGN_TxFIFO.Write();                                       // finalize write into the Tx queue
+        OGN_TxFIFO.Write();                                      // finalize write into the Tx queue
       }
     }
     if(StatTxBackOff) StatTxBackOff--;
 
-    while(OGN_TxFIFO.Full()<2)                                   // any received OGN positions to be relayed ?
+    while(OGN_TxFIFO.Full()<2 && AlarmLevel==0)                  // any received OGN positions to be relayed ?
     { OGN_TxPacket<OGN_Packet> *RelayPacket = OGN_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
       OGN_TxFIFO.Write(); }
@@ -1348,7 +1348,7 @@ void vTaskPROC(void* pvParameters)
           ADSL_TxFIFO.Write(); }
         StatTxBackOff = GhostSilent ? 2+Random.RX%3:10+Random.RX%5; }
     }
-    while(ADSL_TxFIFO.Full()<2)                                  // any received ADS-L pasition to be relayed ?
+    while(ADSL_TxFIFO.Full()<2 && AlarmLevel==0)         // any received ADS-L pasition to be relayed ?
     { ADSL_Packet *RelayPacket = ADSL_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
       ADSL_TxFIFO.Write(); }
