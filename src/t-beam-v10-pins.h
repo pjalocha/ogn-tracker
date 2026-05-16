@@ -30,3 +30,14 @@
 
 // OLED
 #define OLED_PinRST   -1 // no reset line
+
+// ST7789 240x240 with CS tied to GND
+#define TFT_PinCS   -1
+#define TFT_PinRST  33 // white    RST
+#define TFT_PinDC    2 // grey     DC
+#define TFT_PinSCK  13 // braun    SCL
+#define TFT_PinMOSI 14 // black    SDA
+#define TFT_PinBL   15 // magenta  BL
+#define TFT_Width  240
+#define TFT_Height 240
+#define TFT_SckFreq 10000000

@@ -1,11 +1,17 @@
 #include "main.h"
 
-#ifdef WITH_ST7735
+#if defined(WITH_ST7735) || defined(WITH_ST7789)
 
 #include <SPI.h>
 #include <Adafruit_GFX.h>
+#if defined(WITH_ST7735)
 #include <Adafruit_ST7735.h>
+#elif defined(WITH_ST7789)
+#include <Adafruit_ST7789.h>
+#endif
 #include <Fonts/FreeMono9pt7b.h>
+#include <Fonts/FreeMono12pt7b.h>
+#include <Fonts/FreeMonoBold12pt7b.h>
 
 #define ST77XX_DARKORANGE  0xFC00
 #define ST77XX_DARKRED     0x8000   // Dark red
@@ -17,7 +23,11 @@
 #define ST77XX_DARKGRAY    0x7BEF   // Dark gray
 
 
+#if defined(WITH_ST7735)
 extern Adafruit_ST7735 TFT;
+#elif defined(WITH_ST7789)
+extern Adafruit_ST7789 TFT;
+#endif
 
 void TFT_Init(void);
 void TFT_BL_Init(void);
