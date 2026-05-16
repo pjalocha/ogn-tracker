@@ -405,7 +405,7 @@ void vTaskLOG(void* pvParameters)
   static bool PrevFlying = 0;
   for( ; ; )
   { vTaskDelay(1);
-    bool Flying = 1; /// Flight.inFlight();                              // if the aircraft flying ?
+    bool Flying = GPS_TimeSinceLock>=10; /// Flight.inFlight();   // if the aircraft flying ?
     bool Landed = PrevFlying && !Flying;                          // detect transition from airborne to ground
     PrevFlying = Flying;
     size_t Packets = FlashLog_FIFO.Full();                        // how many packets in the queue ?
