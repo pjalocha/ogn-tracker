@@ -859,23 +859,67 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
   //            (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount(), CRC);
 }
 
+static int FLR2ADSL(ADSL_Packet &ADSL, Flarm_Packet &FLR, int32_t RefLat, int32_t RefLon)
+{ if(FLR.FAMP.MsgType!=2) return 0;
+  FLR.FAMP.Decrypt(FLR.Nonce, FLR.Time);
+  ADSL.Init();
+  ADSL.setAddrTable(FLR.FAMP.AddrType+4);    // address-type
+  ADSL.setAddress(FLR.FAMP.Address);         // address
+  ADSL.setAcftTypeOGN(FLR.FAMP.AcftType);    // [aircraft-type]
+  int8_t qSec=0;
+  uint32_t PosTime=FLR.FAMP.getPosTime(qSec, FLR.Time);  // here we could check if PosTime==FLR.Time
+  ADSL.TimeStamp=(PosTime%15)<<2;               // [1/4 sec]
+  ADSL.setAlt(FLR.FAMP.getAltitude());          // [m] HAE
+  int32_t Lat = FLR.FAMP.getLatitude(RefLat);
+  int32_t Lon = FLR.FAMP.getLongitude(RefLon, Lat);
+  ADSL.setLatUBX(Lat);                            // [FNT] <= [UBX]
+  ADSL.setLonUBX(Lon);                            // [FNT] <= [UBX]
+  ADSL.setClimb((FLR.FAMP.getClimb()*4+2)/5);     // [0.125 m/s] <= [0.1 m/s]
+  ADSL.setSpeed((FLR.FAMP.getSpeed()*2+2)/5);     // [0.250 m/s] <= [0.1 m/s]
+  ADSL.setTrack((FLR.FAMP.Track*0x20+20)/45);     // [9-bit cordic] <= [0.5 deg]
+  ADSL.SourceIntegrity = FLR.FAMP.SIL;
+  ADSL.DesignAssurance = FLR.FAMP.SDA;
+  ADSL.NavigIntegrity  = FLR.FAMP.NIC;
+  // ADSL.HorizAccuracy FLR.FAMP.getHorPrec();  // those are coded
+  // ADSL.VertAccuracy FLR.FAMP.getVerPrec();
+  // ADSL.VelAccuracy FLR.FAMP.getVelPrec();
+  return 1; }
+
+static void DecodeRxFLR(FSK_RxPacket *RxPkt)
+{ uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
+  ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
+  int CorrBits=Flarm_Packet::Correct(RxPkt->Data, RxPkt->Err, 4);
+  uint16_t CRC=Flarm_Packet::checkCRC(RxPkt->Data, Flarm_Packet::Bytes);
+  if(CorrBits<0 || CRC!=0x0000) return;
+  Flarm_Packet *FLR = (Flarm_Packet *)RxPkt->Data;
+  FLR->Time = RxPkt->Time;
+  if(GPS_TimeSinceLock<=10) return;
+  if(FLR2ADSL(RxPacket->Packet, *FLR, GPS_Latitude/3*50, GPS_Longitude/3*50 )==0) return;
+  ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time); }
+
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
   if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
   if(RxPkt->SysID==Radio_SysID_LDR ) return DecodeRxLDR (RxPkt);
   if(RxPkt->SysID==Radio_SysID_HDR ) return DecodeRxHDR (RxPkt);
-  if(RxPkt->SysID==Radio_SysID_FLR)
+  if(RxPkt->SysID==Radio_SysID_FLR ) return DecodeRxFLR (RxPkt);
+/*
   { int CorrBits=Flarm_Packet::Correct(RxPkt->Data, RxPkt->Err, 4);
     uint16_t CRC=Flarm_Packet::checkCRC(RxPkt->Data, Flarm_Packet::Bytes);
     if(CorrBits>=0 && CRC==0x0000)
-    { int Len=sprintf(Line, "$PXFLM,");
-      for(uint8_t Idx=0; Idx<Flarm_Packet::Bytes; Idx++)
-        Len+=sprintf(Line+Len, "%02X", RxPkt->Data[Idx]);
-      Len+=NMEA_AppendCheckCRNL(Line, Len); Line[Len]=0;
-      if(xSemaphoreTake(CONS_Mutex, 25))
-      { Format_String(CONS_UART_Write, Line);
-        xSemaphoreGive(CONS_Mutex); } }
+    { Flarm_Packet *FLR = (Flarm_Packet *)RxPkt->Data;
+      FLR->Time = RxPkt->Time;
+      // if(FLR2ADSL( , *FLR)) 
+      // int Len=sprintf(Line, "$PXFLM,");
+      // for(uint8_t Idx=0; Idx<Flarm_Packet::Bytes; Idx++)
+      //   Len+=sprintf(Line+Len, "%02X", RxPkt->Data[Idx]);
+      // Len+=NMEA_AppendCheckCRNL(Line, Len); Line[Len]=0;
+      // if(xSemaphoreTake(CONS_Mutex, 25))
+      // { Format_String(CONS_UART_Write, Line);
+      //   xSemaphoreGive(CONS_Mutex); }
+    }
     return; }
+*/
   return; }
 
 #ifdef WITH_FANET

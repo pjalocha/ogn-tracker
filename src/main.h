@@ -85,6 +85,10 @@ uint32_t getUniqueAddress(void);
 #include "thinknode-m5-pins.h"
 #endif
 
+#ifdef WITH_M5STACK
+#include "m5stack-pins.h"
+#endif
+
 const uint8_t KNOB_Tick = 15;
 #include "play.h"
 

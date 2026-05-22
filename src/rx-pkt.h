@@ -18,7 +18,7 @@ const uint8_t Radio_SysID_HDR  = 6;  // ADS-L HDR
 const uint8_t Radio_SysID_FLR_ADSL  = 8; // FLARM with ADS-L
 const uint8_t Radio_SysID_OGN_ADSL  = 9; // OGN with ADS-L
 
-class FSK_RxPacket                    // Radio packet received by the RF chip
+class __attribute__((packed, aligned(4))) FSK_RxPacket // Radio packet received by the RF chip
 { public:
    static const uint8_t MaxBytes=255; // [bytes] max. number of bytes in the packet
    uint32_t Time;                     // [sec] UTC time slot
@@ -28,7 +28,7 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
      struct
      { uint8_t Channel;               // [ ] radio channel where the packet has been received
        uint8_t SysID   :6;            // [ ] 1=OGN, 2=ADS-L, ...
-       bool Manchester :1;            // ADS-L and OGN are Manchester encoded on M-Band but not O-Band
+       bool Manchester :1;            // ADS-L and OGN are Manchester encoded on M-Band (but not O-Band)
        bool GoodCRC    :1;            // correct CRC has been detected
      } __attribute__((packed)) ;
    } __attribute__((packed)) ;
@@ -81,31 +81,31 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
        Count+=Count1s(Xor); }
      return Count; }
 
-   uint8_t DecodeSysID(void) // resolve multi-system receptions into unique types
+   uint8_t DecodeSysID(void)           // resolve multi-system receptions into unique types
    { if(SysID==Radio_SysID_OGN_ADSL)                       // if OGN+ADSL SYNC
      { const uint8_t SignADSL[3] = { 0x24, 0xB1, 0x80 } ;
        const uint8_t MaskADSL[3] = { 0xFF, 0xFF, 0xF0 } ;
        const uint8_t SignOGN [3] = { 0x9B, 0x2B, 0x60 } ;
        const uint8_t MaskOGN [3] = { 0xFF, 0xFF, 0xF8 } ;
-            if(DiffBits(Data, SignADSL, MaskADSL, 3)<=1)
+            if(DiffBits(Data, SignADSL, MaskADSL, 3)<=1)   // if the first bits fit OGN  (+single bit flip)
        { BitShift(20); Bytes=24; SysID=Radio_SysID_ADSL; }
-       else if(DiffBits(Data, SignOGN, MaskOGN, 3)<=1)
+       else if(DiffBits(Data, SignOGN, MaskOGN, 3)<=1)     // if the first bits fit ADS-L (+single bit flip)
        { BitShift(21); Bytes=26; SysID=Radio_SysID_OGN; }
        return SysID; }
      if(SysID==Radio_SysID_FLR_ADSL)                       // if FLARM+ADSL SYNC
-     { const uint8_t SignADSL[3] = { 0xE4, 0x96, 0x30 } ;
-       const uint8_t MaskADSL[3] = { 0xFF, 0xFF, 0xFE } ;
-       const uint8_t SignFLR [3] = { 0x63, 0xF5, 0x6C } ;
-       const uint8_t MaskFLR [3] = { 0xFF, 0xFF, 0xFE } ;
-            if(DiffBits(Data, SignADSL, MaskADSL, 3)<=1)
+     { const uint8_t SignADSL[3] = { 0xE4, 0x96, 0x30 } ;  //
+       const uint8_t MaskADSL[3] = { 0xFF, 0xFF, 0xFE } ;  //
+       const uint8_t SignFLR [3] = { 0x63, 0xF5, 0x6C } ;  //
+       const uint8_t MaskFLR [3] = { 0xFF, 0xFF, 0xFE } ;  //
+            if(DiffBits(Data, SignADSL, MaskADSL, 3)<=1)   // if the first bits fit ADS-L (+single bit flip tollerated)
        { BitShift(23); Bytes=24; SysID=Radio_SysID_ADSL; }
-       else if(DiffBits(Data, SignFLR, MaskFLR, 3)<=1)
+       else if(DiffBits(Data, SignFLR, MaskFLR, 3)<=1)     // if the first bits fir FLARM (+single bit flip)
        { BitShift(23); Bytes=26; SysID=Radio_SysID_FLR; }
        return SysID; }
      if(SysID==Radio_SysID_LDR && Bytes>=31)
-     { const uint8_t SignLDR[6] = { 0x00, 0x00, 0x00, 0x00, 0x18, 0x71 };
-       if(DiffBits(Data, SignLDR, 6)<=2)
-       { ByteShift(6); }
+     { const uint8_t SignLDR[6] = { 0x00, 0x00, 0x00, 0x00, 0x18, 0x71 }; //
+       if(DiffBits(Data, SignLDR, 6)<=2)                   // if bytes after SYNC fit LDR (2 flipped bits tolerated)
+       { ByteShift(6); }                                   // shift by 6 bytes
        return SysID; }
      return SysID; }
 
@@ -205,5 +205,5 @@ class FSK_RxPacket                    // Radio packet received by the RF chip
     Packet.Correct= Check==0;
     return Check; }
 
-} __attribute__((packed)) ;
+} ;
 

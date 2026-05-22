@@ -6,9 +6,9 @@
 #include "gps.h"
 #include "log.h"
 
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 
-#if defined(WITH_ST7789)
+#if defined(WITH_ST7789) || defined(WITH_ILI9341)
 static const GFXfont *TFT_FontMain = &FreeMono12pt7b;
 static const uint8_t  TFT_FontMainSize = 1;
 static const int      TFT_LineVert = 20;
@@ -41,19 +41,30 @@ static inline void TFT_SetMainFont(void)
 static inline void TFT_ClearTextLine(int Vert)
 { TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT_LineFillHeight, ST77XX_DARKBLUE); }
 
-#if CONFIG_IDF_TARGET_ESP32
+#if !defined(WITH_ILI9341) && CONFIG_IDF_TARGET_ESP32
 static SPIClass TFT_SPI(HSPI);
-#else
+#elif !defined(WITH_ILI9341)
 static SPIClass TFT_SPI(1); // works on newer ESP32 variants used by the other TFT targets
 #endif
 #if defined(WITH_ST7735)
        Adafruit_ST7735 TFT = Adafruit_ST7735(&TFT_SPI, TFT_PinCS, TFT_PinDC, TFT_PinRST);
 #elif defined(WITH_ST7789)
        Adafruit_ST7789 TFT = Adafruit_ST7789(&TFT_SPI, TFT_PinCS, TFT_PinDC, TFT_PinRST);
+#elif defined(WITH_ILI9341)
+       Adafruit_ILI9341 TFT = Adafruit_ILI9341(TFT_PinCS, TFT_PinDC, TFT_PinRST);
 #endif
 
 void TFT_Init(void)
-{ TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
+{
+#if defined(WITH_ILI9341)
+#ifdef Radio_PinMISO
+  SPI.begin(TFT_PinSCK, Radio_PinMISO, TFT_PinMOSI);
+#else
+  SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
+#endif
+#else
+  TFT_SPI.begin(TFT_PinSCK, -1, TFT_PinMOSI);
+#endif
 #if defined(WITH_ST7789)
   pinMode(TFT_PinDC, OUTPUT);
   digitalWrite(TFT_PinDC, HIGH);
@@ -67,7 +78,11 @@ void TFT_Init(void)
     delay(120); }
 #endif
 #ifdef TFT_SckFreq
+#if defined(WITH_ILI9341)
+  SPI.setFrequency(TFT_SckFreq);
+#else
   TFT_SPI.setFrequency(TFT_SckFreq);
+#endif
 #endif
 #if defined(WITH_ST7735)
   TFT.initR(TFT_MODEL);
@@ -77,6 +92,9 @@ void TFT_Init(void)
   TFT.enableDisplay(true);
   TFT.enableTearing(false);
   TFT.invertDisplay(true);
+#elif defined(WITH_ILI9341)
+  TFT.begin(TFT_SckFreq);
+  TFT.invertDisplay(false);
 #endif
 }
 
@@ -100,7 +118,7 @@ static const int TFT_BL_Freq = 5000;
 
 void TFT_BL_Init(void)
 {
-#if defined(WITH_ST7789)
+#if defined(WITH_ST7789) || defined(WITH_ILI9341)
   pinMode(TFT_PinBL, OUTPUT);
   digitalWrite(TFT_PinBL, LOW);
 #else
@@ -111,7 +129,7 @@ void TFT_BL_Init(void)
 
 void TFT_BL(uint8_t Lev)
 {
-#if defined(WITH_ST7789)
+#if defined(WITH_ST7789) || defined(WITH_ILI9341)
   digitalWrite(TFT_PinBL, Lev ? HIGH : LOW);
 #else
   ledcWrite(TFT_BL_Chan, Lev);
@@ -544,4 +562,4 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT_DrawBatt(TFT_BattX(), TFT_BattY);
   return 1; }
 
-#endif // WITH_ST7735 || WITH_ST7789
+#endif // WITH_ST7735 || WITH_ST7789 || WITH_ILI9341

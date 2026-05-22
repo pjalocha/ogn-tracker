@@ -8,7 +8,9 @@
 #include "format.h"
 #include "crc1021.h"
 
-class Flarm_Packet
+#include "famp.h"
+
+class __attribute__((packed, aligned(4))) Flarm_Packet
 { public:
 
   const static uint8_t Words = 6;                                   // data size, exclude CRC
@@ -25,7 +27,14 @@ class Flarm_Packet
       uint8_t CRC[2];                                               // CRC-1021
       uint8_t Dummy[2];
     } ;
+    FAMP_Packet FAMP;
   } ;
+
+   uint32_t Time;                                                   // [sec] Unix Time
+   union
+   { uint32_t Key[4];                                               // encryption key - to be generated based on Time and Address
+     uint32_t Nonce[4];                                             // encryption nonce - to generated base on Time and Header
+   } ;
 
    void Copy(uint8_t *Data) { memcpy(Byte, Data, Bytes); }          // only works for little-endian
    void Clear(void) { for(uint8_t Idx=0; Idx<Words; Idx++) Word[Idx]=0; }

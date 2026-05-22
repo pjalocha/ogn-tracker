@@ -59,7 +59,7 @@ static const uint8_t SYNC_LDR [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
 // =======================================================================================================
 
 uint32_t Radio_TxCount[8] = { 0, 0, 0, 0, 0, 0, 0, 0 } ; // transmitted packet counters
-uint32_t Radio_RxCount[8] = { 0, 0, 0, 0, 0, 0, 0, 0 } ; // received packet counters
+uint32_t Radio_RxCount[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } ; // received packet counters
 
 int32_t Radio_TxCredit = 60000;                        // [ms]
 float   Radio_PktRate = 0.0f;                          // [Hz] received packet rate
@@ -445,6 +445,7 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
 #endif
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
   SysID = RxPkt->DecodeSysID();
+  Radio_RxCount[SysID]++;
   uint8_t ManchErr=RxPkt->ErrCount();
   if(SysID>=8 || ManchErr>=16) return 0;
   LED_OGN_RX(10);
@@ -461,7 +462,6 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
     xSemaphoreGive(CONS_Mutex); }
 #endif
   FSK_RxFIFO.Write();                                                    // complete the write into the queue of received packets
-  if(SysID<8) Radio_RxCount[SysID]++;
   return 1; }
 
 static float Radio_liveRSSI(void)  // read the current RSSI level (assume we are already in receive mode)
@@ -515,7 +515,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   const uint8_t *TxSYNC;
   const uint8_t *RxSYNC;
   int TxSyncLen = FSK_RxPacket::SysSYNC(TxSYNC, TxPktLen, TxSysID); // get SYNC and packet length for the transmittion system
-  /// if(TxSyncLen==0 && TxSysID==Radio_SysID_HDR) TxSyncLen=24;        // a hack for variable HDR packet size
+  // if(TxPktLen==0 && TxSysID==Radio_SysID_HDR) TxPktLen=24;        // a hack for variable HDR packet size
   int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID); // get SYNC and packet length for the reception system
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   if(RxSysID==Radio_SysID_LDR) RxPktLen+=7;                         // a hack !
@@ -819,7 +819,7 @@ template <class Type>
  void Swap(Type &A, Type &B) { Type C=A; A=B; B=C; }
 
 const int Slot1_Start =  450; // [ms]
-const int Slot2_Start =  800; // [ms]
+const int Slot2_Start =  825; // [ms]
 const int Slot2_End   = 1200; // [ms]
 
 static char Line[256];
@@ -1207,9 +1207,10 @@ void Radio_Task(void *Parms)
     // Serial.printf("Radio: %us %ums %dpkt\n", TimeRef.UTC, millis()-TimeRef.sysTime, PktCountSum);
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs [%d]",
+     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d %d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs [%d]",
        Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
        Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
+       Radio_RxCount[8], Radio_RxCount[9],
        Radio_BkgRSSI, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit,
        uxTaskGetStackHighWaterMark(NULL));
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',

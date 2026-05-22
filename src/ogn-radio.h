@@ -58,7 +58,7 @@ extern FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
 extern QueueHandle_t Radio_SlotMsg;   // to tell the Radio_Task about the new time-slot
 
 extern uint32_t Radio_TxCount[8];     // transmitted packet counters
-extern uint32_t Radio_RxCount[8];     // received packet counters
+extern uint32_t Radio_RxCount[12];     // received packet counters
 extern  int32_t Radio_TxCredit;
 extern float    Radio_BkgRSSI;        // [dBm] background noise seen by the receiver
 extern float    Radio_PktRate;        // [Hz]

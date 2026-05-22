@@ -1,6 +1,6 @@
 #include "main.h"
 
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 
 #include <SPI.h>
 #include <Adafruit_GFX.h>
@@ -8,6 +8,16 @@
 #include <Adafruit_ST7735.h>
 #elif defined(WITH_ST7789)
 #include <Adafruit_ST7789.h>
+#elif defined(WITH_ILI9341)
+#include <Adafruit_ILI9341.h>
+#define ST77XX_BLACK   ILI9341_BLACK
+#define ST77XX_BLUE    ILI9341_BLUE
+#define ST77XX_RED     ILI9341_RED
+#define ST77XX_GREEN   ILI9341_GREEN
+#define ST77XX_CYAN    ILI9341_CYAN
+#define ST77XX_MAGENTA ILI9341_MAGENTA
+#define ST77XX_YELLOW  ILI9341_YELLOW
+#define ST77XX_WHITE   ILI9341_WHITE
 #endif
 #include <Fonts/FreeMono9pt7b.h>
 #include <Fonts/FreeMono12pt7b.h>
@@ -27,6 +37,8 @@
 extern Adafruit_ST7735 TFT;
 #elif defined(WITH_ST7789)
 extern Adafruit_ST7789 TFT;
+#elif defined(WITH_ILI9341)
+extern Adafruit_ILI9341 TFT;
 #endif
 
 void TFT_Init(void);

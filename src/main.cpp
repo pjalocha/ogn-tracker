@@ -100,7 +100,7 @@
 #include <PCA9557.h>
 #endif
 
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 #include "tft.h"
 #endif
 
@@ -464,7 +464,7 @@ void OGN_LED_Flash(void)
 
 // =======================================================================================================
 
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 
 const  uint8_t  TFT_Pages      = 9;       // number of LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
@@ -630,7 +630,7 @@ static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
 static void Button_Single(Button2 Butt) // callback when a single press on the button
 {
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   if(TFT_PageOFF)
     TFT_PageOFF=0;
   else
@@ -654,7 +654,7 @@ static void Button_Double(Button2 Butt) { }
 
 static void Button_Long(Button2 Butt)
 {
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT.setFont(0);
@@ -963,9 +963,19 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   Serial.printf("Heap:%d/%dkB CPU:%dMHz Flash:%dMB\n",
      ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz(), ESP.getFlashChipSize()/1024/1024);
 
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   TFT_Init();
+#ifdef TFT_Rotation
+  TFT.setRotation(TFT_Rotation);
+#elif defined(WITH_ILI9341)
+  TFT.setRotation(3);
+#else
   TFT.setRotation(1);
+#endif
+#if defined(WITH_ILI9341) && defined(TFT_MADCTL)
+  { uint8_t MadCtl = TFT_MADCTL;
+    TFT.sendCommand(ILI9341_MADCTL, &MadCtl, 1); }
+#endif
   // TFT.fillScreen(ST77XX_RED);
   // delay(150);
   // TFT.fillScreen(ST77XX_GREEN);
@@ -1006,7 +1016,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   // here we could detect long press at startup to reset to defaults
 #endif  // WITH_SLEEP
   TFT_BL(128);
-#endif  // WITH_ST7735 || WITH_ST7789
+#endif  // WITH_ST7735 || WITH_ST7789 || WITH_ILI9341
 
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
@@ -1209,7 +1219,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   OLED_DrawLogo(OLED.getU8g2(), 0);
   OLED.sendBuffer();
 #endif
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   TFT_DrawID(StartAP);
 #endif
 
@@ -1577,7 +1587,7 @@ void loop()
   GPS_Position *GPS = GPS_getPosition();
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   if(TFT_PageChange)
   { TFT_PageChange=0;
     if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
@@ -1617,7 +1627,7 @@ void loop()
     if(OLED_PageOFF) OLED.setPowerSave(1);
                else  OLED.setPowerSave(0);
 #endif
-#if defined(WITH_ST7735) || defined(WITH_ST7789)
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
     TFT_PageChange=1;
 #ifdef WITH_TFT_DIM
     uint32_t msTime = millis();
@@ -1629,7 +1639,7 @@ void loop()
 #endif
     if(TFT_PageOFF) TFT_BL(0);
               else  TFT_BL(128);
-#endif // WITH_ST7735 || WITH_ST7789
+#endif // WITH_ST7735 || WITH_ST7789 || WITH_ILI9341
     PrevGPS=GPS; }
 }
 
