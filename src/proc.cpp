@@ -879,7 +879,7 @@ static int FLR2ADSL(ADSL_Packet &ADSL, Flarm_Packet &FLR, int32_t RefLat, int32_
   ADSL.setTrack((FLR.FAMP.Track*0x20+20)/45);     // [9-bit cordic] <= [0.5 deg]
   ADSL.SourceIntegrity = FLR.FAMP.SIL;
   ADSL.DesignAssurance = FLR.FAMP.SDA;
-  ADSL.NavigIntegrity  = FLR.FAMP.NIC;
+  ADSL.NavigIntegrity  = FLR.FAMP.NIC+1;
   // ADSL.HorizAccuracy FLR.FAMP.getHorPrec();  // those are coded
   // ADSL.VertAccuracy FLR.FAMP.getVerPrec();
   // ADSL.VelAccuracy FLR.FAMP.getVelPrec();
@@ -895,6 +895,10 @@ static void DecodeRxFLR(FSK_RxPacket *RxPkt)
   FLR->Time = RxPkt->Time;
   if(GPS_TimeSinceLock<=10) return;
   if(FLR2ADSL(RxPacket->Packet, *FLR, GPS_Latitude/3*50, GPS_Longitude/3*50 )==0) return;
+  RxPacket->RxErr  = CorrBits;
+  RxPacket->RxChan = RxPkt->Channel;
+  RxPacket->RxRSSI = RxPkt->RSSI;
+  RxPacket->Correct = 1;
   ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
