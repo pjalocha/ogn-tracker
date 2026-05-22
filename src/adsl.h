@@ -395,8 +395,8 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
        Msg[Len++] = 'f'; Msg[Len++] = 'p'; Msg[Len++] = 'm'; }
 
      Msg[Len++] = ' ';  Msg[Len++] = 'g'; Msg[Len++] = 'p'; Msg[Len++] = 's';
-     Len+=Format_UnsDec(Msg+Len, (uint32_t)getHorAccur());
-     Msg[Len++] = 'x'; Len+=Format_UnsDec(Msg+Len, (uint32_t)getVerAccur());
+     Len+=Format_UnsDec(Msg+Len, (uint32_t)getHorAcc());
+     Msg[Len++] = 'x'; Len+=Format_UnsDec(Msg+Len, (uint32_t)getVerAcc());
 
      Msg[Len]=0; return Len; }
 
@@ -577,22 +577,22 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
      else if(DiffSec<=(-15+FwdMargin)) DiffSec+=15;
      return RefTime+DiffSec; }           // get out the correct position timestamp
 
-   uint8_t getHorAccur(void) const
+   uint8_t getHorAcc(void) const
    { const uint8_t Map[8] = { 63, 63, 63, 63, 63, 30, 10, 3 } ;
      return Map[HorizAccuracy]; }
-   void setHorAccur(uint8_t Prec)
-   {      if(Prec<= 3) HorizAccuracy=7;
-     else if(Prec<=10) HorizAccuracy=6;
-     else if(Prec<=30) HorizAccuracy=5;
+   void setHorAcc(uint8_t Acc)
+   {      if(Acc<= 3) HorizAccuracy=7;
+     else if(Acc<=10) HorizAccuracy=6;
+     else if(Acc<=30) HorizAccuracy=5;
      else HorizAccuracy=4;
      VelAccuracy = HorizAccuracy-4; }
 
-   uint8_t getVerAccur(void) const                // [m] vertical accuracy
+   uint8_t getVerAcc(void) const                // [m] vertical accuracy
    { const uint8_t Map[8] = { 63, 63, 45, 15 } ;
      return Map[VertAccuracy]; }
-   void setVerAccur(uint8_t Prec)
-   {      if(Prec<=15) VertAccuracy=3;
-     else if(Prec<=45) VertAccuracy=2;
+   void setVerAcc(uint8_t Acc)
+   {      if(Acc<=15) VertAccuracy=3;
+     else if(Acc<=45) VertAccuracy=2;
      else VertAccuracy=1; }
 
    static int32_t FNTtoOGN(int32_t Coord) { return ((int64_t)Coord*27000219 +(1<<28))>>29; }    // [FANET cordic] => [0.0001/60 deg]

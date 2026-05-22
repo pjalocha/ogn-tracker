@@ -1589,8 +1589,8 @@ class GPS_Position: public GPS_Time
     Packet.setTrack(((uint32_t)Heading*32+112)/225);
     Packet.Integrity[0]=0; Packet.Integrity[1]=0;
     if(FixQuality>0 && FixMode>0)
-    { Packet.setHorAccur((HDOP*2+5)/10);
-      Packet.setVerAccur((VDOP*3+5)/10); }
+    { Packet.setHorAcc((HDOP*2+5)/10);
+      Packet.setVerAcc((VDOP*3+5)/10); }
   }
 
   // template <class OGNx_Packet>

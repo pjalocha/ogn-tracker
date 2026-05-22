@@ -303,7 +303,7 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
        if(Climb<(-2) || Climb>2) isMoving=1;
        hasClimb=1; }
      calcDir();
-     Error=Packet.getHorAccur();
+     Error=Packet.getHorAcc();
      return 0; }
 
    void Write(ADSL_Packet &Packet, uint8_t RefTime, int32_t RefLat, int32_t RefLon, int32_t RefAlt, uint16_t LatCos=3000, int16_t GeoidSepar=40)
@@ -314,8 +314,8 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
      Packet.setSpeed(Speed*2);                          // [0.5m/s] => [0.25m/s]
      Packet.setTrack(Heading>>7);                       // [cordic]
      Packet.setClimb(Climb*4);                          // [0.5m/s] => [0.125m/s]
-     Packet.setHorAccur(Error);
-     Packet.setVerAccur(Error+Error/2); }
+     Packet.setHorAcc(Error);
+     Packet.setVerAcc(Error+Error/2); }
 
    template <class OGNx_Packet>                          // read position from an OGN packet, use provided reference
     int32_t Read(OGNx_Packet &Packet, uint32_t RxTime, uint32_t RefTime,
