@@ -909,6 +909,7 @@ void Radio_Task(void *Parms)
 
   for( ; ; )
   { if(!HardwareStatus.Radio) { delay(1000); continue; }
+    if(PowerMode==0) { Radio.standby(); Radio.sleep(); delay(5000); continue; }
 
     int PktCount=0;
 
@@ -1224,11 +1225,9 @@ void Radio_Task(void *Parms)
   }
 }
 
-void Radio_Sleep(void)
-{
-  Radio.standby();
-  Radio.sleep();
-}
+// void Radio_Sleep(void)
+// { Radio.standby();
+//   Radio.sleep(); }
 
 // =======================================================================================================
 

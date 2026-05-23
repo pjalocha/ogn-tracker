@@ -667,6 +667,7 @@ static void PrimaryButton_Long(void)
   Parameters.PowerON=0;
   Parameters.WriteToNVS();
   PowerMode=0;
+  delay(1500);
 #ifdef WITH_XPOWERS
   if(PMU)
   { PMU->shutdown();
@@ -685,7 +686,7 @@ static void PrimaryButton_Long(void)
   Parameters.PowerON=0;
   Parameters.WriteToNVS();
   PowerMode=0;
-  Radio_Sleep();
+  delay(1500);
   Vext_ON(0);
 #ifdef ADC_BattSenseEna
   BatterySenseEnable(0);
@@ -1272,7 +1273,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     { Parameters.WriteToNVS(); }
     else                                   // if not pressed: user did not confirm power-on
     { TFT_BL(0);                           // backlight to zero
-      Radio_Sleep();
+      // Radio_Sleep();
       Vext_ON(0);                          // turn off external devices
 #ifdef ADC_BattSenseEna
       BatterySenseEnable(0);
