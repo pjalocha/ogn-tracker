@@ -287,8 +287,8 @@ void OLED_DrawRFcounts(u8g2_t *OLED, const GPS_Position *GPS)
   u8g2_SetFont(OLED, u8g2_font_6x12_tr);         // small font
   int Vert=28;
   u8g2_DrawStr(OLED, 40, Vert-8, "Tx       Rx");
-  // sprintf(Line, "FLR: %d", Radio_RxCount[0]);
-  // u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+  sprintf(Line, "FLR:%7d %9d", Radio_TxCount[0], Radio_RxCount[0]);
+  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
   sprintf(Line, "OGN:%7d %9d", Radio_TxCount[1], Radio_RxCount[1]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
   sprintf(Line, "MDR:%7d %9d", Radio_TxCount[2], Radio_RxCount[2]);
@@ -297,10 +297,10 @@ void OLED_DrawRFcounts(u8g2_t *OLED, const GPS_Position *GPS)
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
   sprintf(Line, "HDR:%7d %9d", Radio_TxCount[6], Radio_RxCount[6]);
   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-#ifdef WITH_FANET
-  sprintf(Line, "FNT:%7d %9d", Radio_TxCount[4], Radio_RxCount[4]);
-  u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
-#endif
+// #ifdef WITH_FANET
+//   sprintf(Line, "FNT:%7d %9d", Radio_TxCount[4], Radio_RxCount[4]);
+//   u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=9;
+// #endif
 }
 
 void OLED_DrawRelayOGN(u8g2_t *OLED, const GPS_Position *GPS)

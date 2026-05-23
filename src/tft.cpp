@@ -6,6 +6,10 @@
 #include "gps.h"
 #include "log.h"
 
+#if defined(WITH_ST7789) && CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/tjpgd.h"
+#endif
+
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 
 #if defined(WITH_ST7789) || defined(WITH_ILI9341)
@@ -41,9 +45,9 @@ static inline void TFT_SetMainFont(void)
 static inline void TFT_ClearTextLine(int Vert)
 { TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT_LineFillHeight, ST77XX_DARKBLUE); }
 
-#if !defined(WITH_ILI9341) && CONFIG_IDF_TARGET_ESP32
+#if (defined(WITH_ST7735) || defined(WITH_ST7789)) && CONFIG_IDF_TARGET_ESP32
 static SPIClass TFT_SPI(HSPI);
-#elif !defined(WITH_ILI9341)
+#elif defined(WITH_ST7735) || defined(WITH_ST7789)
 static SPIClass TFT_SPI(1); // works on newer ESP32 variants used by the other TFT targets
 #endif
 #if defined(WITH_ST7735)
@@ -133,6 +137,65 @@ void TFT_BL(uint8_t Lev)
   digitalWrite(TFT_PinBL, Lev ? HIGH : LOW);
 #else
   ledcWrite(TFT_BL_Chan, Lev);
+#endif
+}
+
+#if defined(WITH_ST7789) && CONFIG_IDF_TARGET_ESP32
+typedef struct
+{ int16_t         xpos;
+  int16_t         ypos;
+  const uint8_t * Input;
+  uint32_t        InpSize;
+  uint32_t        InpPtr;
+} TFT_JPGIODEV;
+
+static UINT TFT_jpg_input(JDEC *jd, BYTE *buff, UINT nd)
+{ TFT_JPGIODEV *dev = (TFT_JPGIODEV *)jd->device;
+  if(!dev->Input) return 0;
+  if(dev->InpPtr >= dev->InpSize) return 0;
+  if((dev->InpPtr+nd) > dev->InpSize) nd = dev->InpSize-dev->InpPtr;
+  if(buff) memcpy(buff, dev->Input + dev->InpPtr, nd);
+  dev->InpPtr += nd;
+  return nd; }
+
+static UINT TFT_jpg_output(JDEC *jd, void *bitmap, JRECT *rect)
+{ TFT_JPGIODEV *dev = (TFT_JPGIODEV *)jd->device;
+  const int16_t x = dev->xpos + rect->left;
+  const int16_t y = dev->ypos + rect->top;
+  const int16_t w = rect->right  - rect->left + 1;
+  const int16_t h = rect->bottom - rect->top  + 1;
+  uint8_t *src = (uint8_t *)bitmap;
+  uint16_t rgb565[16*16];
+  int pixels = w*h;
+  if(pixels > (int)(sizeof(rgb565)/sizeof(rgb565[0]))) return 0;
+  for(int idx=0; idx<pixels; idx++)
+  { uint8_t red   = src[3*idx+0];
+    uint8_t green = src[3*idx+1];
+    uint8_t blue  = src[3*idx+2];
+    rgb565[idx] = ((red & 0xF8)<<8) | ((green & 0xFC)<<3) | (blue>>3); }
+  TFT.drawRGBBitmap(x, y, rgb565, w, h);
+  return 1; }
+#endif
+
+void TFT_DrawLogo(void)
+{
+#if defined(WITH_ST7789) && CONFIG_IDF_TARGET_ESP32
+  extern const uint8_t OGN_logo_jpg[] asm("_binary_src_OGN_logo_240x240_jpg_start");
+  extern const uint8_t OGN_logo_end[] asm("_binary_src_OGN_logo_240x240_jpg_end");
+  const int OGN_logo_size = OGN_logo_end-OGN_logo_jpg;
+  TFT_JPGIODEV dev;
+  JDEC decoder;
+  const UINT WorkSize = 3800;
+  char *Work = (char *)malloc(WorkSize);
+  if(!Work) return;
+  dev.Input = OGN_logo_jpg;
+  dev.InpSize = OGN_logo_size;
+  dev.InpPtr = 0;
+  dev.xpos = (TFT.width()-240)/2;
+  dev.ypos = (TFT.height()-240)/2;
+  if(jd_prepare(&decoder, TFT_jpg_input, (void *)Work, WorkSize, &dev)==JDR_OK)
+    jd_decomp(&decoder, TFT_jpg_output, 0);
+  free(Work);
 #endif
 }
 
@@ -291,9 +354,9 @@ int TFT_DrawRFcounts(void)
   TFT_SetMainFont();
   int Vert=TFT_TopVert;
 
-  // sprintf(Line, "FLR: %d", Radio_RxCount[0]);
-  // TFT.fillRect(0, Vert-12, TFT.width(), 16, ST77XX_DARKBLUE);
-  // TFT.setCursor(2, Vert); TFT.print(Line); Vert+=14;
+  sprintf(Line, "FLR: %d", Radio_RxCount[0]);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
   sprintf(Line, "OGN: %d", Radio_RxCount[1]);
   TFT_ClearTextLine(Vert);
@@ -311,9 +374,9 @@ int TFT_DrawRFcounts(void)
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
-  sprintf(Line, "FNT: %d", Radio_RxCount[4]);
-  TFT_ClearTextLine(Vert);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+  // sprintf(Line, "FNT: %d", Radio_RxCount[4]);
+  // TFT_ClearTextLine(Vert);
+  // TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
   TFT_ClearTextLine(Vert);
   return 1; }
@@ -547,7 +610,6 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   Vert+=TFT_LineVert;
 
   Len=0;
-  // Len+=Format_String(Line+Len, "Alt: ");
   if(GPS && GPS->isValid())
   { int32_t Alt = GPS->Altitude;
     if(Alt>=0) Line[Len++]=' ';
@@ -558,7 +620,30 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
+#ifdef WITH_ST7789
+  Len=0;
+  if(GPS && GPS->isValid())
+  { Len+=Format_UnsDec(Line+Len, ((uint32_t)GPS->Heading+5)/10, 3, 0);        // [deg]
+    Line[Len++]='/';
+    Len+=Format_UnsDec(Line+Len,  (uint32_t)GPS->Speed, 1, 1); }              // [0.1m/s]
+  else Len+=Format_String(Line+Len, "---/---.-");
+  Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
+  Line[Len]=0;
   TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
+
+  Len=0;
+  if(GPS && GPS->isValid())
+  { Len+=Format_SignDec(Line+Len, (int32_t)GPS->ClimbRate, 1, 0); }              // [0.1m/s]
+  else Len+=Format_String(Line+Len, " --.-");
+  Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
+  Line[Len]=0;
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
+#endif
+
+  TFT_ClearTextLine(Vert);
+  TFT_ClearTextLine(Vert+TFT_LineVert);
   TFT_DrawBatt(TFT_BattX(), TFT_BattY);
   return 1; }
 

@@ -963,61 +963,6 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   Serial.printf("Heap:%d/%dkB CPU:%dMHz Flash:%dMB\n",
      ESP.getFreeHeap()>>10, ESP.getHeapSize()>>10, getCpuFrequencyMhz(), ESP.getFlashChipSize()/1024/1024);
 
-#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
-  TFT_Init();
-#ifdef TFT_Rotation
-  TFT.setRotation(TFT_Rotation);
-#elif defined(WITH_ILI9341)
-  TFT.setRotation(3);
-#else
-  TFT.setRotation(1);
-#endif
-#if defined(WITH_ILI9341) && defined(TFT_MADCTL)
-  { uint8_t MadCtl = TFT_MADCTL;
-    TFT.sendCommand(ILI9341_MADCTL, &MadCtl, 1); }
-#endif
-  // TFT.fillScreen(ST77XX_RED);
-  // delay(150);
-  // TFT.fillScreen(ST77XX_GREEN);
-  // delay(150);
-  // TFT.fillScreen(ST77XX_BLUE);
-  // delay(150);
-  TFT.fillScreen(ST77XX_DARKBLUE);
-  TFT_BL_Init();
-  TFT_BL(0);
-#ifdef WITH_SLEEP
-  if(!Parameters.PowerON)                  // if the tracker has been turned off by the user
-  { TFT.setTextColor(ST77XX_WHITE);
-    TFT.setFont(0);
-    TFT.setTextSize(2);
-    TFT.setCursor(32, 16);
-    TFT.print("Confirm");                  // ask for confirmation to avoid acidential turn on
-    TFT.setCursor(30, 48);
-    TFT.print("Power-ON");
-    uint8_t BLlev=0;
-    int Pressed=0;
-    for(int Wait=0; Wait<2000; Wait++)     // wait 2sec for confirmation
-    { delay(1);
-      if(BLlev<128) { BLlev++; TFT_BL(BLlev); }
-      if(!Button_isPressed()) { Pressed=0; continue; }
-      Pressed++;
-      if(Pressed>=20) { Parameters.PowerON=1; break; } // if button pressed for 20ms
-    }
-    if(Parameters.PowerON)                 // if the button pressed
-    { Parameters.WriteToNVS(); }
-    else                                   // if not pressed: user did not confirm power-on
-    { TFT_BL(0);                           // backlight to zero
-      Vext_ON(0);                          // turn off external devices
-#ifdef ADC_BattSenseEna
-      BatterySenseEnable(0);
-#endif
-      esp_deep_sleep_start(); }            // enter deep sleep
-  }
-  // here we could detect long press at startup to reset to defaults
-#endif  // WITH_SLEEP
-  TFT_BL(128);
-#endif  // WITH_ST7735 || WITH_ST7789 || WITH_ILI9341
-
 #ifdef I2C_PinSCL
   Wire.begin(I2C_PinSDA, I2C_PinSCL, (uint32_t)400000); // (SDA, SCL, Frequency) I2C on the correct pins
   Wire.setTimeOut(10);                                  // [ms]
@@ -1057,6 +1002,12 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
                    AXP202_BATT_CUR_ADC1 |
                    AXP202_BATT_VOL_ADC1,
                    true);
+#ifdef WITH_TBEAM10
+    AXP.setPowerOutPut(AXP192_DCDC1, AXP202_ON); // 3.3V on the pin header for LCD and sensors
+    AXP.setDCDC1Voltage(3300);
+    AXP.setPowerOutPut(AXP192_LDO2, AXP202_ON);  // RF power
+    AXP.setPowerOutPut(AXP192_LDO3, AXP202_ON);  // GPS power
+#endif
     Serial.printf("  USB:  %5.3fV  %5.3fA\n",
               0.001f*AXP.getVbusVoltage(), 0.001f*AXP.getVbusCurrent());
     Serial.printf("  Batt: %5.3fV (%5.3f-%5.3f)A\n",
@@ -1146,6 +1097,61 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
 #endif
 
+#if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
+  TFT_Init();
+#ifdef TFT_Rotation
+  TFT.setRotation(TFT_Rotation);
+#elif defined(WITH_ILI9341)
+  TFT.setRotation(3);
+#else
+  TFT.setRotation(1);
+#endif
+#if defined(WITH_ILI9341) && defined(TFT_MADCTL)
+  { uint8_t MadCtl = TFT_MADCTL;
+    TFT.sendCommand(ILI9341_MADCTL, &MadCtl, 1); }
+#endif
+  // TFT.fillScreen(ST77XX_RED);
+  // delay(150);
+  // TFT.fillScreen(ST77XX_GREEN);
+  // delay(150);
+  // TFT.fillScreen(ST77XX_BLUE);
+  // delay(150);
+  TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT_BL_Init();
+  TFT_BL(0);
+#ifdef WITH_SLEEP
+  if(!Parameters.PowerON)                  // if the tracker has been turned off by the user
+  { TFT.setTextColor(ST77XX_WHITE);
+    TFT.setFont(0);
+    TFT.setTextSize(2);
+    TFT.setCursor(32, 16);
+    TFT.print("Confirm");                  // ask for confirmation to avoid acidential turn on
+    TFT.setCursor(30, 48);
+    TFT.print("Power-ON");
+    uint8_t BLlev=0;
+    int Pressed=0;
+    for(int Wait=0; Wait<2000; Wait++)     // wait 2sec for confirmation
+    { delay(1);
+      if(BLlev<128) { BLlev++; TFT_BL(BLlev); }
+      if(!Button_isPressed()) { Pressed=0; continue; }
+      Pressed++;
+      if(Pressed>=20) { Parameters.PowerON=1; break; } // if button pressed for 20ms
+    }
+    if(Parameters.PowerON)                 // if the button pressed
+    { Parameters.WriteToNVS(); }
+    else                                   // if not pressed: user did not confirm power-on
+    { TFT_BL(0);                           // backlight to zero
+      Vext_ON(0);                          // turn off external devices
+#ifdef ADC_BattSenseEna
+      BatterySenseEnable(0);
+#endif
+      esp_deep_sleep_start(); }            // enter deep sleep
+  }
+  // here we could detect long press at startup to reset to defaults
+#endif  // WITH_SLEEP
+  TFT_BL(128);
+#endif  // WITH_ST7735 || WITH_ST7789 || WITH_ILI9341
+
 #ifdef I2C_PinSCL
   I2C_Scan(Wire, "I2C bus:");
 #endif
@@ -1220,6 +1226,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   OLED.sendBuffer();
 #endif
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
+#ifdef WITH_ST7789
+  TFT_DrawLogo();
+  delay(1000);
+  TFT.fillScreen(ST77XX_DARKBLUE);
+#endif
   TFT_DrawID(StartAP);
 #endif
 

@@ -21,7 +21,7 @@
 
 #define Flasher_Pin    4 // High intensity LED for collision alert: HIGH active
 
-#define Buzzer_Pin    13 // Beeper/buzzer
+#define Buzzer_Pin    25 // Beeper/buzzer
 #define Buzzer_Channel 0 // LED controller channel
 
 // I2C
