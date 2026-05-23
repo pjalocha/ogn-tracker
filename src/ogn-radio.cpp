@@ -1224,6 +1224,12 @@ void Radio_Task(void *Parms)
   }
 }
 
+void Radio_Sleep(void)
+{
+  Radio.standby();
+  Radio.sleep();
+}
+
 // =======================================================================================================
 
 #endif // WITH_OGN

@@ -68,6 +68,7 @@ extern uint8_t Radio_ChipVersion;
 extern int8_t Radio_ChipTemperature;  // [degC]
 
 void Radio_Task(void *Parms);
+void Radio_Sleep(void);
 
 #ifdef WITH_LORAWAN
 #include "lorawan.h"

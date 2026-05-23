@@ -624,11 +624,7 @@ static void OptButton_Init(void)
 }
 #endif
 
-#ifdef Button_Pin                       // primary button to switch display pages
-static Button2 Button(Button_Pin);
-static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
-
-static void Button_Single(Button2 Butt) // callback when a single press on the button
+static void PrimaryButton_Single(void)
 {
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   if(TFT_PageOFF)
@@ -650,9 +646,7 @@ static void Button_Single(Button2 Butt) // callback when a single press on the b
 #endif
 }
 
-static void Button_Double(Button2 Butt) { }
-
-static void Button_Long(Button2 Butt)
+static void PrimaryButton_Long(void)
 {
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   TFT.fillScreen(ST77XX_DARKBLUE);
@@ -669,10 +663,29 @@ static void Button_Long(Button2 Butt)
   TFT_BL(16);
   delay(50);
 #endif
+#ifdef WITH_POWERON_MEMORY
+  Parameters.PowerON=0;
+  Parameters.WriteToNVS();
+  PowerMode=0;
+#ifdef WITH_XPOWERS
+  if(PMU)
+  { PMU->shutdown();
+    delay(1000); }
+#endif
+#ifdef WITH_AXP
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
+  { AXP.setPowerOutPut(AXP192_LDO2, AXP202_OFF);
+    AXP.setPowerOutPut(AXP192_LDO3, AXP202_OFF);
+    AXP.setPowerOutPut(AXP192_DCDC1, AXP202_OFF);
+    AXP.shutdown();
+    delay(1000); }
+#endif
+#endif
 #ifdef WITH_SLEEP
   Parameters.PowerON=0;
   Parameters.WriteToNVS();
   PowerMode=0;
+  Radio_Sleep();
   Vext_ON(0);
 #ifdef ADC_BattSenseEna
   BatterySenseEnable(0);
@@ -681,6 +694,18 @@ static void Button_Long(Button2 Butt)
 #endif // WITH_SLEEP
 }
 
+#ifdef Button_Pin                       // primary button to switch display pages
+static Button2 Button(Button_Pin);
+static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
+
+static void Button_Single(Button2 Butt) // callback when a single press on the button
+{ PrimaryButton_Single(); }
+
+static void Button_Double(Button2 Butt) { }
+
+static void Button_Long(Button2 Butt)
+{ PrimaryButton_Long(); }
+
 static void Button_Init(void)
 { pinMode(Button_Pin, INPUT);
   Button.setLongClickTime(2000);
@@ -688,6 +713,81 @@ static void Button_Init(void)
   Button.setDoubleClickHandler(Button_Double);
   Button.setLongClickDetectedHandler(Button_Long); }
 #endif // Button_Pin
+
+#ifdef WITH_POWERON_MEMORY
+static void PMU_ButtonPress(bool &ShortPress, bool &LongPress)
+{ ShortPress=false; LongPress=false;
+#ifdef WITH_XPOWERS
+  if(PMU)
+  { PMU->getIrqStatus();
+    ShortPress = PMU->isPekeyShortPressIrq();
+    LongPress  = PMU->isPekeyLongPressIrq();
+    PMU->clearIrqStatus();
+    return; }
+#endif
+#ifdef WITH_AXP
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
+  { uint8_t Addr = HardwareStatus.AXP192 ? AXP192_SLAVE_ADDRESS : AXP202_SLAVE_ADDRESS;
+    uint8_t Reg  = HardwareStatus.AXP192 ? AXP192_INTSTS3       : AXP202_INTSTS3;
+    uint8_t IRQ3a=0, IRQ3b=0;
+    if(I2C_Read(0, Addr, Reg, &IRQ3a, 1)==0 &&
+       I2C_Read(0, Addr, Reg, &IRQ3b, 1)==0)
+    { uint8_t IRQ3 = IRQ3a & IRQ3b;
+      LongPress  = (IRQ3&0x01)!=0;
+      ShortPress = (IRQ3&0x02)!=0;
+      if(IRQ3&0x03) AXP.clearIRQ();
+    }
+    return;
+  }
+#endif
+}
+#endif // WITH_POWERON_MEMORY
+
+#ifdef WITH_POWERON_MEMORY
+static bool PMU_PowerOnByExternal(void)
+{
+#ifdef WITH_XPOWERS
+  if(HardwareStatus.AXP210 && PMU)
+  { XPowersAXP2101 *AXP210 = static_cast<XPowersAXP2101 *>(PMU);
+    return AXP210->isVbusInsertOnSource(); }
+#endif
+#ifdef WITH_AXP
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
+  { uint8_t PwrStatus = 0;
+    uint8_t Addr = HardwareStatus.AXP192 ? AXP192_SLAVE_ADDRESS : AXP202_SLAVE_ADDRESS;
+    if(I2C_Read(0, Addr, AXP202_STATUS, &PwrStatus, 1)==0)
+      return (PwrStatus&1)!=0; }
+#endif
+  return false;
+}
+
+static void PMU_ApplyPowerOnMemory(void)
+{ bool ExtPwrON = PMU_PowerOnByExternal();
+  Serial.println(ExtPwrON ? "Power-ON by ext. power" : "Power-ON by the button");
+  if(ExtPwrON)
+  {
+    if(!Parameters.PowerON)
+    {
+#ifdef WITH_XPOWERS
+      if(PMU) PMU->shutdown();
+#endif
+#ifdef WITH_AXP
+      if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
+      { AXP.setPowerOutPut(AXP192_LDO2, AXP202_OFF);
+        AXP.setPowerOutPut(AXP192_LDO3, AXP202_OFF);
+        AXP.setPowerOutPut(AXP192_DCDC1, AXP202_OFF);
+        AXP.shutdown(); }
+#endif
+      delay(1000);
+    }
+  }
+  else
+  { if(!Parameters.PowerON)
+    { Parameters.PowerON=1;
+      Parameters.WriteToNVS(); }
+  }
+}
+#endif // WITH_POWERON_MEMORY
 
 // =======================================================================================================
 
@@ -1002,11 +1102,22 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
                    AXP202_BATT_CUR_ADC1 |
                    AXP202_BATT_VOL_ADC1,
                    true);
+#ifdef WITH_POWERON_MEMORY
+    AXP.setlongPressTime(AXP_LONGPRESS_TIME_2S);
+    AXP.setShutdownTime(AXP_POWER_OFF_TIME_10S);
+#endif
 #ifdef WITH_TBEAM10
     AXP.setPowerOutPut(AXP192_DCDC1, AXP202_ON); // 3.3V on the pin header for LCD and sensors
     AXP.setDCDC1Voltage(3300);
     AXP.setPowerOutPut(AXP192_LDO2, AXP202_ON);  // RF power
     AXP.setPowerOutPut(AXP192_LDO3, AXP202_ON);  // GPS power
+#endif
+#ifdef WITH_POWERON_MEMORY
+    AXP.clearIRQ();
+    AXP.enableIRQ(AXP202_PEK_SHORTPRESS_IRQ |
+                  AXP202_PEK_LONGPRESS_IRQ  |
+                  AXP202_PEK_FALLING_EDGE_IRQ |
+                  AXP202_PEK_RISING_EDGE_IRQ, true);
 #endif
     Serial.printf("  USB:  %5.3fV  %5.3fA\n",
               0.001f*AXP.getVbusVoltage(), 0.001f*AXP.getVbusCurrent());
@@ -1082,7 +1193,22 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #endif
 #endif //WITH_TBEAMS3
     // set charging LED flashing
-    PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ); }
+    PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ);
+#ifdef WITH_POWERON_MEMORY
+    PMU->setPowerKeyPressOffTime(XPOWERS_POWEROFF_10S);
+    PMU->clearIrqStatus();
+    PMU->enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ | XPOWERS_AXP2101_PKEY_LONG_IRQ);
+#endif
+  }
+  else if(HardwareStatus.AXP192)
+  {
+#ifdef WITH_POWERON_MEMORY
+    PMU->setPowerKeyLongPressOnTime(XPOWERS_AXP192_LONGPRESS_2000MS);
+    PMU->setPowerKeyPressOffTime(XPOWERS_POWEROFF_10S);
+    PMU->clearIrqStatus();
+    PMU->enableIRQ(XPOWERS_AXP192_PKEY_SHORT_IRQ | XPOWERS_AXP192_PKEY_LONG_IRQ);
+#endif
+  }
   if(HardwareStatus.AXP192 || HardwareStatus.AXP210)
   { Serial.printf("  USB:  %5.3fV\n", 0.001f*PMU->getVbusVoltage());
     Serial.printf("  Batt: %5.3fV %d%%\n", 0.001f*PMU->getBattVoltage(), PMU->getBatteryPercent());
@@ -1095,6 +1221,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #ifdef BATT_ADC_CHANNEL
   if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202 && !HardwareStatus.AXP210)  // if none of the power controllers detected
   { ADC_Init(); }                                               // then we use ADC to measue the battery voltage
+#endif
+
+#if defined(WITH_POWERON_MEMORY) && (defined(WITH_AXP) || defined(WITH_XPOWERS))
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202 || HardwareStatus.AXP210)
+    PMU_ApplyPowerOnMemory();
 #endif
 
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
@@ -1141,6 +1272,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     { Parameters.WriteToNVS(); }
     else                                   // if not pressed: user did not confirm power-on
     { TFT_BL(0);                           // backlight to zero
+      Radio_Sleep();
       Vext_ON(0);                          // turn off external devices
 #ifdef ADC_BattSenseEna
       BatterySenseEnable(0);
@@ -1589,6 +1721,15 @@ void loop()
 #endif
 #ifdef Button2_Pin
   OptButton.loop();                // handle button presses
+#endif
+#ifdef WITH_POWERON_MEMORY
+  bool PMU_ShortPress=false, PMU_LongPress=false;
+  PMU_ButtonPress(PMU_ShortPress, PMU_LongPress);
+  if(PMU_LongPress)
+    PrimaryButton_Long();
+  else
+  if(PMU_ShortPress)
+    PrimaryButton_Single();
 #endif
 #ifdef WITH_BLE_SPP
   BLE_SPP_Check();                 // handle Bluetooth
