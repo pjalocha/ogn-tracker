@@ -40,4 +40,4 @@
 #define TFT_PinBL   15 // magenta  BL
 #define TFT_Width  240
 #define TFT_Height 240
-#define TFT_SckFreq 10000000
+#define TFT_SckFreq 20000000 // 16MHz

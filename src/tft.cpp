@@ -75,11 +75,11 @@ void TFT_Init(void)
   if(TFT_PinRST>=0)
   { pinMode(TFT_PinRST, OUTPUT);
     digitalWrite(TFT_PinRST, HIGH);
-    delay(10);
+    delay(20);
     digitalWrite(TFT_PinRST, LOW);
-    delay(10);
+    delay(20);
     digitalWrite(TFT_PinRST, HIGH);
-    delay(120); }
+    delay(200); }
 #endif
 #ifdef TFT_SckFreq
 #if defined(WITH_ILI9341)
@@ -196,6 +196,20 @@ void TFT_DrawLogo(void)
   if(jd_prepare(&decoder, TFT_jpg_input, (void *)Work, WorkSize, &dev)==JDR_OK)
     jd_decomp(&decoder, TFT_jpg_output, 0);
   free(Work);
+#elif defined(WITH_ST7735)
+  TFT.fillScreen(ST77XX_WHITE);
+  TFT.drawCircle(108, 34, 28, ST77XX_BLUE);
+  TFT.drawCircle(108, 34, 32, ST77XX_BLUE);
+  TFT.drawCircle(108, 34, 36, ST77XX_BLUE);
+  TFT.setTextColor(ST77XX_BLACK);
+  TFT.setFont(&FreeMono18pt7b);
+  TFT.setTextSize(1);
+  TFT.setCursor(52, 38);
+  TFT.print("OGN");
+  TFT.setFont(&FreeMonoBold12pt7b);
+  TFT.setTextSize(1);
+  TFT.setCursor(38, 62);
+  TFT.print("Tracker");
 #endif
 }
 
@@ -205,8 +219,12 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y, uint16_t CellSize,
 { TFT.drawRect(X, Y, CellSize+4, (CellSize+1)*Cells+3, FrameColor);   // draw the main box
   TFT.drawRect(X+2, Y-4, CellSize, 4, FrameColor);                    // draw the tip
   if(Full>Cells) Full=Cells;
-  for(uint16_t Cell=0; Cell<Full; Cell++)
-  { TFT.fillRect(X+2, Y+(Cells-1-Cell)*(CellSize+1)+2, CellSize, CellSize, CellColor); }
+  // Draw alternating cells first to reduce the visible top-to-bottom wipe.
+  for(uint16_t Pass=0; Pass<2; Pass++)
+  { for(uint16_t Cell=0; Cell<Full; Cell++)
+    { if((Cell&1)!=Pass) continue;
+      TFT.fillRect(X+2, Y+(Cells-1-Cell)*(CellSize+1)+2, CellSize, CellSize, CellColor); }
+  }
 }
 
 static void TFT_DrawBatt(uint16_t X, uint16_t Y)

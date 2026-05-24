@@ -657,10 +657,28 @@ static void PrimaryButton_Long(void)
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
+#if defined(WITH_ST7789) || defined(WITH_ILI9341)
+  const char *Msg1 = "Power";
+  const char *Msg2 = "OFF";
+  int16_t X1, Y1, X2, Y2;
+  uint16_t W1, H1, W2, H2;
+  TFT.setFont(&FreeMono18pt7b);
+  TFT.setTextSize(1);
+  TFT.getTextBounds((char *)Msg1, 0, 0, &X1, &Y1, &W1, &H1);
+  TFT.getTextBounds((char *)Msg2, 0, 0, &X2, &Y2, &W2, &H2);
+  int Gap = H1/2;
+  int BlockH = H1+Gap+H2;
+  int Top = (TFT.height()-BlockH)/2;
+  TFT.setCursor((TFT.width()-W1)/2-X1, Top-Y1);
+  TFT.print(Msg1);
+  TFT.setCursor((TFT.width()-W2)/2-X2, Top+H1+Gap-Y2);
+  TFT.print(Msg2);
+#else
   TFT.setFont(0);
   TFT.setTextSize(2);
   TFT.setCursor(32, 32);
   TFT.print("Power-OFF");
+#endif
   delay(200);
   TFT_BL(64);
   delay(50);
@@ -1118,6 +1136,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
     AXP.setDCDC1Voltage(3300);
     AXP.setPowerOutPut(AXP192_LDO2, AXP202_ON);  // RF power
     AXP.setPowerOutPut(AXP192_LDO3, AXP202_ON);  // GPS power
+    delay(150);                                  // let the LCD/sensor rail settle before TFT reset/init
 #endif
 #ifdef WITH_POWERON_MEMORY
     AXP.clearIRQ();
@@ -1365,7 +1384,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   OLED.sendBuffer();
 #endif
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
-#ifdef WITH_ST7789
+#if defined(WITH_ST7735) || defined(WITH_ST7789)
   TFT_DrawLogo();
   delay(1000);
   TFT.fillScreen(ST77XX_DARKBLUE);

@@ -22,6 +22,7 @@
 #include <Fonts/FreeMono9pt7b.h>
 #include <Fonts/FreeMono12pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
+#include <Fonts/FreeMono18pt7b.h>
 
 #define ST77XX_DARKORANGE  0xFC00
 #define ST77XX_DARKRED     0x8000   // Dark red
