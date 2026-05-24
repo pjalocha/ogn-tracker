@@ -565,12 +565,20 @@ static void BatterySenseEnable(bool ON=1) { digitalWrite(ADC_BattSenseEna, ON); 
 
 uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-control chip or from an ADC channel
 {
+  uint16_t Volt=0;
 #ifdef WITH_XPOWERS
-  if(PMU) return PMU->getBattVoltage();
+  if(!xSemaphoreTake(I2C_Mutex, 50)) return 0;
+  if(PMU) Volt=PMU->getBattVoltage();
+  xSemaphoreGive(I2C_Mutex);
+  return Volt;
 #endif
 #ifdef WITH_AXP
-  if(HardwareStatus.AXP192 || HardwareStatus.AXP202) return AXP.getBattVoltage();
+  if(!xSemaphoreTake(I2C_Mutex, 50)) return 0;
+  if(HardwareStatus.AXP192 || HardwareStatus.AXP202) Volt= AXP.getBattVoltage();
+  xSemaphoreGive(I2C_Mutex);
+  return Volt;
 #endif
+
 #ifdef ADC_BattSenseEna
   digitalWrite(ADC_BattSenseEna, HIGH);
   delay(1);
@@ -582,9 +590,7 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
   { RawVoltage += adc1_get_raw(ADC_Chan_Batt); }
   RawVoltage = (RawVoltage)/Samples;
 
-  uint16_t Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs);
-#else
-  uint16_t Volt=0;
+  Volt = (uint16_t)esp_adc_cal_raw_to_voltage(RawVoltage, ADC_characs);
 #endif // BATT_ADC_CHANNEL
 
 #ifdef BATT_ADC_RATIO

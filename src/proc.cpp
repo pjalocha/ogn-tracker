@@ -294,7 +294,7 @@ static bool getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   if(SNR>10) { SNR-=10; if(SNR>31) SNR=31; }
         else { SNR=0; }
   Packet.Telemetry.GPS.SNR=SNR;
-  uint16_t BattVolt = (BatteryVoltage+128)>>8; // BatterySense();   // [mV] measure battery voltage
+  uint16_t BattVolt = (BatteryVoltage+128)>>8;                      // [mV] measure battery voltage
   Packet.Telemetry.Battery.Voltage  = EncodeUR2V8(BattVolt/4);
   int BattCap = ((int)BattVolt-3300)/13;                            // approx. formula
   Packet.Telemetry.Battery.Capacity = Limit(BattCap, 0, 63);
