@@ -310,27 +310,12 @@ static bool getTelemetry(ADSL_Packet &Packet, const GPS_Position *GPS, uint8_t T
   if(Type==3) return getTelemSatPPS(Packet);
   return 0; }
 
-static void ReadStatus(OGN_Packet &Packet)
+static uint16_t ReadBattery(void)
 {
-  // Packet.clrHumidity();
-#ifdef WITH_STM32
-#ifdef WITH_JACEK
-  uint16_t MCU_Vbatt   = Measure_Vbatt();                                    // [0.001V]
-  Packet.EncodeVoltage(((MCU_Vbatt<<3)+62)/125);                             // [1/64V]
-  if(MCU_Vbatt<3600)
-  { uint16_t FlashLen = 3600-MCU_Vbatt; if(FlashLen>250) FlashLen=250;
-    LED_BAT_Flash(FlashLen); }
-#else // WITH_JACEK
-  uint16_t MCU_VCC   = Measure_MCU_VCC();                                    // [0.001V]
-  Packet.EncodeVoltage(((MCU_VCC<<3)+62)/125);                               // [1/64V]
-#endif
-  int16_t MCU_Temp  = Measure_MCU_Temp();                                    // [0.1degC]
-#endif
-
-#ifdef WITH_ESP32
-  // Packet.clrTemperature();
-
+// #ifdef WITH_ESP32
   uint16_t BattVolt = BatterySense();                                        // [mV] measure battery voltage
+  if(BattVolt==0) return BattVolt;
+
   if(BatteryVoltage>0)
   { // int32_t PrevVolt = BatteryVoltage;
     int32_t Rate = ((uint32_t)BattVolt<<8) - BatteryVoltage;                 // [1/256 mV]
@@ -349,7 +334,6 @@ static void ReadStatus(OGN_Packet &Packet)
     BatteryVoltagePipe.Clear(BattVolt<<3);
     BatteryVoltageRate = 0; }
   // PrevBattVolt = BattVolt;
-  Packet.EncodeVoltage(((BatteryVoltage>>2)+500)/1000);            // [1/64V] encode into the status packet
 
 #ifdef DEBUG_PRINT
   xSemaphoreTake(CONS_Mutex, 25);
@@ -368,7 +352,30 @@ static void ReadStatus(OGN_Packet &Packet)
   Format_String(CONS_UART_Write, "mV/min\n");
   xSemaphoreGive(CONS_Mutex);
 #endif
+// #endif
+  return BattVolt; }
+
+static void ReadStatus(OGN_Packet &Packet)
+{
+  // Packet.clrHumidity();
+#ifdef WITH_STM32
+#ifdef WITH_JACEK
+  uint16_t MCU_Vbatt   = Measure_Vbatt();                                    // [0.001V]
+  Packet.EncodeVoltage(((MCU_Vbatt<<3)+62)/125);                             // [1/64V]
+  if(MCU_Vbatt<3600)
+  { uint16_t FlashLen = 3600-MCU_Vbatt; if(FlashLen>250) FlashLen=250;
+    LED_BAT_Flash(FlashLen); }
+#else // WITH_JACEK
+  uint16_t MCU_VCC   = Measure_MCU_VCC();                                    // [0.001V]
+  Packet.EncodeVoltage(((MCU_VCC<<3)+62)/125);                               // [1/64V]
 #endif
+  int16_t MCU_Temp  = Measure_MCU_Temp();                                    // [0.1degC]
+#endif
+
+  // Packet.clrTemperature();
+
+  ReadBattery();
+  Packet.EncodeVoltage(((BatteryVoltage>>2)+500)/1000);            // [1/64V] encode into the status packet
 
 // #ifdef WITH_SX1262
 //   if(Packet.Status.Pressure==0) Packet.clrTemperature();
