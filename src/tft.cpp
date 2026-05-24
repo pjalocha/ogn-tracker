@@ -627,35 +627,48 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setCursor(TFT.getCursorX(), Vert-4); TFT.write('o');
   Vert+=TFT_LineVert;
 
-  Len=0;
-  if(GPS && GPS->isValid())
-  { int32_t Alt = GPS->Altitude;
-    if(Alt>=0) Line[Len++]=' ';
-    Len+=Format_SignDec(Line+Len,  Alt, 1, 1, 1); }              // [0.1m]
-  else Len+=Format_String(Line+Len, "-----.-");
-  Line[Len++]='m'; Line[Len++]=' ';
-  Line[Len]=0;
+  // Len=0;
+  if(GPS && GPS->isValid()) sprintf(Line, "%7.1fm (MSL)", 0.1*GPS->Altitude);
+                      else   strcpy(Line, "-----.-m (MSL)");
+  // { int32_t Alt = GPS->Altitude;
+  //   if(Alt>=0) Line[Len++]=' ';
+  //   Len+=Format_SignDec(Line+Len,  Alt, 1, 1, 1); }              // [0.1m]
+  // else Len+=Format_String(Line+Len, "-----.-");
+  // Line[Len++]='m'; Line[Len++]=' ';
+  // Line[Len]=0;
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
 #ifdef WITH_ST7789
-  Len=0;
-  if(GPS && GPS->isValid())
-  { Len+=Format_UnsDec(Line+Len, ((uint32_t)GPS->Heading+5)/10, 3, 0);        // [deg]
-    Line[Len++]='/';
-    Len+=Format_UnsDec(Line+Len,  (uint32_t)GPS->Speed, 1, 1); }              // [0.1m/s]
-  else Len+=Format_String(Line+Len, "---/---.-");
-  Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
-  Line[Len]=0;
+  // Len=0;
+  if(GPS && GPS->isValid()) sprintf(Line, "%03d/%5.1fm/s", (GPS->Heading+5)/10, 0.1*GPS->Speed);
+                      else   strcpy(Line, "---/  -.-m/s");
+  // { Len+=Format_UnsDec(Line+Len, ((uint32_t)GPS->Heading+5)/10, 3, 0);        // [deg]
+  //   Line[Len++]='/';
+  //   Len+=Format_UnsDec(Line+Len,  (uint32_t)GPS->Speed, 4, 1); }              // [0.1m/s]
+  // else Len+=Format_String(Line+Len, "---/---.-");
+  // Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
+  // Line[Len]=0;
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
-  Len=0;
-  if(GPS && GPS->isValid())
-  { Len+=Format_SignDec(Line+Len, (int32_t)GPS->ClimbRate, 1, 0); }              // [0.1m/s]
-  else Len+=Format_String(Line+Len, " --.-");
-  Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
-  Line[Len]=0;
+  // Len=0;
+  if(GPS && GPS->isValid()) sprintf(Line, "%+5.1fm/s", 0.1*GPS->ClimbRate);
+                       else  strcpy(Line, " --.-m/s");
+  // { Len+=Format_SignDec(Line+Len, (int32_t)GPS->ClimbRate, 1, 0); }              // [0.1m/s]
+  // else Len+=Format_String(Line+Len, " --.-");
+  // Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
+  // Line[Len]=0;
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
+
+  if(GPS_SatCnt && GPS_SatSNR) sprintf(Line, "%02d/%02dsat %4.1fdB", GPS_Satellites, GPS_SatCnt, 0.25*GPS_SatSNR);
+                        else    strcpy(Line, "--/--sat --.-dB");
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
+
+  if(GPS && GPS->isValid()) sprintf(Line, "DOP%4.1f/%4.1f/%4.1f", 0.1*GPS->HDOP, 0.1*GPS->VDOP, 0.1*GPS->PDOP);
+                      else   strcpy(Line, "DOP--.-/--.-/--.-");
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 #endif

@@ -31,6 +31,7 @@ extern          uint16_t GPS_PosPeriod;     // [msec] how often (which period) t
 
 extern           uint8_t GPS_SatSNR;        // [0.25dB] average SNR for satellites being tracked
 extern           uint8_t GPS_SatCnt;        // [count] number of satellites being tracked
+extern           uint8_t GPS_Satellites;    // [count] number of satelites in the solution reported by the GPS
 
 typedef union
          { uint8_t  Flags;
