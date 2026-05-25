@@ -263,7 +263,7 @@ static const char *AcftTypeName(uint8_t AcftType)
 */
 
 int TFT_DrawID(bool WithAP)
-{ char Line[128];
+{ char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT_SetMainFont();
@@ -332,6 +332,51 @@ int TFT_DrawID(bool WithAP)
   TFT.print("(c) Pawel Jalocha");
 
   TFT_DrawBatt(TFT_BattX(), TFT_BattY);
+  return 1; }
+
+int TFT_DrawSatMap(void)
+{ const int16_t CenterX = TFT.width()/2-1;
+  const int16_t CenterY = TFT.height()/2;
+  const int16_t Radius  = TFT.height()/2; // 90deg => 120px on a 240x240 display
+  const uint16_t GridColor = ST77XX_DARKGRAY;
+  const uint16_t SatColor[8] = { ST77XX_WHITE,      // QZSS
+                                 ST77XX_YELLOW,     // GPS
+                                 ST77XX_CYAN,       // GLONASS
+                                 ST77XX_GREEN,      // Galileo
+                                 ST77XX_DARKORANGE, // BeiDou
+                                 ST77XX_WHITE,
+                                 ST77XX_WHITE,
+                                 ST77XX_WHITE };
+
+  TFT.fillScreen(ST77XX_DARKBLUE);
+
+  // Elevation circles: 0deg at horizon, 90deg at zenith.
+  for(uint8_t Elev=0; Elev<=90; Elev+=30)
+  { int16_t Ring = ((90-Elev)*Radius + 45)/90;
+    if(Ring>0) TFT.drawCircle(CenterX, CenterY, Ring, GridColor); }
+
+  // Azimuth spokes every 30 degrees, with 0deg at the top.
+  for(uint32_t Azim=0; Azim<360; Azim+=30)
+  { uint16_t Angle = (Azim*0x2000+22)/45;
+     int16_t X = ((int32_t)Radius*Isin(Angle)+0x800)>>12;
+     int16_t Y = ((int32_t)Radius*Icos(Angle)+0x800)>>12;
+    TFT.drawLine(CenterX, CenterY, CenterX+X, CenterY+Y, GridColor); }
+
+  // Zenith marker in the middle.
+  TFT.drawCircle(CenterX, CenterY, 2, GridColor);
+
+  for(uint8_t Idx=0; Idx<GPS_SatMon.Size; Idx++)
+  { GPS_Sat &Sat = GPS_SatMon.Sat[Idx];
+    int16_t R = 120-Sat.Elev*8;
+    if(Sat.Azim>60) continue;
+    uint16_t A = ((uint32_t)Sat.Azim*6*0x2000+22)/45;
+     int16_t X = ((int32_t)R*Isin(A)+0x800)>>12;
+     int16_t Y = ((int32_t)R*Icos(A)+0x800)>>12;
+    uint8_t SatRadius = Sat.SNR/8;
+    if(SatRadius<2) SatRadius=2;
+    if(Sat.Fix) TFT.fillCircle(CenterX+Y, CenterY-X, SatRadius, SatColor[Sat.Sys]);
+           else TFT.drawCircle(CenterX+Y, CenterY-X, SatRadius, SatColor[Sat.Sys]); }
+
   return 1; }
 
 int TFT_DrawSat(const GPS_Position *GPS)

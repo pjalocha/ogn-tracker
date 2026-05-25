@@ -486,7 +486,9 @@ static int TFT_DrawPage(const GPS_Position *GPS)
   if(TFT_Page==1) return TFT_DrawID();
   if(TFT_Page==2) return TFT_DrawSat(GPS);
   if(TFT_Page==3) return TFT_DrawRF();
-#ifndef WITH_ST7789
+#ifdef WITH_ST7789
+  if(TFT_Page==4) return TFT_DrawSatMap();
+#else
   if(TFT_Page==4) return TFT_DrawRFcounts();
 #endif
   if(TFT_Page==5) return TFT_DrawLookout();
@@ -494,8 +496,7 @@ static int TFT_DrawPage(const GPS_Position *GPS)
   if(TFT_Page==6) return TFT_DrawBaro(GPS);
   if(TFT_Page==7) return TFT_DrawLoRaWAN(GPS);
   if(TFT_Page==8) return TFT_DrawLog(GPS);
-  return TFT_DrawGPS(GPS);
-  return 0; }
+  return TFT_DrawGPS(GPS); }
 
 static void TFT_SetPowerSave(uint8_t PageOFF)
 {
