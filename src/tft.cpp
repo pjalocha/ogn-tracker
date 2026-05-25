@@ -343,7 +343,7 @@ int TFT_DrawSatMap(void)
                                  ST77XX_YELLOW,     // GPS
                                  ST77XX_CYAN,       // GLONASS
                                  ST77XX_GREEN,      // Galileo
-                                 ST77XX_DARKORANGE, // BeiDou
+                                 ST77XX_MAGENTA,    // BeiDou
                                  ST77XX_WHITE,
                                  ST77XX_WHITE,
                                  ST77XX_WHITE };
@@ -372,7 +372,7 @@ int TFT_DrawSatMap(void)
     uint16_t A = ((uint32_t)Sat.Azim*6*0x2000+22)/45;
      int16_t X = ((int32_t)R*Isin(A)+0x800)>>12;
      int16_t Y = ((int32_t)R*Icos(A)+0x800)>>12;
-    uint8_t SatRadius = Sat.SNR/8;
+    uint8_t SatRadius = Sat.SNR/6;
     if(SatRadius<2) SatRadius=2;
     if(Sat.Fix) TFT.fillCircle(CenterX+Y, CenterY-X, SatRadius, SatColor[Sat.Sys]);
            else TFT.drawCircle(CenterX+Y, CenterY-X, SatRadius, SatColor[Sat.Sys]); }
