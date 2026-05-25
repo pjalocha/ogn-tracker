@@ -368,7 +368,7 @@ int TFT_DrawSatMap(void)
   for(uint8_t Idx=0; Idx<GPS_SatMon.Size; Idx++)
   { GPS_Sat &Sat = GPS_SatMon.Sat[Idx];
     int16_t R = 120-Sat.Elev*8;
-    if(Sat.Azim>60) continue;
+    if(Sat.Azim>60 || Sat.SNR==0) continue;
     uint16_t A = ((uint32_t)Sat.Azim*6*0x2000+22)/45;
      int16_t X = ((int32_t)R*Isin(A)+0x800)>>12;
      int16_t Y = ((int32_t)R*Icos(A)+0x800)>>12;
