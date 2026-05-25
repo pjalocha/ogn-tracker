@@ -699,8 +699,8 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setCursor(TFT.getCursorX(), Vert-4); TFT.write('o');
   Vert+=TFT_LineVert;
 
-  if(GPS && GPS->isValid()) sprintf(Line, "%7.1fm (MSL)", 0.1*GPS->Altitude);
-                      else   strcpy(Line, "-----.-m (MSL)");
+  if(GPS && GPS->isValid()) sprintf(Line, "%7.1fm MSL", 0.1*GPS->Altitude);
+                      else   strcpy(Line, "-----.-m MSL");
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 

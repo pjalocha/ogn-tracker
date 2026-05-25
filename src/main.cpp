@@ -470,6 +470,7 @@ const  uint8_t  TFT_Pages      = 9;       // number of LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
+static uint8_t  TFT_PanelOFF   = 0;       // TFT controller is sleeping
 #ifdef WITH_TFT_DIM
 static uint32_t TFT_PageActive = 0;       // [ms] last time the page was active (button pressed)
 const  uint32_t TFT_PageTimeout = (uint32_t)60000*WITH_TFT_DIM;  // [ms] timeout to turn off the TFT backlight
@@ -495,6 +496,23 @@ static int TFT_DrawPage(const GPS_Position *GPS)
   if(TFT_Page==8) return TFT_DrawLog(GPS);
   return TFT_DrawGPS(GPS);
   return 0; }
+
+static void TFT_SetPowerSave(uint8_t PageOFF)
+{
+  if(PageOFF)
+  { if(!TFT_PanelOFF)
+    { TFT_OFF();
+      TFT_PanelOFF=1; }
+    TFT_BL(0);
+  }
+  else
+  { if(TFT_PanelOFF)
+    { TFT_ON();
+      TFT_PanelOFF=0;
+      TFT_PageChange=1; }
+    TFT_BL(128);
+  }
+}
 
 #endif
 
@@ -636,12 +654,14 @@ static void PrimaryButton_Single(void)
 {
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   if(TFT_PageOFF)
-    TFT_PageOFF=0;
+  { TFT_PageOFF=0;
+    TFT_PageChange=1; }
   else
     TFT_NextPage();
   #ifdef WITH_TFT_DIM
   TFT_PageActive=millis();
   #endif
+  TFT_SetPowerSave(0);
 #endif
 #ifdef WITH_OLED
   if(OLED_PageOFF)
@@ -1818,8 +1838,7 @@ void loop()
 #else
     TFT_PageOFF = 0;
 #endif
-    if(TFT_PageOFF) TFT_BL(0);
-              else  TFT_BL(128);
+    TFT_SetPowerSave(TFT_PageOFF);
 #endif // WITH_ST7735 || WITH_ST7789 || WITH_ILI9341
     PrevGPS=GPS; }
 }

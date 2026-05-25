@@ -43,6 +43,8 @@ extern Adafruit_ILI9341 TFT;
 #endif
 
 void TFT_Init(void);
+void TFT_OFF(void);
+void TFT_ON(void);
 void TFT_BL_Init(void);
 void TFT_BL(uint8_t Lev);
 void TFT_DrawLogo(void);
