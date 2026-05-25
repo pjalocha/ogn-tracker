@@ -355,7 +355,7 @@ static uint8_t I2C_Write(TwoWire &Wire, uint8_t Addr, uint8_t Reg, uint8_t *Data
 
 uint8_t I2C_Read(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
 { if(Bus!=0) return 0xB;
-  if(!xSemaphoreTake(I2C_Mutex, 100)) return 0xA;
+  if(!xSemaphoreTake(I2C_Mutex, 50)) return 0xA;
   uint8_t Ret=I2C_Read(Wire, Addr, Reg, Data, Len, Wait);
   xSemaphoreGive(I2C_Mutex);
   // Serial.printf("I2C_Read(%d, x%02X, x%02X, , [%d], ) => %d\n", Bus, Addr, Reg, Len, Ret);
@@ -363,7 +363,7 @@ uint8_t I2C_Read(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t 
 
 uint8_t I2C_Write(uint8_t Bus, uint8_t Addr, uint8_t Reg, uint8_t *Data, uint8_t Len, uint8_t Wait)
 { if(Bus!=0) return 0xB;
-  if(!xSemaphoreTake(I2C_Mutex, 100)) return 0xA;
+  if(!xSemaphoreTake(I2C_Mutex, 50)) return 0xA;
   uint8_t Ret=I2C_Write(Wire, Addr, Reg, Data, Len, Wait);
   xSemaphoreGive(I2C_Mutex);
   return Ret; }
@@ -483,9 +483,11 @@ static void TFT_NextPage(void)
 static int TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
   if(TFT_Page==1) return TFT_DrawID();
-  if(TFT_Page==2) return TFT_DrawSat();
+  if(TFT_Page==2) return TFT_DrawSat(GPS);
   if(TFT_Page==3) return TFT_DrawRF();
+#ifndef WITH_ST7789
   if(TFT_Page==4) return TFT_DrawRFcounts();
+#endif
   if(TFT_Page==5) return TFT_DrawLookout();
   if(!GPS) return TFT_DrawID();
   if(TFT_Page==6) return TFT_DrawBaro(GPS);
@@ -567,13 +569,13 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 {
   uint16_t Volt=0;
 #ifdef WITH_XPOWERS
-  if(!xSemaphoreTake(I2C_Mutex, 50)) return 0;
+  if(!xSemaphoreTake(I2C_Mutex, 25)) return 0;
   if(PMU) Volt=PMU->getBattVoltage();
   xSemaphoreGive(I2C_Mutex);
   return Volt;
 #endif
 #ifdef WITH_AXP
-  if(!xSemaphoreTake(I2C_Mutex, 50)) return 0;
+  if(!xSemaphoreTake(I2C_Mutex, 25)) return 0;
   if(HardwareStatus.AXP192 || HardwareStatus.AXP202) Volt= AXP.getBattVoltage();
   xSemaphoreGive(I2C_Mutex);
   return Volt;
@@ -743,27 +745,29 @@ static void Button_Init(void)
 static void PMU_ButtonPress(bool &ShortPress, bool &LongPress)
 { ShortPress=false; LongPress=false;
 #ifdef WITH_XPOWERS
-  if(PMU)
-  { PMU->getIrqStatus();
-    ShortPress = PMU->isPekeyShortPressIrq();
-    LongPress  = PMU->isPekeyLongPressIrq();
-    PMU->clearIrqStatus();
-    return; }
+  if(!PMU) return;
+  if(!xSemaphoreTake(I2C_Mutex, 10)) return;
+  PMU->getIrqStatus();
+  ShortPress = PMU->isPekeyShortPressIrq();
+  LongPress  = PMU->isPekeyLongPressIrq();
+  PMU->clearIrqStatus();
+  xSemaphoreGive(I2C_Mutex);
+  return;
 #endif
 #ifdef WITH_AXP
-  if(HardwareStatus.AXP192 || HardwareStatus.AXP202)
-  { uint8_t Addr = HardwareStatus.AXP192 ? AXP192_SLAVE_ADDRESS : AXP202_SLAVE_ADDRESS;
-    uint8_t Reg  = HardwareStatus.AXP192 ? AXP192_INTSTS3       : AXP202_INTSTS3;
-    uint8_t IRQ3a=0, IRQ3b=0;
-    if(I2C_Read(0, Addr, Reg, &IRQ3a, 1)==0 &&
-       I2C_Read(0, Addr, Reg, &IRQ3b, 1)==0)
-    { uint8_t IRQ3 = IRQ3a & IRQ3b;
-      LongPress  = (IRQ3&0x01)!=0;
-      ShortPress = (IRQ3&0x02)!=0;
-      if(IRQ3&0x03) AXP.clearIRQ();
-    }
-    return;
-  }
+  if(!HardwareStatus.AXP192 && !HardwareStatus.AXP202) return;
+  // if(!xSemaphoreTake(I2C_Mutex, 10)) return;
+  uint8_t Addr = HardwareStatus.AXP192 ? AXP192_SLAVE_ADDRESS : AXP202_SLAVE_ADDRESS;
+  uint8_t Reg  = HardwareStatus.AXP192 ? AXP192_INTSTS3       : AXP202_INTSTS3;
+  uint8_t IRQ3a=0, IRQ3b=0;
+  if(I2C_Read(0, Addr, Reg, &IRQ3a, 1)==0 &&
+     I2C_Read(0, Addr, Reg, &IRQ3b, 1)==0)
+  { uint8_t IRQ3 = IRQ3a & IRQ3b;
+    LongPress  = (IRQ3&0x01)!=0;
+    ShortPress = (IRQ3&0x02)!=0;
+    if(IRQ3&0x03) AXP.clearIRQ(); }
+  // xSemaphoreGive(I2C_Mutex);
+  return;
 #endif
 }
 #endif // WITH_POWERON_MEMORY
@@ -783,8 +787,7 @@ static bool PMU_PowerOnByExternal(void)
     if(I2C_Read(0, Addr, AXP202_STATUS, &PwrStatus, 1)==0)
       return (PwrStatus&1)!=0; }
 #endif
-  return false;
-}
+  return false; }
 
 static void PMU_ApplyPowerOnMemory(void)
 { bool ExtPwrON = PMU_PowerOnByExternal();

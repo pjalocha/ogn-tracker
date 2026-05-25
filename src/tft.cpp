@@ -20,8 +20,8 @@ static const int      TFT_LineVertTight = 19;
 static const int      TFT_LineFillOfs = 15;
 static const int      TFT_LineFillHeight = 22;
 static const int      TFT_TopVert = 20;
-static const int      TFT_Footer1 = 92;
-static const int      TFT_Footer2 = 104;
+static const int      TFT_Footer1 = 222;
+static const int      TFT_Footer2 = 234;
 static const int      TFT_BattY = 38;
 static const uint16_t TFT_BattCellSize = 12;
 #else
@@ -269,34 +269,53 @@ int TFT_DrawID(bool WithAP)
   TFT_SetMainFont();
 
   int Vert=TFT_TopVert;
-  TFT_ClearTextLine(Vert);
-  TFT.setCursor(2, Vert);
   sprintf(Line, "%s:%c:%06X", Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
-  // Parameters.Print(Line); Line[10]=0;
-  TFT.print(Line);
-  Vert+=TFT_LineVertTight;
-  if(Parameters.Reg[0])
-  { TFT.setCursor(2, Vert);
-    sprintf(Line, "Reg:%s", Parameters.Reg);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+#ifdef WITH_BLE_SPP
+  if(Parameters.BTname[0])
+  { sprintf(Line, "BT:%s", Parameters.BTname);
     TFT_ClearTextLine(Vert);
-    TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Pilot[0])
-  { TFT.setCursor(2, Vert);
-    sprintf(Line, "Plt:%s", Parameters.Pilot);
-    TFT_ClearTextLine(Vert);
-    TFT.print(Line); Vert+=TFT_LineVertTight; }
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+#endif
 #ifdef WITH_AP
   if(WithAP)
-  { TFT.setCursor(2, Vert);
-    sprintf(Line, "AP:%s", Parameters.APname);
+  { sprintf(Line, "AP:%s", Parameters.APname);
     TFT_ClearTextLine(Vert);
-    TFT.print(Line); Vert+=TFT_LineVertTight; }
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
 #endif
-  if(Vert<60)
-  { TFT.setCursor(2, Vert);
-    sprintf(Line, "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
+  if(Parameters.Reg[0])
+  { sprintf(Line, "Reg:%s", Parameters.Reg);
     TFT_ClearTextLine(Vert);
-    TFT.print(Line); Vert+=TFT_LineVertTight; }
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Parameters.Manuf[0] && Vert<TFT.height())
+  { sprintf(Line, "Manuf:%s", Parameters.Manuf);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Parameters.Model[0] && Vert<TFT.height())
+  { sprintf(Line, "Model:%s", Parameters.Model);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Parameters.Pilot[0] && Vert<TFT.height())
+  { sprintf(Line, "Pilot:%s", Parameters.Pilot);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Parameters.Base[0] && Vert<TFT.height())
+  { sprintf(Line, "Base:%s", Parameters.Base);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Parameters.Crew[0] && Vert<TFT.height())
+  { sprintf(Line, "Crew:%s", Parameters.Crew);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Parameters.Task[0] && Vert<TFT.height())
+  { sprintf(Line, "Task:%s", Parameters.Task);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+  if(Vert<TFT.height())
+  { sprintf(Line, "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
+    TFT_ClearTextLine(Vert);
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
 
   TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT.height()-Vert+TFT_LineFillHeight, ST77XX_DARKBLUE);
   uint64_t ID=getUniqueID();
@@ -315,13 +334,28 @@ int TFT_DrawID(bool WithAP)
   TFT_DrawBatt(TFT_BattX(), TFT_BattY);
   return 1; }
 
-int TFT_DrawSat(void)
+int TFT_DrawSat(const GPS_Position *GPS)
 { char Line[32];
   // TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT_SetMainFont();
 
   int Vert=TFT_TopVert;
+
+#ifdef WITH_ST7789
+  uint8_t Len=0;
+  strcpy(Line, "--.-- --:--:--");
+  if(GPS && GPS->isDateValid())
+  { Format_UnsDec (Line+ 0, (uint32_t)GPS->Day,   2, 0);
+    Format_UnsDec (Line+ 3, (uint32_t)GPS->Month, 2, 0);
+  }
+  if(GPS && GPS->isTimeValid())
+  { Format_UnsDec (Line+ 6, (uint32_t)GPS->Hour,  2, 0);
+    Format_UnsDec (Line+ 9, (uint32_t)GPS->Min,   2, 0);
+    Format_UnsDec (Line+12, (uint32_t)GPS->Sec,   2, 0); }
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+#endif
   for(uint8_t Sys=0; Sys<=4; Sys++)      // loop over constelations
   { int Len=sprintf(Line, "%s:%d:%d", GPS_Sat::SysName(Sys), GPS_SatMon.FixSats[Sys], GPS_SatMon.VisSats[Sys]);
     uint8_t SNR=GPS_SatMon.VisSNR[Sys];  // [0.25dB]
@@ -330,10 +364,24 @@ int TFT_DrawSat(void)
     TFT_ClearTextLine(Vert);
     // int Bar=SNR/2;                       //
     // TFT.fillRect(0, Vert-11, Bar, 14, ST77XX_DARKRED);
-    TFT.setCursor(2, Vert); TFT.print(Line);
-    Vert+=TFT_LineVertTight; }
+    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+#ifdef WITH_ST7789
+  if(GPS_SatCnt && GPS_SatSNR) sprintf(Line, "%02d/%02dsat %4.1fdB", GPS_Satellites, GPS_SatCnt, 0.25*GPS_SatSNR);
+                        else    strcpy(Line, "--/--sat --.-dB");
   TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
+  if(GPS && GPS->isValid()) sprintf(Line, "DOP%4.1f/%4.1f/%4.1f", 0.1*GPS->HDOP, 0.1*GPS->VDOP, 0.1*GPS->PDOP);
+                      else   strcpy(Line, "DOP--.-/--.-/--.-");
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  Line[0]=0;
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+#endif
   TFT_DrawBatt(TFT_BattX(), TFT_BattY);
   return 1; }
 
@@ -441,7 +489,30 @@ int TFT_DrawRF(void)
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
+  TFT_ClearTextLine(Vert); Vert+=TFT_LineVert;
+
+#ifdef WITH_ST7789
+  sprintf(Line, "FLR: %d", Radio_RxCount[0]);
   TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "OGN: %d", Radio_RxCount[1]);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "MDR: %d", Radio_RxCount[2]);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "LDR: %d", Radio_RxCount[5]);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "HDR: %d", Radio_RxCount[6]);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+#endif
+
   return 1; }
 
 int TFT_DrawBaro(const GPS_Position *GPS)
@@ -595,6 +666,7 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT_SetMainFont();
 
   int Vert=TFT_TopVert;
+
   uint8_t Len=0;
   strcpy(Line, "--.-- --:--:--");
   if(GPS && GPS->isDateValid())
@@ -627,38 +699,19 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setCursor(TFT.getCursorX(), Vert-4); TFT.write('o');
   Vert+=TFT_LineVert;
 
-  // Len=0;
   if(GPS && GPS->isValid()) sprintf(Line, "%7.1fm (MSL)", 0.1*GPS->Altitude);
                       else   strcpy(Line, "-----.-m (MSL)");
-  // { int32_t Alt = GPS->Altitude;
-  //   if(Alt>=0) Line[Len++]=' ';
-  //   Len+=Format_SignDec(Line+Len,  Alt, 1, 1, 1); }              // [0.1m]
-  // else Len+=Format_String(Line+Len, "-----.-");
-  // Line[Len++]='m'; Line[Len++]=' ';
-  // Line[Len]=0;
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
 #ifdef WITH_ST7789
-  // Len=0;
   if(GPS && GPS->isValid()) sprintf(Line, "%03d/%5.1fm/s", (GPS->Heading+5)/10, 0.1*GPS->Speed);
                       else   strcpy(Line, "---/  -.-m/s");
-  // { Len+=Format_UnsDec(Line+Len, ((uint32_t)GPS->Heading+5)/10, 3, 0);        // [deg]
-  //   Line[Len++]='/';
-  //   Len+=Format_UnsDec(Line+Len,  (uint32_t)GPS->Speed, 4, 1); }              // [0.1m/s]
-  // else Len+=Format_String(Line+Len, "---/---.-");
-  // Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
-  // Line[Len]=0;
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
-  // Len=0;
   if(GPS && GPS->isValid()) sprintf(Line, "%+5.1fm/s", 0.1*GPS->ClimbRate);
                        else  strcpy(Line, " --.-m/s");
-  // { Len+=Format_SignDec(Line+Len, (int32_t)GPS->ClimbRate, 1, 0); }              // [0.1m/s]
-  // else Len+=Format_String(Line+Len, " --.-");
-  // Line[Len++]='m'; Line[Len++]='/';Line[Len++]='s';
-  // Line[Len]=0;
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
@@ -669,6 +722,11 @@ int TFT_DrawGPS(const GPS_Position *GPS)
 
   if(GPS && GPS->isValid()) sprintf(Line, "DOP%4.1f/%4.1f/%4.1f", 0.1*GPS->HDOP, 0.1*GPS->VDOP, 0.1*GPS->PDOP);
                       else   strcpy(Line, "DOP--.-/--.-/--.-");
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
+
+  if(GPS && GPS->isValid()) sprintf(Line, "Geoid%+6.1fm", 0.1*GPS->GeoidSeparation);
+                      else   strcpy(Line, "Geoid  --.-m");
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 #endif
