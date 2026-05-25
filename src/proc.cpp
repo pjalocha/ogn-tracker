@@ -269,7 +269,7 @@ static bool getTelemInfo(ADSL_Packet &Packet)
   { InfoIdx++; if(InfoIdx>=Parameters.InfoParmNum) { InfoIdx=0; break; }
     Value=Parameters.InfoParmValue(InfoIdx);
     if(Value[0]) break; }
-  if(Value[0]==0) return 0;
+  if(Value==0 || Value[0]==0) return 0;
   Packet.Info.Header.TelemType=0x01;
   Packet.Info.Header.InfoType=InfoIdx;
   uint8_t Idx=0;
