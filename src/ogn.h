@@ -1,5 +1,4 @@
-#ifndef __OGN_H__
-#define __OGN_H__
+#pragma once
 
 #include <stdio.h>
 
@@ -2011,5 +2010,4 @@ class GPS_Position: public GPS_Time
 
 } ;
 
-#endif // of __OGN_H__
 

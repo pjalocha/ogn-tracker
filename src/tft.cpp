@@ -341,7 +341,7 @@ int TFT_DrawSatMap(void)
   const uint16_t GridColor = ST77XX_DARKGRAY;
   const uint16_t SatColor[8] = { ST77XX_WHITE,      // QZSS
                                  ST77XX_YELLOW,     // GPS
-                                 ST77XX_CYAN,       // GLONASS
+                                 ST77XX_RED,        // GLONASS
                                  ST77XX_GREEN,      // Galileo
                                  ST77XX_MAGENTA,    // BeiDou
                                  ST77XX_WHITE,
@@ -352,14 +352,14 @@ int TFT_DrawSatMap(void)
 
   // Elevation circles: 0deg at horizon, 90deg at zenith.
   for(uint8_t Elev=0; Elev<=90; Elev+=30)
-  { int16_t Ring = ((90-Elev)*Radius + 45)/90;
+  { int16_t Ring = ((90-Elev)*Radius + 45)/90;      // [pix]
     if(Ring>0) TFT.drawCircle(CenterX, CenterY, Ring, GridColor); }
 
   // Azimuth spokes every 30 degrees, with 0deg at the top.
-  for(uint32_t Azim=0; Azim<360; Azim+=30)
-  { uint16_t Angle = (Azim*0x2000+22)/45;
-     int16_t X = ((int32_t)Radius*Isin(Angle)+0x800)>>12;
-     int16_t Y = ((int32_t)Radius*Icos(Angle)+0x800)>>12;
+  for(uint32_t Azim=0; Azim<360; Azim+=30)                  // [deg]
+  { uint16_t Angle = (Azim*0x2000+22)/45;                   // [16-bit cordic]
+     int16_t X = ((int32_t)Radius*Isin(Angle)+0x800)>>12;   // [pix]
+     int16_t Y = ((int32_t)Radius*Icos(Angle)+0x800)>>12;   // [pix]
     TFT.drawLine(CenterX, CenterY, CenterX+X, CenterY+Y, GridColor); }
 
   // Zenith marker in the middle.
@@ -367,12 +367,12 @@ int TFT_DrawSatMap(void)
 
   for(uint8_t Idx=0; Idx<GPS_SatMon.Size; Idx++)
   { GPS_Sat &Sat = GPS_SatMon.Sat[Idx];
-    int16_t R = 120-Sat.Elev*8;
+    int16_t R = 120-Sat.Elev*8;                             // [pix]
     if(Sat.Azim>60 || Sat.SNR==0) continue;
-    uint16_t A = ((uint32_t)Sat.Azim*6*0x2000+22)/45;
-     int16_t X = ((int32_t)R*Isin(A)+0x800)>>12;
-     int16_t Y = ((int32_t)R*Icos(A)+0x800)>>12;
-    uint8_t SatRadius = Sat.SNR/6;
+    uint16_t A = ((uint32_t)Sat.Azim*6*0x2000+22)/45;       // [16-bit cordic]
+     int16_t X = ((int32_t)R*Isin(A)+0x800)>>12;            // [pix]
+     int16_t Y = ((int32_t)R*Icos(A)+0x800)>>12;            // [pix]
+    uint8_t SatRadius = Sat.SNR/6;                          // [pix] 30dB => 5pix circle
     if(SatRadius<2) SatRadius=2;
     if(Sat.Fix) TFT.fillCircle(CenterX+Y, CenterY-X, SatRadius, SatColor[Sat.Sys]);
            else TFT.drawCircle(CenterX+Y, CenterY-X, SatRadius, SatColor[Sat.Sys]); }
