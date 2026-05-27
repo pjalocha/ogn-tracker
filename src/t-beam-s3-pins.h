@@ -43,3 +43,9 @@
 #define SD_PinMISO 37
 
 #define SD_SPI_DMA  SPI_DMA_CH_AUTO
+
+#define Flasher_Pin   21 // High intensity LED for collision alert: HIGH active
+
+#define Buzzer_Pin    39 // Beeper/buzzer
+#define Buzzer_Channel 0 // LED controller channel
+

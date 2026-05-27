@@ -64,6 +64,8 @@ int main(int argc, char *argv[])
   std::sort(OutLine.begin(), OutLine.end(), Earlier);                    // sort the IGC B-record lines
   OutFile=fopen(OutFileName, "wt");
   if(OutFile==0) { printf("Cannot open %s for write\n", OutFileName); return 0; }
+  fprintf(OutFile, "HFDTM100GPSDATUM:WGS84\n");
+  // fprintf(OutFile, "I023639GSP4042TRT\n");                              // extended format with ground speed and track
   for(size_t Idx=0; Idx<OutLine.size(); Idx++)                           // look over (now sorted) IGC B-records
   { fprintf(OutFile, "%s", OutLine[Idx]); }
   fclose(OutFile);

@@ -1895,7 +1895,7 @@ class GPS_Position: public GPS_Time
      Format_UnsDec(Out+4, (uint32_t)Sec , 2);
      return 6; }
 
-   int WriteIGC(char *Out) const                                  // write IGC B-record
+   int WriteIGC(char *Out, bool Ext=1) const                      // write IGC B-record
    { // if(!isValid()) return 0;
      int Len=0;
      Out[Len++] = 'B';
@@ -1916,6 +1916,9 @@ class GPS_Position: public GPS_Time
        if(Alt<0) { Alt = (-Alt); Out[Len++] = '-'; Len+=Format_UnsDec(Out+Len, (uint32_t)Alt, 4); } // -AAAA (when negative)
             else { Len+=Format_UnsDec(Out+Len, (uint32_t)Alt, 5); }                                 // AAAAA
      } else Len+=Format_String(Out+Len, "     ");
+     if(Ext && isValid())
+     { Len+=Format_UnsDec(Out+Len, ((uint32_t)Speed*36+50)/100, 4);
+       Len+=Format_UnsDec(Out+Len, ((uint32_t)Heading+5)/10, 3); }
      Out[Len++]='\n'; Out[Len]=0; return Len; }
 
   // private:

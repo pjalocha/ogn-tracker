@@ -221,6 +221,7 @@ static void IGC_LogHeader(const GPS_Position &Pos)                      // write
 #ifdef WITH_FollowMe
   IGC_LogLine("HFGPSReceiver:L80\n");                              // GPS sensor
 #else
+  IGC_LogLine("HFDTM100GPSDATUM:WGS84\n");
 #ifdef WITH_GPS_UBX
   IGC_LogLine("HFGPSReceiver:UBX\n");                              // GPS sensor
 #endif
@@ -228,6 +229,7 @@ static void IGC_LogHeader(const GPS_Position &Pos)                      // write
   IGC_LogLine("HFGPSReceiver:MTK\n");                              // GPS sensor
 #endif
 #endif
+
 #ifdef WITH_BMP180
   IGC_LogLine("HFPRSPressAltSensor:BMP180\n");                     // pressure sensor
 #endif
@@ -237,6 +239,7 @@ static void IGC_LogHeader(const GPS_Position &Pos)                      // write
 #ifdef WITH_BME280
   IGC_LogLine("HFPRSPressAltSensor:BME280/BMP280\n");              // pressure sensor
 #endif
+  IGC_LogLine("I023639GSP4042TRT\n");                              // extended format with ground speed and track
 }
 
 void IGC_ID(void)
