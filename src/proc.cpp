@@ -685,7 +685,7 @@ static bool ADSL_isSignif(const ADSL_Packet *Packet, const ADSL_Packet *PrevPack
   return 0; }
 
 // process received ADS-L packets
-static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
+static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime, bool doRelay)
 { uint32_t Address = RxPacket->Packet.getAddress();                                      // address
   uint8_t AddrType = RxPacket->Packet.getAddrTable();                                    // address-type: ADS-L convention
   if(AddrType<4) AddrType=0;
@@ -713,7 +713,8 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
   { RxPacket->LatDist=LatDist;
     RxPacket->LonDist=LonDist;
     RxPacket->calcRelayRank(GPS_Altitude/10);                                         // calculate the relay-rank (priority for relay)
-    ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);                // add to the relay queue and get the previ>
+    if(!doRelay) RxPacket->Rank=0;
+    ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);   // add to the relay queue and get the previ>
     // Serial.printf("ProcessRxADSL: %02X:%06X [%+5d,%+5d]m\n",
     //          RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), LatDist, LonDist);
 #ifdef WITH_LOOKOUT
@@ -814,7 +815,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   RxPacket->Packet.Descramble();
   // Serial.printf("DecodeRxADSL : #%d %02X:%06X Err:%d Corr:%d\n",
   //          RxPkt->Channel, RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), RxPkt->ErrCount(), CorrErr);
-  ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time); }
+  ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time, 1); }
 
 static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=25 || RxPkt->Manchester) return;
@@ -906,7 +907,7 @@ static void DecodeRxFLR(FSK_RxPacket *RxPkt)
   RxPacket->RxChan = RxPkt->Channel;
   RxPacket->RxRSSI = RxPkt->RSSI;
   RxPacket->Correct = 1;
-  ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time); }
+  ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time, !FLR->FAMP.NoTrack); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 { if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
