@@ -314,29 +314,18 @@ static void IGC_LogBATstatus(const GPS_Position &GPS)
   Line[Len++]='\n'; Line[Len]=0;                                 // end-of-line, end-of-string
   IGC_LogLine(Line, Len); }
 
-/*
 static void IGC_LogRFMstatus(const GPS_Position &GPS)
-{ int Len=IGC_FormatLOGN(Line, "RFM Tx:", GPS);
-  // int Len=Format_String(Line, "LOGNRFM");
-  // if(GPS.isTimeValid()) Len+=GPS.WriteHHMMSS(Line+Len);
-  // Len+=Format_String(Line+Len, "Tx:");                                     //
-  Len+=Format_SignDec(Line+Len, (int32_t)Parameters.TxPower);              // Tx power
-  Len+=Format_String(Line+Len, "dBm ");
-  Len+=Format_SignDec(Line+Len, (int32_t)TRX.chipTemp);                    // RF chip internal temperature (not calibrated)
-  Len+=Format_String(Line+Len, "degC Rx:");                                     //
-  Len+=Format_SignDec(Line+Len, (int32_t)-5*TRX.averRSSI, 2, 1);                    // noise level seen by the receiver
-  Len+=Format_String(Line+Len, "dBm ");
-  Len+=Format_UnsDec(Line+Len, (uint32_t))RX_OGN_Count64);                            // received packet/min
-  Len+=Format_String(Line+Len, "/min RxFIFO:");
-  Len+=Format_UnsDec(Line+Len, (uint32_t)RF_RxFIFO.Full());                          // how many packets wait in the RX queue
-  Len+=Format_String(Line+Len, " Plan:");
-  Len+=Format_String(Line+Len, (uint32_t)RF_FreqPlan.getPlanName());                 // name of the frequency plan
-  Len+=Format_String(Line+Len, " ");
-  Len+=Format_UnsDec(Line+Len, (uint32_t)(RF_FreqPlan.getCenterFreq()/100000), 3, 1); // center frequency
-  Len+=Format_String(Line+Len, "MHz");
+{ int Len=IGC_FormatLOGN(Line, "RFM ", GPS);
+  Len+=sprintf(Line+Len, " %s %ddBm", Radio_FreqPlan.getPlanName(), Parameters.TxPower);
+  Len+=sprintf(Line+Len,
+     " Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d %d:%d  %3.1fdBm %3.1f pkt/s %3.1fs",
+       Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
+       Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
+       Radio_RxCount[8], Radio_RxCount[9],
+       Radio_BkgRSSI, Radio_PktRate, 0.001*Radio_TxCredit);
   Line[Len++]='\n'; Line[Len]=0;                                 // end-of-line, end-of-string
   IGC_LogLine(Line, Len); }
-*/
+
 static void IGC_LogRX(const GPS_Position &GPS)
 { uint32_t Time=0; if(GPS.isTimeValid()) Time=GPS.getUnixTime();
   while(IGClog_OGN_FIFO.Full())
@@ -394,7 +383,14 @@ static void IGC_LogGPSstatus(const GPS_Position &GPS)
       Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.VDOP, 2, 1); }
   }
   Line[Len++]='\n'; Line[Len]=0;                                 // end-of-line, end-of-string
-  IGC_LogLine(Line, Len); }
+  IGC_LogLine(Line, Len);
+#ifdef GPS_PinPPS
+  Len=IGC_FormatLOGN(Line, "PPS ", GPS);
+  Len+=PPS_Print(Line+Len);
+  Line[Len++]='\n'; Line[Len]=0;                                 // end-of-line, end-of-string
+  IGC_LogLine(Line, Len);
+#endif
+}
 
 static void IGC_CheckGPS(void)                                   // check if new GPS position
 { static uint8_t PrevPosIdx=0;
@@ -432,7 +428,7 @@ static void IGC_CheckGPS(void)                                   // check if new
       if(Time-IGC_SaveTime>=IGC_SavePeriod)                          //
       { IGC_LogBATstatus(GPS);
         IGC_LogGPSstatus(GPS);
-        // IGC_LogRFMstatus(GPS);
+        IGC_LogRFMstatus(GPS);
         IGC_SHA256_bck.Clone(IGC_SHA256);
         IGC_SHA256_bck.Finish(IGC_Digest);                           // complete SHA256 digest
         uint8_t *Sig = (uint8_t *)Line+256;                          // space to write the SHA and signature

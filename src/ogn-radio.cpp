@@ -11,6 +11,10 @@
 
 #include "timesync.h"
 
+#ifdef WITH_SDLOG
+#include "sdlog.h"
+#endif
+
 // #define DEBUG_RX    // print debug info for received packets
 // #define DEBUG_SLOT  // print debug info when the TX/RX slot starts
 
@@ -1234,10 +1238,16 @@ void Radio_Task(void *Parms)
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     PktCountSum=0;
-    SysLog_Line(Line, LineLen, 1, 25);
     if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
+#ifdef WITH_SDLOG
+    if(Log_Free()>=128)
+    { Line[LineLen++]='\n'; Line[LineLen]=0;
+      if(xSemaphoreTake(Log_Mutex, 25))
+      { Format_String(Log_Write, Line, 0, LineLen);
+        xSemaphoreGive(Log_Mutex); } }
+#endif
   }
 }
 

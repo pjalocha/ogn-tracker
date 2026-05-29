@@ -169,6 +169,8 @@ extern uint32_t PPS_Intr_Missed;   // [count] of missed PPS interrupts
 
 extern  int32_t PPS_usPeriodErr;   // [1/16us] PPS period systematic error
 extern uint32_t PPS_usPeriodRMS;   // [ ]
+
+int PPS_Print(char *Line);
 #else
 inline bool  GPS_PPS_isOn() { return 0; }
 #endif

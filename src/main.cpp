@@ -940,6 +940,25 @@ static void IRAM_ATTR PPS_Intr(void *Context)
     PPS_Intr_Missed=0;
     PPS_Intr_usFirst= usTime; }
 }
+
+int PPS_Print(char *Line)
+{ int Len=0;
+  uint32_t msTime = millis();
+  uint32_t PPSage = msTime-PPS_Intr_msTime;                         // [ms] time since the last PPS interrupt
+  uint32_t UTC    = GPS_TimeSync.UTC;                               // [sec] time since last ref. UTC
+  uint32_t UTCage = msTime-GPS_TimeSync.sysTime;                    // [ms] time since last ref. UTC
+  // Serial.printf("PPS: PPSage:%u UTCage:%u [ms] UTC:%u", PPSage, UTCage, UTC);
+  PPSage -= UTCage;                                                 //
+  PPSage += 500;
+  UTC -= PPSage/1000;
+  // Serial.printf(" => PPSage:%u UTC:%u\n", PPSage, UTC);
+  if(PPS_Intr_Count>=10 && PPSage<=20000)
+    Len=sprintf(Line, "SatPPS: %08X:%08X/16MHz/%3.1fus %+3.1fppm %3.1fus %ds",
+              UTC, PPS_usPrecTime,
+              (1.0/4)*IntSqrt(PPS_usTimeRMS),
+              (-1.0/16)*PPS_usPeriodErr, (1.0/4)*IntSqrt(PPS_usPeriodRMS),
+              PPS_Intr_Count );
+  return Len; }
 #endif
 
 // move to the specific pin-defnition file
