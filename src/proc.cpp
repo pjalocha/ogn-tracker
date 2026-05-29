@@ -531,6 +531,8 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
   uint8_t  AddrType = RxPacket->Packet.Header.AddrType;                              // address-type: FLR/OGN convention
   uint8_t OwnPacket = ( Address  == Parameters.Address  )                            // my own aircraft ?
                    && ( AddrType == Parameters.AddrType );
+  RxPacket->LatDist=0;
+  RxPacket->LonDist=0;
   if(RxPacket->Packet.Header.NonPos)                                                 // status or info packet
   { if(RxPacket->Packet.isInfo())                                                    // info packet
     { char Call[16]= { 0 };
@@ -691,6 +693,8 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
   else AddrType-=4;                                                                      // address-type: FLR/OGN convention
   uint8_t MyOwnPacket = ( Address  == Parameters.Address )                               // is it my own aircraft ?
                      && ( AddrType == Parameters.AddrType);
+  RxPacket->LatDist=0;
+  RxPacket->LonDist=0;
   if(RxPacket->Packet.isTelemetry())
   { // Serial.printf("ProcessRxADSL() %02X:%06X Telem:%d\n", AddrType, Address, RxPacket->Packet.Telemetry.Header.TelemType);
     char Call[16] = { 0 };

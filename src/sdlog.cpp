@@ -331,10 +331,18 @@ static void IGC_LogRX(const GPS_Position &GPS)
   while(IGClog_OGN_FIFO.Full())
   { int Len=IGC_FormatLOGN(Line, "RX ", GPS);
     OGN_RxPacket<OGN_Packet> *RxPacket=IGClog_OGN_FIFO.getRead();
+    uint32_t RxDist = IntFastDistance(RxPacket->LatDist, RxPacket->LonDist);
+    if(RxDist>0)
+    { uint16_t Dir=IntAtan2(RxPacket->LonDist, RxPacket->LatDist);
+      Len+=Format_UnsDec(Line+Len, ((uint32_t)Dir*90+0x2000)>>14, 3);
+      Line[Len++]='/';
+      Len+=Format_UnsDec(Line+Len, (RxDist+50)/100, 2, 1);
+      Line[Len++]='k'; Line[Len++]='m'; Line[Len++]=' '; }
     uint8_t RxErr = RxPacket->RxErr;
     if(RxErr<=8)
     { Len+=RxPacket->Packet.WriteAPRS(Line+Len, Time, "OGNTRK");
       if(RxErr) { Line[Len++]=' '; Line[Len++]='0'+RxErr; Line[Len++]='e'; }
+      // Len+=sprintf(Line+Len, " %3.1fdBm", -0.5*RxPacket->RxRSSI);
       Line[Len++]=' ';
       Len+=Format_SignDec(Line+Len, -5*(int16_t)RxPacket->RxRSSI, 1, 1);
       Len+=Format_String(Line+Len, "dBm");
@@ -346,6 +354,13 @@ static void IGC_LogRX(const GPS_Position &GPS)
   while(IGClog_ADSL_FIFO.Full())
   { int Len=IGC_FormatLOGN(Line, "RX ", GPS);
     ADSL_RxPacket *RxPacket=IGClog_ADSL_FIFO.getRead();
+    uint32_t RxDist = IntFastDistance(RxPacket->LatDist, RxPacket->LonDist);
+    if(RxDist>0)
+    { uint16_t Dir=IntAtan2(RxPacket->LonDist, RxPacket->LatDist);
+      Len+=Format_UnsDec(Line+Len, ((uint32_t)Dir*90+0x2000)>>14, 3);
+      Line[Len++]='/';
+      Len+=Format_UnsDec(Line+Len, (RxDist+50)/100, 2, 1);
+      Line[Len++]='k'; Line[Len++]='m'; Line[Len++]='m'; }
     uint8_t RxErr = RxPacket->RxErr;
     if(RxErr<=5)
     { Len+=RxPacket->Packet.WriteAPRS(Line+Len, Time, GPS.GeoidSeparation/10, "OGADSL");
