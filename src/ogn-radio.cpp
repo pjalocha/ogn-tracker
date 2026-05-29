@@ -944,7 +944,7 @@ void Radio_Task(void *Parms)
     }
 #endif
 
-#ifdef WITH_FANET
+#ifdef WITH_FANET_SLOT
     uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();            // frequency to transmit FANET
     if(FreqFNT)
     { float BW=250.0f; if(Radio_FreqPlan.Plan>1) BW=500.0f;      // for plans 2,3 and 4 bandwidth 500kHz
@@ -1006,11 +1006,26 @@ void Radio_Task(void *Parms)
     }
     else
     { if(msTimeLeft>0) vTaskDelay(msTimeLeft); }
-#endif // WITH_FANET
+#endif // WITH_FANET_SLOT
 
     // if(xSemaphoreTake(CONS_Mutex, 20))
     // { Serial.printf("Radio: %10d:%8d %4dms\n", TimeRef.UTC, TimeRef.sysTime, msTime);
     //   xSemaphoreGive(CONS_Mutex); }
+
+#if defined(WITH_FANET) && !defined(WITH_FANET_SLOT)
+    FANET_Packet *FNTpacket = FNT_TxFIFO.getRead();              // get the FANET packet to transmit
+    uint32_t FreqFNT = Radio_FreqPlan.getFreqFANET();            // frequency to transmit FANET
+    if(FNTpacket && FreqFNT)
+    { float BW=250.0f; if(Radio_FreqPlan.Plan>1) BW=500.0f;      // for plans 2,3 and 4 bandwidth 500kHz
+      Radio_ConfigFANET(BW);
+      Radio_setFrequency(1e-6*FreqFNT);
+      bool Busy = Radio.scanChannel()==RADIOLIB_PREAMBLE_DETECTED;
+      if(!Busy)
+      { Radio_TxFANET(*FNTpacket);
+        FNT_TxFIFO.Read(); }
+    }
+    if(FNTpacket) FNT_TxFIFO.Read();
+#endif
 
 #ifdef WITH_PAW
     PAW_Packet *PawPacket = PAW_TxFIFO.getRead();
@@ -1025,6 +1040,7 @@ void Radio_Task(void *Parms)
       Radio_TxPAW(*PawPacket); }
     if(PawPacket) PAW_TxFIFO.Read();
 #endif
+
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
     if(OgnPacket1) OGN_TxFIFO.Read();
     const OGN_TxPacket<OGN_Packet> *OgnPacket2 = OGN_TxFIFO.getRead();   // 2nd OGN packet (possibly NULL)

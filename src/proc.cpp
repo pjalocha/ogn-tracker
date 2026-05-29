@@ -3,7 +3,6 @@
 #include "hal.h"                      // Hardware Abstraction Layer
 
 #include "proc.h"                     // PROC task: decode/correct received packets
-#include "ctrl.h"                     // CTRL task:
 #include "log.h"                      // LOG task: packet logging
 
 #include "ogn.h"                      // OGN packet structures, encoding/decoding/etc.
@@ -543,7 +542,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       }
     }
 #ifdef WITH_SDLOG
-    IGClog_FIFO.Write(*RxPacket);                                                     // log all non-position packets ?
+    IGClog_OGN_FIFO.Write(*RxPacket);                                                     // log all non-position packets ?
 #endif
     return ; }
   if(OwnPacket) return;                                                             // don't process my own (relayed) packets
@@ -551,7 +550,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
   { RxPacket->calcRelayRank(GPS_Altitude/10);
     OGN_RxPacket<OGN_Packet> *PrevRxPacket = OGN_RelayQueue.addNew(RxPacketIdx);      // add to the relay queue and get the previous packet of same ID
 #ifdef WITH_SDLOG
-    IGClog_FIFO.Write(*RxPacket);                                                     // log encrypted position packets
+    IGClog_OGN_FIFO.Write(*RxPacket);                                                     // log encrypted position packets
 #endif
     return; }
   int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
@@ -611,7 +610,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
      if((Signif && Flight.inFlight()) || Warn) FlashLog(RxPacket, RxTime);                                          // log only significant packets
 #endif
 #ifdef WITH_SDLOG
-     if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
+     if(Signif || Warn) IGClog_OGN_FIFO.Write(*RxPacket);
 #endif
 #ifdef WITH_PFLAA
     if(Parameters.Verbose & 0b01)
@@ -702,7 +701,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #endif
     }
 #ifdef WITH_SDLOG
-    // IGClog_FIFO.Write(*RxPacket);                                                     // log all telemetry packets$
+    IGClog_ADSL_FIFO.Write(*RxPacket);                                                     // log all telemetry packets$
 #endif
     return ; }
   if(!RxPacket->Packet.isPosition()) return;

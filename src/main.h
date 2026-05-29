@@ -17,6 +17,9 @@ extern USBCDC USBSerial;
 #define Serial USBSerial
 #endif
 
+#include "igc-key.h"
+extern IGC_Key IGC_SignKey;
+
 // #define millis() (xTaskGetTickCount())
 #define xTaskGetTickCount() (millis())
 
@@ -28,7 +31,7 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.19"
+#define VERSION "0.1.20"
 #endif
 
 // #define SOFT_NAME "dev-14.02" // signal development version

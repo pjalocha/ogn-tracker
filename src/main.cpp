@@ -114,6 +114,10 @@
 #include "sdlog.h"
 #endif
 
+#ifdef WITH_SDLOG
+IGC_Key IGC_SignKey;
+#endif
+
 // =======================================================================================================
 
 uint64_t getUniqueMAC(void)                                  // 48-bit unique ID of the ESP32 chip
@@ -253,12 +257,7 @@ void SD_Unmount(void)
   { spi_bus_free((spi_host_device_t)SD_Host.slot);
     SD_BusReady=false; } }
 
-esp_err_t SD_Mount(void)
-{ esp_err_t Ret = esp_vfs_fat_sdspi_mount(SD_BasePath, &SD_Host, &SD_SlotConfig, &SD_MountConfig, &SD_Card);
-  if(Ret!=ESP_OK) SD_Unmount();
-  return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
-
-static esp_err_t SD_Init(void)
+static esp_err_t SD_InitBus(void)
 { SD_Host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
   SD_Host.slot = SPI3_HOST;
   SD_Host.max_freq_khz = SDMMC_FREQ_PROBING;
@@ -270,7 +269,19 @@ static esp_err_t SD_Init(void)
   { Serial.printf("SD spi_bus_initialize failed (%d)\n", Ret);
     return Ret; }
   SD_BusReady = true;
-  Ret = SD_Mount();
+  return ESP_OK; }
+
+esp_err_t SD_Mount(void)
+{ if(SD_Card) return ESP_OK;
+  if(!SD_BusReady)
+  { esp_err_t Ret = SD_InitBus();
+    if(Ret!=ESP_OK) return Ret; }
+  esp_err_t Ret = esp_vfs_fat_sdspi_mount(SD_BasePath, &SD_Host, &SD_SlotConfig, &SD_MountConfig, &SD_Card);
+  if(Ret!=ESP_OK) SD_Unmount();
+  return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
+
+static esp_err_t SD_Init(void)
+{ esp_err_t Ret = SD_Mount();
   Serial.printf("SD mount(%d)\n", Ret);
   return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
 
@@ -1007,7 +1018,7 @@ static void LED_PCB_Init (void)    { }
 
 // =======================================================================================================
 
-static char Line[128];
+static char Line[512];
 static void PrintPOGNS(void);
 
 void setup()
@@ -1421,15 +1432,6 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   Flasher_Play(Flasher_PattTriple);
 #endif
 
-#ifdef WITH_SD
-  SD_Init();
-  if(SD_isMounted())                       // if SD card succesfully mounted at startup
-  { Parameters.SaveToFlash=0;
-    if(Parameters.ReadFromFile("/sdcard/TRACKER.CFG")>0)    // try to read parameters from the TRACKER.CFG file
-    { if(Parameters.SaveToFlash) Parameters.WriteToNVS(); } // if succesfull and SaveToFlash==1 then save them to flash
-  }
-#endif
-
 #ifdef WITH_BEEPER
   Beep_Init();
 #ifdef WITH_BEEPER_GEN
@@ -1443,6 +1445,23 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   // Play_Morse('O');
   // Play_Morse('G');
   // Play_Morse('N');
+#endif
+
+#ifdef WITH_SD
+  SD_Init();
+  if(SD_isMounted())                       // if SD card succesfully mounted at startup
+  { Parameters.SaveToFlash=0;
+    if(Parameters.ReadFromFile("/sdcard/TRACKER.CFG")>0)    // try to read parameters from the TRACKER.CFG file
+    { if(Parameters.SaveToFlash) Parameters.WriteToNVS(); } // if succesfull and SaveToFlash==1 then save them to flash
+  }
+#endif
+
+#ifdef WITH_SDLOG
+  IGC_SignKey.Init();
+  IGC_SignKey.Generate();
+  if(IGC_SignKey.ReadFromNVS()!=ESP_OK) IGC_SignKey.WriteToNVS();
+  if(IGC_SignKey.Pub_Write((uint8_t *)Line, 512)==0)
+    Format_String(CONS_UART_Write, Line);
 #endif
 
   uint8_t Len=Format_String(Line, "$POGNS,SysStart");

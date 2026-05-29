@@ -4,7 +4,6 @@
 
 #include "hal.h"
 #include "gps.h"
-#include "ctrl.h"
 #include "nmea.h"
 #include "ubx.h"
 #ifdef WITH_MAVLINK
