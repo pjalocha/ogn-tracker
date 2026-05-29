@@ -360,7 +360,7 @@ static void IGC_LogRX(const GPS_Position &GPS)
       Len+=Format_UnsDec(Line+Len, ((uint32_t)Dir*90+0x2000)>>14, 3);
       Line[Len++]='/';
       Len+=Format_UnsDec(Line+Len, (RxDist+50)/100, 2, 1);
-      Line[Len++]='k'; Line[Len++]='m'; Line[Len++]='m'; }
+      Line[Len++]='k'; Line[Len++]='m'; Line[Len++]=' '; }
     uint8_t RxErr = RxPacket->RxErr;
     if(RxErr<=5)
     { Len+=RxPacket->Packet.WriteAPRS(Line+Len, Time, GPS.GeoidSeparation/10, "OGADSL");
