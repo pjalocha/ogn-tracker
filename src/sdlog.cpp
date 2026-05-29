@@ -240,6 +240,15 @@ static void IGC_LogHeader(const GPS_Position &Pos)                      // write
   IGC_LogLine("HFPRSPressAltSensor:BME280/BMP280\n");              // pressure sensor
 #endif
   IGC_LogLine("I023639GSP4042TRT\n");                              // extended format with ground speed and track
+
+  { int Len=Format_String(Line, "LOGN PUBKEY:");
+    uint8_t *IGC_Sign = (uint8_t *)Line+256;
+    int KeyLen=IGC_SignKey.Pub_WriteBin(IGC_Sign, 128);
+    for(int Idx=0; Idx<KeyLen; Idx++)
+      Len+=Format_Hex(Line+Len, IGC_Sign[Idx]);
+    Line[Len++]='\n'; Line[Len]=0;
+    IGC_LogLine(Line, Len); }
+
 }
 
 void IGC_ID(void)
@@ -364,25 +373,26 @@ static void IGC_LogRX(const GPS_Position &GPS)
 
 static void IGC_LogGPSstatus(const GPS_Position &GPS)
 { int Len=IGC_FormatLOGN(Line, "GPS ", GPS);
-  // int Len=Format_String(Line, "LOGNGPS");
-  // if(GPS.isTimeValid()) Len+=GPS.WriteHHMMSS(Line+Len);
-  // Line[Len++]=' ';
-  if(GPS.isValid())
-    Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.Satellites);
+  if(GPS_SatCnt>0 && GPS_SatSNR>0)
+  { Len+=GPS_SatMon.PrintStats(Line+Len); }
   else
-    Len+=Format_UnsDec(Line+Len, (uint32_t)GPS_SatCnt);
-  Len+=Format_String(Line+Len, "sat/");
-  Line[Len++]='0'+GPS.FixQuality;
-  Line[Len++]='/';
-  Len+=Format_UnsDec(Line+Len, (uint32_t)(GPS_SatSNR+2)>>2);
-  Len+=Format_String(Line+Len, "dB");
-  if(GPS.isValid())
-  { Len+=Format_String(Line+Len, " DOP:"); ;
-    Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.PDOP, 2, 1);
+  { if(GPS.isValid())
+      Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.Satellites);
+    else
+      Len+=Format_UnsDec(Line+Len, (uint32_t)GPS_SatCnt);
+    Len+=Format_String(Line+Len, "sat/");
+    Line[Len++]='0'+GPS.FixQuality;
     Line[Len++]='/';
-    Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.HDOP, 2, 1);
-    Line[Len++]='/';
-    Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.VDOP, 2, 1); }
+    Len+=Format_UnsDec(Line+Len, (uint32_t)(GPS_SatSNR+2)>>2);
+    Len+=Format_String(Line+Len, "dB");
+    if(GPS.isValid())
+    { Len+=Format_String(Line+Len, " DOP:"); ;
+      Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.PDOP, 2, 1);
+      Line[Len++]='/';
+      Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.HDOP, 2, 1);
+      Line[Len++]='/';
+      Len+=Format_UnsDec(Line+Len, (uint32_t)GPS.VDOP, 2, 1); }
+  }
   Line[Len++]='\n'; Line[Len]=0;                                 // end-of-line, end-of-string
   IGC_LogLine(Line, Len); }
 

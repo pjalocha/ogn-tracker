@@ -33,11 +33,21 @@ class IGC_Key
 
    mbedtls_ctr_drbg_context CtrDrbgCtx; // RNG parameter, used to produce the key but as well to produce signature
 
-   mbedtls_pk_context Key;
    mbedtls_x509write_csr Req;
    mbedtls_entropy_context Entropy;
 
    static const uint8_t PrivBinSize = 36; // 72;                      // [bytes] max. size for the private key in binary form
+
+ protected:
+   int CopyToPK(mbedtls_pk_context &Key)
+   { int Ret = mbedtls_pk_setup(&Key, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY));
+     if(Ret!=0) return Ret;
+     mbedtls_ecp_keypair *KeyPair = mbedtls_pk_ec(Key);
+     Ret = mbedtls_ecp_group_copy(&KeyPair->grp, &SignCtx.grp);
+     if(Ret!=0) return Ret;
+     Ret = mbedtls_ecp_copy(&KeyPair->Q, &SignCtx.Q);
+     if(Ret!=0) return Ret;
+     return mbedtls_mpi_copy(&KeyPair->d, &SignCtx.d); }
 
  public:
    // IGC_Key() { Init(); }
@@ -45,7 +55,6 @@ class IGC_Key
    int Init(void)                                              // initialize on startup
    { const char *Pers = "ecdsa";
      mbedtls_x509write_csr_init(&Req);
-     mbedtls_pk_init(&Key);
      mbedtls_ecdsa_init(&SignCtx);
      mbedtls_ctr_drbg_init(&CtrDrbgCtx);
      mbedtls_entropy_init(&Entropy);
@@ -56,10 +65,6 @@ class IGC_Key
    int Generate(void)                                          // produce a new pair of keys: private and public key
    {                                                           // key-pair, curve, RNG function, RNG parameter
      int Ret = mbedtls_ecdsa_genkey(&SignCtx, ECPARAMS, mbedtls_ctr_drbg_random, &CtrDrbgCtx);  // produce key-pair
-     if(Ret!=0) return Ret;
-     Ret = mbedtls_pk_setup(&Key, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY));
-     if(Ret!=0) return Ret;
-     Key.pk_ctx = &SignCtx;                                    // ?
      return Ret; }                                             // return zero on success
 
    int Write(uint8_t *Data, int MaxLen=240)                     // write both private and public keys to a binary record
@@ -70,10 +75,11 @@ class IGC_Key
 
    int Read(const uint8_t *Data, int Len)
    { if(Len<=PrivBinSize) return 0;
+     mbedtls_ecdsa_free(&SignCtx);
+     mbedtls_ecdsa_init(&SignCtx);
+     if(mbedtls_ecp_group_load(&SignCtx.grp, ECPARAMS)!=0) return 0;
      if(Priv_ReadBin(Data, PrivBinSize)!=0) return 0;
      if(Pub_ReadBin(Data+PrivBinSize, Len-PrivBinSize)!=0) return 0;
-     // int Ret = mbedtls_pk_setup(&Key, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY));
-     Key.pk_ctx = &SignCtx;                                    // ?
      return Len; }                                             // return number of bytes read
 
    int Sign_MD5_SHA256(uint8_t *Sign, const uint8_t *Hash, int HashLen)      // sign an MD5/SHA256 Hash
@@ -107,28 +113,49 @@ class IGC_Key
    { return mbedtls_mpi_read_binary(&SignCtx.d, Data, Len); }  // return zero for success
 
    int Pub_Write(uint8_t *Out, int MaxLen)                     // write the public key in an ASCII form
-   { return mbedtls_pk_write_pubkey_pem(&Key, Out, MaxLen); }  // return zero if success
+   { mbedtls_pk_context Key;
+     mbedtls_pk_init(&Key);
+     int Ret = CopyToPK(Key);
+     if(Ret==0) Ret = mbedtls_pk_write_pubkey_pem(&Key, Out, MaxLen);
+     mbedtls_pk_free(&Key);
+     return Ret; }                                             // return zero if success
 
    int Priv_Write(uint8_t *Out, int MaxLen)                    // write the private key in an ASCII form
-   { return mbedtls_pk_write_key_pem(&Key, Out, MaxLen); }     // return zero if success
+   { mbedtls_pk_context Key;
+     mbedtls_pk_init(&Key);
+     int Ret = CopyToPK(Key);
+     if(Ret==0) Ret = mbedtls_pk_write_key_pem(&Key, Out, MaxLen);
+     mbedtls_pk_free(&Key);
+     return Ret; }                                             // return zero if success
 
    int Pub_Write_DER(uint8_t *Out, int MaxLen)                 // write the public key in an ASCII form
-   { return mbedtls_pk_write_pubkey_der(&Key, Out, MaxLen); }  // return zero if success
+   { mbedtls_pk_context Key;
+     mbedtls_pk_init(&Key);
+     int Ret = CopyToPK(Key);
+     if(Ret==0) Ret = mbedtls_pk_write_pubkey_der(&Key, Out, MaxLen);
+     mbedtls_pk_free(&Key);
+     return Ret; }                                             // return zero if success
 
    int Priv_Write_DER(uint8_t *Out, int MaxLen)                // write the private key in an ASCII form
-   { return mbedtls_pk_write_key_der(&Key, Out, MaxLen); }     // return zero if success
+   { mbedtls_pk_context Key;
+     mbedtls_pk_init(&Key);
+     int Ret = CopyToPK(Key);
+     if(Ret==0) Ret = mbedtls_pk_write_key_der(&Key, Out, MaxLen);
+     mbedtls_pk_free(&Key);
+     return Ret; }                                             // return zero if success
 
 #ifdef WITH_ESP32
-  esp_err_t WriteToNVS(const char *Name="IGCKEY", const char *NameSpace="TRACKER")
-  { uint8_t Buff[256];
-    nvs_handle Handle;
-    esp_err_t Err = nvs_open(NameSpace, NVS_READWRITE, &Handle);
-    if(Err!=ESP_OK) return Err;
-    int BuffLen = Write(Buff, 256);
-    Err = nvs_set_blob(Handle, Name, Buff, BuffLen);
-    if(Err==ESP_OK) Err = nvs_commit(Handle);
-    nvs_close(Handle);
-    return Err; }
+   esp_err_t WriteToNVS(const char *Name="IGCKEY", const char *NameSpace="TRACKER")
+   { uint8_t Buff[256];
+     nvs_handle Handle;
+     esp_err_t Err = nvs_open(NameSpace, NVS_READWRITE, &Handle);
+     if(Err!=ESP_OK) return Err;
+     int BuffLen = Write(Buff, 256);
+     if(BuffLen<=0) Err = ESP_FAIL;
+     else Err = nvs_set_blob(Handle, Name, Buff, BuffLen);
+     if(Err==ESP_OK) Err = nvs_commit(Handle);
+     nvs_close(Handle);
+     return Err; }
 
   esp_err_t ReadFromNVS(const char *Name="IGCKEY", const char *NameSpace="TRACKER")
   { uint8_t Buff[256];
@@ -137,10 +164,11 @@ class IGC_Key
     if(Err!=ESP_OK) return Err;
     size_t Size=0;
     Err = nvs_get_blob(Handle, Name,    0, &Size);                  // get the Size of the blob in the Flash
-    if( (Err==ESP_OK) && (Size<=256) )
+    if( (Err==ESP_OK) && (Size<=sizeof(Buff)) )
       Err = nvs_get_blob(Handle, Name, Buff, &Size);                // read the Blob from the Flash
     nvs_close(Handle);
     if(Err!=ESP_OK) return Err;
+    if(Size>sizeof(Buff)) return ESP_ERR_INVALID_SIZE;
     if(Read(Buff, Size)==Size) return ESP_OK;
     return ESP_ERR_NOT_FOUND; }
 #endif // WITH_ESP32

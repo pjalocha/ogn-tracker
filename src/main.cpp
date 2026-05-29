@@ -1458,8 +1458,9 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_SDLOG
   IGC_SignKey.Init();
-  IGC_SignKey.Generate();
-  if(IGC_SignKey.ReadFromNVS()!=ESP_OK) IGC_SignKey.WriteToNVS();
+  if(IGC_SignKey.ReadFromNVS()!=ESP_OK)
+  { IGC_SignKey.Generate();
+    IGC_SignKey.WriteToNVS(); }
   if(IGC_SignKey.Pub_Write((uint8_t *)Line, 512)==0)
     Format_String(CONS_UART_Write, Line);
 #endif

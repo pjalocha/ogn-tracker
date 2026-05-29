@@ -741,11 +741,9 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #ifdef WITH_LOG
     if((Signif && Flight.inFlight()) || Warn) FlashLog(RxPacket, RxTime);                                      // log only significant packets
 #endif
-/*
 #ifdef WITH_SDLOG
-    if(Signif || Warn) IGClog_FIFO.Write(*RxPacket);
+    if(Signif || Warn) IGClog_ADSL_FIFO.Write(*RxPacket);
 #endif
-*/
 #ifdef WITH_PFLAA
     if(Parameters.Verbose & 0b01)
     { uint8_t Len=0;

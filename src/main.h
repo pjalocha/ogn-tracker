@@ -17,8 +17,10 @@ extern USBCDC USBSerial;
 #define Serial USBSerial
 #endif
 
+#ifdef WITH_SDLOG
 #include "igc-key.h"
 extern IGC_Key IGC_SignKey;
+#endif
 
 // #define millis() (xTaskGetTickCount())
 #define xTaskGetTickCount() (millis())

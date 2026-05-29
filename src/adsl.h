@@ -336,6 +336,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
      Msg[Len++] = 'h';
      if(isTelemetry())
      { Msg[Len++]=' ';
+       Len+=Print(Msg+Len);
        return Len; }
      if(!isPos) return 0;
 
