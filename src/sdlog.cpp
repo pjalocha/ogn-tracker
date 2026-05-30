@@ -418,6 +418,7 @@ static void IGC_CheckGPS(void)                                   // check if new
   bool inFlight = GPS.InFlight;                                  // in-flight or on-the-ground ?
   bool StopFile = PrevInFlight && !inFlight;                     // decide to stop the file when InFlight switches from 1 to 0
   PrevInFlight = inFlight;
+  if(!GPS.isValid()) StopFile=1;
 #ifdef DEBUG_PRINT
   GPS.PrintLine(Line);
   xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
@@ -452,7 +453,7 @@ static void IGC_CheckGPS(void)                                   // check if new
         IGC_Reopen(); }                                              // re-open IGC thus close it and open it back to save the current data
     }
   }
-  else if(GPS.isValid())                                             // if IGC file is not open
+  else if(GPS.isValid() && GPS_TimeSinceLock>10)                                             // if IGC file is not open
   { for(int Try=0; Try<8; Try++)
     { int Err=IGC_Open(GPS); if(Err!=(-2)) break; }                  // try to open a new IGC file but don't overwrite the old ones
     if(IGC_File)                                                     // if open succesfully

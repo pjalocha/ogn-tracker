@@ -46,13 +46,17 @@ class LookOut_Target           // describes a flying aircrafts
    } ;
 
    union
-   { uint32_t    Rank;          //        rank: lowest means shorter time margin, shorter distance margin thus bigger thread
+   { // uint32_t    Rank;          //        rank: lowest means shorter time margin, shorter distance margin thus bigger thread
      struct
      { uint16_t DistMargin;     // [0.5m] remaining safety margin: if positive, then considered not a thread at all
        uint8_t  TimeMargin;     // [0.5s] time to target (if no distance margin left)
        uint8_t  WarnLevel;      // assigned warning level: 0, 1, 2 or 3
      }  __attribute__((packed));
    } ;
+
+   uint32_t calcSafeDist(void)
+   { if(WarnLevel) return 0xFF-WarnLevel;
+     return ((uint32_t)TimeMargin<<16) + DistMargin; }
 
    int16_t        dX;        // [0.5m]   relative position of target
    int16_t        dY;        // [0.5m]
@@ -71,7 +75,7 @@ class LookOut_Target           // describes a flying aircrafts
   uint16_t  MissDist;        // [0.5m]   estimated closest approach distance
 
   public:
-   void Clear(void) { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; Rank=0xFFFF; }
+   void Clear(void) { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF; }
 
    bool isMoving(void) const { return Pos.isMoving; }
 
@@ -182,8 +186,7 @@ template <const uint8_t MaxTgts=32>
    } ;
 
    uint8_t     WarnLevel;                 // highest warning level of all the targets
-   uint8_t     WeakestIdx;                // index for the weakest target (or a not allocated target)
-   uint32_t    WeakestRank;               // rank of the weakest target
+   uint8_t     SafestIdx;                 // index for the safest target (or a not allocated target)
 
    uint8_t AcftType;
 
@@ -210,7 +213,7 @@ template <const uint8_t MaxTgts=32>
 
    void Clear(void)
    { Flags=0; ID=0; Pos.Clear(); Pred=0;
-     Targets=0; WeakestIdx=0; WeakestRank=0xFFFFFFFF;
+     Targets=0; SafestIdx=0;
      WorstTgtIdx=0; WorstTgtTime=0xFF;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { Target[Idx].Clear(); }
@@ -248,7 +251,7 @@ template <const uint8_t MaxTgts=32>
    { WritePFLAU(Line); printf("%s", Line);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;
-       if( Target[Idx].DistMargin) continue;
+       // if( Target[Idx].DistMargin) continue;
        Target[Idx].WritePFLAA(Line);
        printf("%s", Line);
      }
@@ -258,7 +261,7 @@ template <const uint8_t MaxTgts=32>
    { WritePFLAU(Line); Format_String(Output, Line);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;                    // skip empty slots
-       if( Target[Idx].DistMargin) continue;               // skip slots with distance margin remaining
+       // if( Target[Idx].DistMargin) continue;               // skip slots with distance margin remaining
        Target[Idx].WritePFLAA(Line);
        Format_String(Output, Line);
      }
@@ -444,32 +447,32 @@ template <const uint8_t MaxTgts=32>
      return Tgt; }                                                                     // return the pointer to the most dangerous target
 
    const LookOut_Target *ProcessTarget(ADSL_Packet &Packet, uint32_t RxTime)           // process a position of another aircraft in ADS-L format
-   { // printf("ProcessTarget(%d) ... entry\n", WeakestIdx);
-     LookOut_Target *New = Target+WeakestIdx;                                          // get a free or lowest rank slot
-     New->Clear();                                                                     // put the new position there
-     if(New->Pos.Read(Packet, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, GeoidSepar, DistRange)<0) return 0; // calculate the position against the reference position
-     if(!New->Pos.hasStdAlt)                                                           // if no baro altitude
-     { if(Pos.hasStdAlt) { New->Pos.dStdAlt=Pos.dStdAlt; New->Pos.hasStdAlt=1; } }     // take it from own
-     New->Address  = Packet.getAddress();
-     New->AddrType = Packet.getAddrType();
-     New->AcftType = Packet.getAcftTypeOGN();
-     return ProcessTarget(New); }
+   { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
+     LookOut_Target New;                                                               // parse into a scratch slot first
+     New.Clear();
+     if(New.Pos.Read(Packet, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, GeoidSepar, DistRange)<0) return 0; // calculate the position against the reference position
+     if(!New.Pos.hasStdAlt)                                                            // if no baro altitude
+     { if(Pos.hasStdAlt) { New.Pos.dStdAlt=Pos.dStdAlt; New.Pos.hasStdAlt=1; } }       // take it from own
+     New.Address  = Packet.getAddress();
+     New.AddrType = Packet.getAddrType();
+     New.AcftType = Packet.getAcftTypeOGN();
+     return ProcessTarget(&New); }
 
    template <class OGNx_Packet>
     const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
-   { // printf("ProcessTarget(%d) ... entry\n", WeakestIdx);
-     LookOut_Target *New = Target+WeakestIdx;                                          // get a free or lowest rank slot
-     New->Clear();                                                                     // put the new position there
-     if(New->Pos.Read(Packet, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0) return 0; // calculate the position against the reference position
-     if(!New->Pos.hasStdAlt)                                                           // if no baro altitude
-     { if(Pos.hasStdAlt) { New->Pos.dStdAlt=Pos.dStdAlt; New->Pos.hasStdAlt=1;} }      // take it from own
-     New->Address  = Packet.Header.Address;
-     New->AddrType = Packet.Header.AddrType+4;
-     New->AcftType = Packet.Position.AcftType;
+   { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
+     LookOut_Target New;                                                               // parse into a scratch slot first
+     New.Clear();
+     if(New.Pos.Read(Packet, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0) return 0; // calculate the position against the reference position
+     if(!New.Pos.hasStdAlt)                                                            // if no baro altitude
+     { if(Pos.hasStdAlt) { New.Pos.dStdAlt=Pos.dStdAlt; New.Pos.hasStdAlt=1;} }        // take it from own
+     New.Address  = Packet.Header.Address;
+     New.AddrType = Packet.Header.AddrType+4;
+     New.AcftType = Packet.Position.AcftType;
      // if(Call) { strncpy(New->Call, Call, 10); New->Call[10]=0; }
      //     else   New->Call[0]=0;
-     New->Call[0]=0;
-     return ProcessTarget(New); }
+     New.Call[0]=0;
+     return ProcessTarget(&New); }
 
    void setTargetCall(uint32_t Address, uint8_t AddrType, const char *Call)
    { uint32_t ID=AddrType; ID = (ID<<=24)|Address;
@@ -487,14 +490,11 @@ template <const uint8_t MaxTgts=32>
      LookOut_Target *Old = 0;                                                          // possible previous index to the same ID
      for(OldIdx=0; OldIdx<MaxTargets; OldIdx++)                                        // scan targets already on the list
      { if(Target[OldIdx].Alloc==0) continue;                                           // skip not allocated
-       if(OldIdx==WeakestIdx) continue;                                                // skip the new position
        if(Target[OldIdx].ID==New->ID) break; }                                         // to find previous position for the target
      if(OldIdx<MaxTargets)                                                             // if found
      { Old = Target+OldIdx;
-       if((Old->Pos.T-Old->Pred)>Target[WeakestIdx].Pos.T)                             // if position is not really newer
-         return Old;                                                                   // then stop processing this (not new) position
-       Old->Alloc=0; }                                                                 // mark old position as "not allocated"
-     New->Alloc=1;                                                                     // mark this position as allocated
+       if((Old->Pos.T-Old->Pred)>New->Pos.T)                                           // if position is not really newer
+         return Old; }                                                                 // then stop processing this (not new) position
 
      if(Old && Old->Call[0] && New->Call[0]==0) { strncpy(New->Call, Old->Call, 10); New->Call[10]=0; } // copy the call
 
@@ -517,6 +517,12 @@ template <const uint8_t MaxTgts=32>
        // printf("Climb/Turn %08X dT=%3.1fs ", New->ID, 0.5*dT); New->Pos.Print();
      }
 
+     if(Old) Old->Alloc=0;                                                             // mark old position as "not allocated"
+     New->Alloc=1;                                                                     // mark this position as allocated
+     LookOut_Target *Slot = Target+SafestIdx;                                          // get a free or safest slot
+     *Slot = *New;                                                                     // put the accepted new position there
+     New = Slot;
+
      AdjustRefTime(New->Pos.T);                                                        // possibly adjust the time reference after this new position time
      // printf("ProcessTarget() ... AdjustRefTime()\n");
 
@@ -527,16 +533,16 @@ template <const uint8_t MaxTgts=32>
      if(Warn>WarnLevel) WarnLevel=Warn;                                                // record higest warnign level
      // printf("ProcessTarget() ... calc()\n");
 
-     uint8_t MaxIdx=WeakestIdx; uint32_t Max=New->Rank;                                // look for the lowest rank position on the list
+     uint8_t MaxIdx=SafestIdx; uint32_t Max=New->calcSafeDist();                       // look for the safest position on the list
      for( uint8_t Idx=MaxIdx; ; )                                                      // go over targets
      { Idx++; if(Idx>=MaxTargets) Idx=0;
-       if(Idx==WeakestIdx) break;                                                      // end the loop when back at New
+       if(Idx==SafestIdx) break;                                                       // end the loop when back at New
        LookOut_Target &Tgt = Target[Idx];
        if(!Tgt.Alloc) { MaxIdx=Idx; break; }                                           // if unallocated target found: stop the search
-       // if(Tgt.Rank==0xFFFFFFFF) { MaxIdx=Idx; break; }                                 // if abs. weakest target found: stop the search
-       if(Tgt.Rank>=Max) { Max=Tgt.Rank; MaxIdx=Idx; }                                 // if weaker rank found: note it
+       uint32_t SafeDist = Tgt.calcSafeDist();
+       if(SafeDist>=Max) { Max=SafeDist; MaxIdx=Idx; }                                 // if safer target found: note it
      }
-     WeakestIdx=MaxIdx;                                                                // tqke the weakest slot for the nest time
+     SafestIdx=MaxIdx;                                                                 // take the safest slot for the next time
 
      return New; }
 
