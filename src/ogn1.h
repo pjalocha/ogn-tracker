@@ -478,8 +478,8 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
        JSON[Len++] = HexDigit(Position.AcftType);
        JSON[Len++]='\"';
        Len+=Format_String(JSON+Len, ",\"acft_cat\":\"");           // GDL90 aircraft category
-                            // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, UFO, balloon, Zeppelin, UAV, ground vehicle, static } ; 
-       const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   0,      10,       10,  14, 18, 19 } ;
+                            // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, gyro, balloon, Zeppelin, UAV, ground vehicle, static } ;
+       const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   7,      10,       10,  14, 18, 19 } ;
        Len+=Format_Hex(JSON+Len, AcftCat[Position.AcftType]);
        JSON[Len++]='\"';
        Len+=Format_String(JSON+Len, ",\"stealth\":");
@@ -582,7 +582,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      const static uint8_t EmitterType[16] =                            // conversion table from OGN aircraft-type
      { 0,  9,  2,  7,     // unknown,          glider,           towplane,       helicopter
       11,  3,  9, 11,     // parachute,        drop plane,       hang-glider,    para-glider
-       2,  3, 15, 10,     // powered aircraft, jet aircraft,     UFO,            balloon
+       2,  3,  7, 10,     // powered aircraft, jet aircraft,     gyrocopter,     balloon
       10, 14,  2, 19  };  // airship,          UAV,              ground vehiele, fixed object
      MAV->emiter_type   =    EmitterType[Position.AcftType];           // convert from the OGN
    }
@@ -599,7 +599,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
        "/g" , //  7 = para-glider      (rare but seen)
        "\\^", //  8 = powered aircraft (often)
        "/^",  //  9 = jet aircraft     (rare but seen)
-       "/z",  //  A = UFO              (people set for fun)
+       "/X",  //  A = gyrocopter
        "/O",  //  B = balloon          (seen once)
        "/O",  //  C = airship          (seen once)
        "/'",  //  D = UAV              (drones, can become very common)
@@ -1135,4 +1135,3 @@ class OGN1_DiffPacket
 */
 
 #endif // of __OGN1_H__
-

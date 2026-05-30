@@ -525,6 +525,8 @@ static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
+static const int32_t MaxRxDist = 25000;  // [m] assumed maximum reception distance, what is more is asusmed be badly decoded and dropped
+
 // process received OGN packets
 static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
 { uint32_t Address  = RxPacket->Packet.Header.Address;                               // address
@@ -556,7 +558,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 #endif
     return; }
   int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
-  bool DistOK = RxPacket->Packet.calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
+  bool DistOK = RxPacket->Packet.calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine, MaxRxDist)>=0;
   if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;
     RxPacket->LonDist=LonDist;
@@ -711,11 +713,11 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
   if(!RxPacket->Packet.isPosition()) return;
   if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
   int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
-  bool DistOK = RxPacket->calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine)>=0;
+  bool DistOK = RxPacket->calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine, MaxRxDist)>=0;
   if(DistOK)                                                                          // reasonable reception distance
   { RxPacket->LatDist=LatDist;
     RxPacket->LonDist=LonDist;
-    RxPacket->calcRelayRank(GPS_Altitude/10);                                         // calculate the relay-rank (priority for relay)
+    RxPacket->calcRelayRank((GPS_Altitude+GPS_GeoidSepar)/10);                       // calculate the relay-rank (priority for relay)
     if(!doRelay) RxPacket->Rank=0;
     ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);   // add to the relay queue and get the previ>
     // Serial.printf("ProcessRxADSL: %02X:%06X [%+5d,%+5d]m\n",
@@ -844,6 +846,7 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   uint8_t RxPacketIdx  = OGN_RelayQueue.getNew();
   OGN_RxPacket<OGN_Packet> *RxPacket = OGN_RelayQueue[RxPacketIdx];
   PAW->Write(RxPacket->Packet);
+  RxPacket->Packet.Position.Time = RxPkt->Time%60;
   RxPacket->RxErr  = 0;
   RxPacket->RxChan = RxPkt->Channel;
   RxPacket->RxRSSI = RxPkt->RSSI;

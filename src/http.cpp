@@ -148,7 +148,7 @@ static void ParmForm_Acft(httpd_req_t *Req)
 
   Begin_Control_Row(Req, "Acft-Type");
   const char *AcftTypeTable[16] = { "Unknown", "(moto)Glider", "Tow-plane", "Helicopter", "Parachute", "Drop-plane", "Hang-glider", "Para-glider",
-                                    "Powered-aircraft", "Jet-aircraft", "UFO", "Balloon", "Airship", "UAV/drone", "Ground support", "Static object" } ;
+                                    "Powered-aircraft", "Jet-aircraft", "Gyrocopter", "Balloon", "Airship", "UAV/drone", "Ground support", "Static object" } ;
   SelectList(Req, "AcftType", AcftTypeTable, 16, Parameters.AcftType);
   End_Control_Row(Req);
 

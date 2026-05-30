@@ -331,7 +331,7 @@ static void IGC_LogRX(const GPS_Position &GPS)
   while(IGClog_OGN_FIFO.Full())
   { int Len=IGC_FormatLOGN(Line, "RX ", GPS);
     OGN_RxPacket<OGN_Packet> *RxPacket=IGClog_OGN_FIFO.getRead();
-    uint32_t RxDist = IntFastDistance(RxPacket->LatDist, RxPacket->LonDist);
+    uint32_t RxDist = IntDistance(RxPacket->LatDist, RxPacket->LonDist);
     if(RxDist>0)
     { uint16_t Dir=IntAtan2(RxPacket->LonDist, RxPacket->LatDist);
       Len+=Format_UnsDec(Line+Len, ((uint32_t)Dir*90+0x2000)>>14, 3);
@@ -354,7 +354,7 @@ static void IGC_LogRX(const GPS_Position &GPS)
   while(IGClog_ADSL_FIFO.Full())
   { int Len=IGC_FormatLOGN(Line, "RX ", GPS);
     ADSL_RxPacket *RxPacket=IGClog_ADSL_FIFO.getRead();
-    uint32_t RxDist = IntFastDistance(RxPacket->LatDist, RxPacket->LonDist);
+    uint32_t RxDist = IntDistance(RxPacket->LatDist, RxPacket->LonDist);
     if(RxDist>0)
     { uint16_t Dir=IntAtan2(RxPacket->LonDist, RxPacket->LatDist);
       Len+=Format_UnsDec(Line+Len, ((uint32_t)Dir*90+0x2000)>>14, 3);

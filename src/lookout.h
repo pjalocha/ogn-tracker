@@ -213,6 +213,7 @@ template <const uint8_t MaxTgts=32>
 
    void Clear(void)
    { Flags=0; ID=0; Pos.Clear(); Pred=0;
+     GeoidSepar=0;
      Targets=0; SafestIdx=0;
      WorstTgtIdx=0; WorstTgtTime=0xFF;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
@@ -251,7 +252,7 @@ template <const uint8_t MaxTgts=32>
    { WritePFLAU(Line); printf("%s", Line);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;
-       // if( Target[Idx].DistMargin) continue;
+       if(WarnLevel>0 && Target[Idx].DistMargin) continue;
        Target[Idx].WritePFLAA(Line);
        printf("%s", Line);
      }
@@ -261,7 +262,7 @@ template <const uint8_t MaxTgts=32>
    { WritePFLAU(Line); Format_String(Output, Line);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;                    // skip empty slots
-       // if( Target[Idx].DistMargin) continue;               // skip slots with distance margin remaining
+       if(WarnLevel>0 && Target[Idx].DistMargin) continue;               // skip slots with distance margin remaining
        Target[Idx].WritePFLAA(Line);
        Format_String(Output, Line);
      }
@@ -448,6 +449,7 @@ template <const uint8_t MaxTgts=32>
 
    const LookOut_Target *ProcessTarget(ADSL_Packet &Packet, uint32_t RxTime)           // process a position of another aircraft in ADS-L format
    { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
+     if(!hasPosition) return 0;
      LookOut_Target New;                                                               // parse into a scratch slot first
      New.Clear();
      if(New.Pos.Read(Packet, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, GeoidSepar, DistRange)<0) return 0; // calculate the position against the reference position
@@ -461,6 +463,7 @@ template <const uint8_t MaxTgts=32>
    template <class OGNx_Packet>
     const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
    { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
+     if(!hasPosition) return 0;
      LookOut_Target New;                                                               // parse into a scratch slot first
      New.Clear();
      if(New.Pos.Read(Packet, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0) return 0; // calculate the position against the reference position

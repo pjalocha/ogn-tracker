@@ -7,6 +7,7 @@
 
 #include "format.h"
 #include "intmath.h"
+#include "ognconv.h"
 
 // ===============================================================================================
 
@@ -605,7 +606,7 @@ class FANET_RxPacket: public FANET_Packet
          int32_t Lat = getLat(Msg);                                // [cordic]
          int32_t Lon = getLon(Msg+3);                              // [cordic]
          uint32_t Alt=getAltitude(Msg+6);                          // [m]
-         uint32_t Feet = ((int32_t)3360*Alt+512)>>10;              // [feet]
+         uint32_t Feet = MetersToFeet(Alt);                        // [feet]
          uint32_t Speed=getSpeed(Msg[8]);                          // [0.5km/h]
          uint32_t Knots=(Speed*553+1024)>>11;                      // knots
           int32_t Climb=getClimb(Msg[9]);                          // [0.1m/s]
@@ -614,7 +615,7 @@ class FANET_RxPacket: public FANET_Packet
           int16_t Turn=getQNE(Msg[11]);                            // [0.25deg/s]
           int16_t QNE=getQNE(Msg[12]);                             // [m]
           int32_t StdAlt=Alt+QNE; if(StdAlt<0) StdAlt=0;           // [m]
-         uint32_t StdFeet = ((int32_t)3360*StdAlt+512)>>10;        // [feet]
+         uint32_t StdFeet = MetersToFeet(StdAlt);                  // [feet]
          char hLat, hLon;
          Len+=Format_Lat(Out+Len, Lat, hLat);
          Out[Len++]=Icon[0];

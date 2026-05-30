@@ -413,7 +413,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
        "/g" , //  7 = para-glider      (rare but seen)
        "\\^", //  8 = powered aircraft (often)
        "/^",  //  9 = jet aircraft     (rare but seen)
-       "/z",  //  A = UFO              (people set for fun)
+       "/X",  //  A = gyrocopter
        "/O",  //  B = balloon          (seen once)
        "/O",  //  C = airship          (seen once)
        "/'",  //  D = UAV              (drones, can become very common)
@@ -526,7 +526,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    void setAcftTypeOGN(uint8_t AcftType)                       // set OGN aircraft-type
    { const uint8_t Map[16] = { 0, 4, 1, 3,                     // unknown, glider, tow-plane, helicopter
                                8, 1, 7, 7,                     // sky-diver, drop plane, hang-glider, para-glider
-                               1, 2, 0, 5,                     // motor airplane, jet, UFO, balloon
+                               1, 2, 3, 5,                     // motor airplane, jet, gyrocopter, balloon
                                5,11, 0, 0 } ;                  // airship, UAV, ground vehicle, static object
      if(AcftType<16) AcftCat=Map[AcftType];
                 else AcftCat=0; }

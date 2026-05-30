@@ -29,14 +29,21 @@ int32_t Coord_CRDtoUBX(int32_t Coord) { return ((int64_t)Coord*78125+(1<<24))>>2
 
 // ==============================================================================================
 
-int32_t FeetToMeters(int32_t Altitude) { return (Altitude*2497+4096)>>13; } // [feet] => [m]  3 m error at 300'000 ft
-int32_t MetersToFeet(int32_t Altitude) { return (Altitude*6719+1024)>>11; } // [m] => [feet]  8 ft error at 100'000 m
+static int32_t DivRound(int32_t Value, int32_t Div)
+{ if(Value>=0) return (Value+(Div/2))/Div;
+  return -((-Value+(Div/2))/Div); }
+
+// Fast approximations, if exact conversion ever becomes too expensive:
+// int32_t FeetToMeters(int32_t Altitude) { return (Altitude*2497+4096)>>13; } // [feet] => [m]  3 m error at 300'000 ft
+// int32_t MetersToFeet(int32_t Altitude) { return (Altitude*6719+1024)>>11; } // [m] => [feet]  8 ft error at 100'000 m
+int32_t FeetToMeters(int32_t Altitude) { return DivRound(Altitude*381, 1250); } // [feet] => [m]
+int32_t MetersToFeet(int32_t Altitude) { return DivRound(Altitude*1250, 381); } // [m] => [feet]
 
 // ==============================================================================================
 
 uint8_t AcftType_OGNtoADSB(uint8_t AcftType)
-                         // no-inf0, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, UFO, balloon, Zeppelin, UAV, ground vehicle, fixed object
-{ const uint8_t AcftCat[16] = { 0x00, 0xB1, 0xA1, 0xA7, 0xB3,      0xA1,       0xB4,        0xB4,        0xA1,   0xA2, 0x00, 0xB2,    0xB2,    0xB6, 0xC3, 0xC4 };
+                         // no-inf0, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, gyro, balloon, Zeppelin, UAV, ground vehicle, fixed object
+{ const uint8_t AcftCat[16] = { 0x00, 0xB1, 0xA1, 0xA7, 0xB3,      0xA1,       0xB4,        0xB4,        0xA1,   0xA2, 0xA7, 0xB2,    0xB2,    0xB6, 0xC3, 0xC4 };
   return AcftCat[AcftType]; }
 
 uint8_t AcftType_FNTtoADSB(uint8_t AcftType)
@@ -63,14 +70,14 @@ uint8_t AcftType_ADSBtoOGN(uint8_t AcftCat)
   return 0; }
 
 uint8_t AcftType_OGNtoGDL(uint8_t AcftType)
-                         // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, UFO, balloon, Zeppelin, UAV, ground vehicle, static-object
-{ const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   0,      10,       10,   14,  18,     19 } ;
+                         // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, gyro, balloon, Zeppelin, UAV, ground vehicle, static-object
+{ const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   7,      10,       10,   14,  18,     19 } ;
   return AcftCat[AcftType]; }
 
 uint8_t AcftType_OGNtoADSL(uint8_t AcftType)                // OGN to ADS-L aircraft-type
 { const uint8_t Map[16] = { 0, 4, 1, 3,                     // unknown, glider, tow-plane, helicopter
                             8, 1, 7, 7,                     // sky-diver, drop plane, hang-glider, para-glider
-                            1, 2, 0, 5,                     // motor airplane, jet, UFO, balloon
+                            1, 2, 3, 5,                     // motor airplane, jet, gyrocopter, balloon
                             5,11, 0, 0 } ;                  // airship, UAV, ground vehicle, static object
   return Map[AcftType]; }
 

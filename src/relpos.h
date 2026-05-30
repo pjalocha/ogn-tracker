@@ -294,7 +294,7 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
      if(Packet.calcDistanceVectorOGN(LatDist, LonDist, RefLat, RefLon, LatCos, MaxDist)<0) return -1; // [m, m, , , , m]
      X = LatDist*2;                                    // [m]      => [0.5m] relative along latitude
      Y = LonDist*2;                                    // [m]      => [0.5m] relative along longitude
-     Z = Packet.getAlt()-RefAlt-GeoidSepar; Z*=2;
+     Z = Packet.getAlt()-GeoidSepar-RefAlt; Z*=2;    // ADS-L altitude is HAE, LookOut reference is AMSL
      Speed = Packet.getSpeed()/2;
      if(Speed>2) isMoving=1;
      Heading = Packet.getTrack()<<7;

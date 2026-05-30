@@ -126,8 +126,8 @@ class __attribute__((packed, aligned(4))) PAW_Packet
      JSON[Len++] = HexDigit(AcftType);
      JSON[Len++]='\"';
      Len+=Format_String(JSON+Len, ",\"acft_cat\":\"");           // GDL90 aircraft category
-                          // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, UFO, balloon, Zeppelin, UAV, ground vehicle, static } ; 
-     const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   0,      10,       10,  14, 18, 19 } ;
+                          // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, gyro, balloon, Zeppelin, UAV, ground vehicle, static } ;
+     const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   7,      10,       10,  14, 18, 19 } ;
      Len+=Format_Hex(JSON+Len, AcftCat[AcftType]);
      JSON[Len++]='\"';
      // uint32_t PosTime=Time; if(nsTime<300000000) PosTime--;

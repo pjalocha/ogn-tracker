@@ -559,7 +559,7 @@ uint16_t StratuxPort;
   static const char *AcftTypeName(uint8_t AcftType)
   { const char *TypeName[16] = { "----", "Glid", "Tow ", "Heli",
                                  "SkyD", "Drop", "Hang", "Para",
-                                 "Pwrd", "Jet ", "UFO ", "Ball",
+                                 "Pwrd", "Jet ", "Gyro", "Ball",
                                  "Zepp", "UAV ", "Car ", "Fix " } ;
     if(AcftType<16) return TypeName[AcftType];
     return TypeName[0]; }
