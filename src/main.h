@@ -82,6 +82,10 @@ uint32_t getUniqueAddress(void);
 #include "t-beam-s3-pins.h"
 #endif
 
+#ifdef WITH_IGC_TRACKER
+#include "igc-tracker-pins.h"
+#endif
+
 #ifdef WITH_HTIT_TRACKER
 #include "htit-tracker-pins.h"
 #endif

@@ -176,7 +176,7 @@ static uint32_t RedrawTime = 0;
 static uint8_t PartUpd = 0;
 
 void EPD_DrawID(void)
-{ char Line[32];
+{ char Line[40];
   EPD.setFullWindow();                                           // this will be full page update
   EPD.firstPage();
   EPD.fillScreen(GxEPD_WHITE);                                   // all-white screen
@@ -184,6 +184,7 @@ void EPD_DrawID(void)
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold9pt7b);                               // use bold font: more readable
   sprintf(Line, "%X:%d:%06X %s", Parameters.AcftType, Parameters.AddrType, Parameters.Address, Parameters.Reg);
+  // sprintf(Line, "%s:%d:%06X %s", Parameters.AcftTypeName(), Parameters.AddrType, Parameters.Address, Parameters.Reg);
   EPD.setCursor(0, 195);
   EPD.print(Line);
   // drawSpeaker(110, 16, 32, GxEPD_BLACK);

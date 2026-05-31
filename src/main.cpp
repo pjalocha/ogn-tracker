@@ -259,11 +259,20 @@ void SD_Unmount(void)
 
 static esp_err_t SD_InitBus(void)
 { SD_Host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
+#ifdef SD_SPI_HOST
+  SD_Host.slot = SD_SPI_HOST;
+#else
   SD_Host.slot = SPI3_HOST;
+#endif
   SD_Host.max_freq_khz = SDMMC_FREQ_PROBING;
   SD_SlotConfig = (sdspi_device_config_t)SDSPI_DEVICE_CONFIG_DEFAULT();
   SD_SlotConfig.host_id   = (spi_host_device_t)SD_Host.slot;
   SD_SlotConfig.gpio_cs   = (gpio_num_t)SD_PinCS;
+  pinMode(SD_PinCS, OUTPUT);
+  digitalWrite(SD_PinCS, HIGH);
+  pinMode(SD_PinMISO, INPUT_PULLUP);
+  pinMode(SD_PinMOSI, INPUT_PULLUP);
+  pinMode(SD_PinSCK, INPUT_PULLUP);
   esp_err_t Ret = spi_bus_initialize((spi_host_device_t)SD_Host.slot, &SD_BusConfig, SD_SPI_DMA);
   if(Ret!=ESP_OK)
   { Serial.printf("SD spi_bus_initialize failed (%d)\n", Ret);
@@ -281,7 +290,21 @@ esp_err_t SD_Mount(void)
   return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
 
 static esp_err_t SD_Init(void)
-{ esp_err_t Ret = SD_Mount();
+{
+#ifdef SD_MOUNT_START_DELAY
+  delay(SD_MOUNT_START_DELAY);
+#endif
+#ifndef SD_MOUNT_RETRIES
+#define SD_MOUNT_RETRIES 1
+#endif
+#ifndef SD_MOUNT_RETRY_DELAY
+#define SD_MOUNT_RETRY_DELAY 0
+#endif
+  esp_err_t Ret = ESP_FAIL;
+  for(uint8_t Try=0; Try<SD_MOUNT_RETRIES; Try++)
+  { Ret = SD_Mount();
+    if(Ret==ESP_OK) break;
+    if(Try+1<SD_MOUNT_RETRIES && SD_MOUNT_RETRY_DELAY>0) delay(SD_MOUNT_RETRY_DELAY); }
   Serial.printf("SD mount(%d)\n", Ret);
   return Ret; } // ESP_OK => all good, ESP_FAIL => failed to mount file system, other => failed to init. the SD card
 
@@ -397,6 +420,11 @@ AXP20X_Class AXP;
 #endif
 
 uint8_t PowerMode = 2;                       // 0=sleep/minimal power, 1=comprimize, 2=full power
+
+#ifdef Reset_Pin
+static void RESET_ON(bool ON=1) { digitalWrite(Reset_Pin, !ON); }
+static void RESET_Init(void)    { pinMode(Reset_Pin, OUTPUT); RESET_ON(0); }
+#endif
 
 #ifdef Vext_PinEna
 static void Vext_Init(void) {  pinMode(Vext_PinEna, OUTPUT); }
@@ -1042,6 +1070,10 @@ static void PrintPOGNS(void);
 
 void setup()
 {
+#ifdef Reset_Pin
+  RESET_Init(); RESET_ON(0);                 // peripherial reset inactive
+#endif
+
   CONS_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the writing to the console
   I2C_Mutex  = xSemaphoreCreateMutex();      // semaphore for sharing the I2C bus
   WIFI_Mutex = xSemaphoreCreateMutex();      // semaphore for sharing the WIFI usage
@@ -1055,6 +1087,13 @@ void setup()
 //   Radio_SlotMsg = xQueueCreate(1, sizeof(TimeSync)); // message queue for GPS to signal the new time slot
 // #endif
   Random.Word+=getUniqueID(); XorShift64(Random.Word);
+
+#ifdef Reset_Pin
+  RESET_ON(1);                             // peripherial reset, not clear if to activate it here
+  delay(10);
+  RESET_ON(0);
+  delay(10);
+#endif
 
 #ifdef Button_Pin
   Button_Init();
@@ -1428,7 +1467,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 
 #ifdef WITH_OLED
   OLED.begin();
-#ifdef WITH_TBEAMS3
+#if defined(WITH_TBEAMS3) || defined(WITH_OLED_FLIP)
    OLED.setDisplayRotation(U8G2_R2);
 #else
   OLED.setDisplayRotation(U8G2_R0);
