@@ -95,6 +95,9 @@ static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ1); }
 
 // =======================================================================================================
 
+#define WITH_RADIO_CACHE
+
+#ifdef WITH_RADIO_CACHE
 static float Radio_Cache_Freq = -1.0f;
 static float Radio_Cache_TxPower = -1000.0f;
 static float Radio_Cache_BitRate = -1.0f;
@@ -114,9 +117,12 @@ static uint16_t Radio_Cache_CRCPolynomial = 0;
 static bool Radio_Cache_CRCInverted = false;
 static uint8_t Radio_Cache_PacketMode = 0xFF;
 static uint8_t Radio_Cache_PacketLen = 0xFF;
+#endif
 
 static void Radio_Cache_Clear(void)
-{ Radio_Cache_Freq = -1.0f;
+{
+#ifdef WITH_RADIO_CACHE
+  Radio_Cache_Freq = -1.0f;
   Radio_Cache_TxPower = -1000.0f;
   Radio_Cache_BitRate = -1.0f;
   Radio_Cache_FreqDev = -1.0f;
@@ -127,14 +133,20 @@ static void Radio_Cache_Clear(void)
   Radio_Cache_Encoding = 0xFF;
   Radio_Cache_CRCMode = 0xFF;
   Radio_Cache_PacketMode = 0xFF;
-  Radio_Cache_PacketLen = 0xFF; }
+  Radio_Cache_PacketLen = 0xFF;
+#endif
+}
 
 static int Radio_setFrequency(float Freq)                // set receive/transmit frequency
 { Freq += (0.0000001f*Parameters.RFchipFreqCorr)*Freq;   // apply frequency correction
+#ifdef WITH_RADIO_CACHE
   if(Freq==Radio_Cache_Freq) return 0;
+#endif
   int State=Radio.setFrequency(Freq);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_Freq = Freq;
+#endif
   return 0; }
 
 static int Radio_setOutputPower(float TxPower)         // set trannsmitter power
@@ -146,113 +158,177 @@ static int Radio_setOutputPower(float TxPower)         // set trannsmitter power
 #ifdef WITH_SX1262
   else if(TxPower>22) TxPower=22;
 #endif
+#ifdef WITH_RADIO_CACHE
   if(TxPower==Radio_Cache_TxPower) return 0;
+#endif
   int State=Radio.setOutputPower(TxPower);
   if(State) return State;
   State=Radio.setCurrentLimit(140);                // values are 0 to 140 mA for SX1262, default is 60
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_TxPower=TxPower;
+#endif
   return 0; }
 
 static int Radio_setDataShaping(uint8_t Shaping)
-{ if(Shaping==Radio_Cache_DataShaping) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if(Shaping==Radio_Cache_DataShaping) return 0;
+#endif
   int State=Radio.setDataShaping(Shaping);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_DataShaping = Shaping;
+#endif
   return 0; }
 
 static int Radio_setBitRate(float BitRate)
-{ if(BitRate==Radio_Cache_BitRate) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if(BitRate==Radio_Cache_BitRate) return 0;
+#endif
   int State=Radio.setBitRate(BitRate);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_BitRate = BitRate;
+#endif
   return 0; }
 
 static int Radio_setFrequencyDeviation(float FreqDev)
-{ if(FreqDev==Radio_Cache_FreqDev) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if(FreqDev==Radio_Cache_FreqDev) return 0;
+#endif
   int State=Radio.setFrequencyDeviation(FreqDev);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_FreqDev = FreqDev;
+#endif
   return 0; }
 
 static int Radio_setRxBandwidth(float RxBandwidth)
-{ if(RxBandwidth==Radio_Cache_RxBandwidth) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if(RxBandwidth==Radio_Cache_RxBandwidth) return 0;
+#endif
   int State=Radio.setRxBandwidth(RxBandwidth);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_RxBandwidth = RxBandwidth;
+#endif
   return 0; }
 
 static int Radio_setPreambleLength(uint16_t PreambleLength)
-{ if(PreambleLength==Radio_Cache_PreambleLength) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if(PreambleLength==Radio_Cache_PreambleLength) return 0;
+#endif
   int State=Radio.setPreambleLength(PreambleLength);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_PreambleLength = PreambleLength;
+#endif
   return 0; }
 
 static int Radio_setSyncWord(uint8_t *SyncWord, uint8_t SyncLen)
-{ if((SyncLen==Radio_Cache_SyncLen) && (SyncLen<=sizeof(Radio_Cache_SyncWord)) && (memcmp(SyncWord, Radio_Cache_SyncWord, SyncLen)==0)) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if((SyncLen==Radio_Cache_SyncLen) && (SyncLen<=sizeof(Radio_Cache_SyncWord)) && (memcmp(SyncWord, Radio_Cache_SyncWord, SyncLen)==0)) return 0;
+#endif
   int State=Radio.setSyncWord(SyncWord, SyncLen);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   if(SyncLen<=sizeof(Radio_Cache_SyncWord))
   { memcpy(Radio_Cache_SyncWord, SyncWord, SyncLen);
     Radio_Cache_SyncLen = SyncLen; }
   else Radio_Cache_SyncLen = 0xFF;
+#endif
   return 0; }
 
 static int Radio_setSyncWord(uint8_t SyncWord)
-{ if((Radio_Cache_SyncLen==1) && (Radio_Cache_SyncWord[0]==SyncWord)) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if((Radio_Cache_SyncLen==1) && (Radio_Cache_SyncWord[0]==SyncWord)) return 0;
+#endif
   int State=Radio.setSyncWord(SyncWord);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_SyncWord[0] = SyncWord;
   Radio_Cache_SyncLen = 1;
+#endif
   return 0; }
 
 static int Radio_setEncoding(uint8_t Encoding)
-{ if(Encoding==Radio_Cache_Encoding) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if(Encoding==Radio_Cache_Encoding) return 0;
+#endif
   int State=Radio.setEncoding(Encoding);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_Encoding = Encoding;
+#endif
   return 0; }
 
 #ifdef WITH_SX1276
 static int Radio_setCRC(bool Enable, bool Type=false)
-{ if((Radio_Cache_CRCMode==0) && (Enable==Radio_Cache_CRCEnable) && (Type==Radio_Cache_CRCType)) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if((Radio_Cache_CRCMode==0) && (Enable==Radio_Cache_CRCEnable) && (Type==Radio_Cache_CRCType)) return 0;
+#endif
   int State=Radio.setCRC(Enable, Type);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_CRCMode = 0;
   Radio_Cache_CRCEnable = Enable;
   Radio_Cache_CRCType = Type;
+#endif
   return 0; }
 #endif
 
 #ifdef WITH_SX1262
 static int Radio_setCRC(uint8_t Len, uint16_t Initial=0x1D0F, uint16_t Polynomial=0x1021, bool Inverted=true)
-{ if((Radio_Cache_CRCMode==1) && (Len==Radio_Cache_CRCLen) && (Initial==Radio_Cache_CRCInitial) &&
+{
+#ifdef WITH_RADIO_CACHE
+  if((Radio_Cache_CRCMode==1) && (Len==Radio_Cache_CRCLen) && (Initial==Radio_Cache_CRCInitial) &&
      (Polynomial==Radio_Cache_CRCPolynomial) && (Inverted==Radio_Cache_CRCInverted)) return 0;
+#endif
   int State=Radio.setCRC(Len, Initial, Polynomial, Inverted);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_CRCMode = 1;
   Radio_Cache_CRCLen = Len;
   Radio_Cache_CRCInitial = Initial;
   Radio_Cache_CRCPolynomial = Polynomial;
   Radio_Cache_CRCInverted = Inverted;
+#endif
   return 0; }
 #endif
 
 static int Radio_fixedPacketLengthMode(uint8_t Len)
-{ if((Radio_Cache_PacketMode==0) && (Len==Radio_Cache_PacketLen)) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if((Radio_Cache_PacketMode==0) && (Len==Radio_Cache_PacketLen)) return 0;
+#endif
   int State=Radio.fixedPacketLengthMode(Len);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_PacketMode = 0;
   Radio_Cache_PacketLen = Len;
+#endif
   return 0; }
 
 static int Radio_variablePacketLengthMode(uint8_t MaxLen)
-{ if((Radio_Cache_PacketMode==1) && (MaxLen==Radio_Cache_PacketLen)) return 0;
+{
+#ifdef WITH_RADIO_CACHE
+  if((Radio_Cache_PacketMode==1) && (MaxLen==Radio_Cache_PacketLen)) return 0;
+#endif
   int State=Radio.variablePacketLengthMode(MaxLen);
   if(State) return State;
+#ifdef WITH_RADIO_CACHE
   Radio_Cache_PacketMode = 1;
   Radio_Cache_PacketLen = MaxLen;
+#endif
   return 0; }
 
 // =======================================================================================================
