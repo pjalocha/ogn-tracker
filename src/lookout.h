@@ -132,7 +132,7 @@ class LookOut_Target           // describes a flying aircrafts
      uint32_t Addr = ID&0xFFFFFF;                                  // [24-bit] address
      Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));               // 24-bit address: RND, ICAO, FLARM, OGN
      Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
-     if(Call[0]) { NMEA[Len++]='|'; Len+=Format_String(NMEA+Len, Call); }
+     if(Call[0]) { NMEA[Len++]='!'; Len+=Format_String(NMEA+Len, Call); }
      NMEA[Len++]=',';
      // Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*225+0x800)>>12, 4, 1); // [deg] heading (by GPS)
      Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*45+0x1000)>>13);  // [deg] heading - without decimal part
