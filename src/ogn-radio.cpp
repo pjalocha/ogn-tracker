@@ -62,6 +62,9 @@ static const uint8_t SYNC_LDR [10] = { 0xB4, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x18,
 
 // =======================================================================================================
 
+uint32_t Radio_msLiveTime = 0;
+uint32_t Radio_msDeadTime = 0;
+
 uint32_t Radio_TxCount[8] = { 0, 0, 0, 0, 0, 0, 0, 0 } ; // transmitted packet counters
 uint32_t Radio_RxCount[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } ; // received packet counters
 
@@ -716,6 +719,8 @@ static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, uint8_t SysID, uint
     uint32_t msTime = Now-msStart;                                 // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
   Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI); // [dBm] measure the noise level at the end of the slot and average
+  uint32_t msLive = millis()-msStart;
+  Radio_msLiveTime+=msLive;
   return PktCount; }                                               // return number of received packets
 
 // =======================================================================================================
@@ -1225,6 +1230,7 @@ void Radio_Task(void *Parms)
       Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);
       Radio_setFrequency(RxFreq);
       Radio.startReceive();
+      uint32_t msLive = millis();
       for( ; ; )
       { vTaskDelay(1);
         PktCount+=Radio_Receive(RxPktLen, RxSysID, RxChannel, TimeRef);
@@ -1232,6 +1238,8 @@ void Radio_Task(void *Parms)
         uint32_t Now = millis();
         uint32_t msTime = Now-msStart;                                 // [ms] time since start
         if(msTime>=msTimeLeft) break; }
+      msLive = millis()-msLive;
+      Radio_msLiveTime += msLive;
       Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI);
       const ADSL_Packet *AdslPacket = ADSL_TxFIFO.getRead();
       if(AdslPacket)
@@ -1463,16 +1471,16 @@ void Radio_Task(void *Parms)
     // Serial.printf("Radio: %us %ums %dpkt\n", TimeRef.UTC, millis()-TimeRef.sysTime, PktCountSum);
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d %d:%d  %3.1fdBm %d pkts %3.1f pkt/s %3.1fs [%d]",
+     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d %d:%d  %3.1fdBm live:%ums %u pkts %3.1f pkt/s %3.1fs [%d]",
        Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
        Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
        Radio_RxCount[8], Radio_RxCount[9],
-       Radio_BkgRSSI, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit,
+       Radio_BkgRSSI, Radio_msLiveTime, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit,
        uxTaskGetStackHighWaterMark(NULL));
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
-    PktCountSum=0;
+    PktCountSum=0; Radio_msLiveTime=0;
     if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 20))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
