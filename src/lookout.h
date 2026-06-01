@@ -297,12 +297,9 @@ template <const uint8_t MaxTgts=32>
      { NMEA[Len++]=',';                                    //
        uint32_t Addr=Tgt->ID;
        Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));     // 24-bit address: RND, ICAO, FLARM, OGN
-       Len+=Format_Hex(NMEA+Len, (uint16_t)Addr); }
-// #ifdef WITH_SKYDEMON
-//     { Len+=Format_Hex(NMEA+Len, Tgt->ID & 0x00FFFFFF); }  // maybe just 6 digits should be produced ?
-// #else
-//     { Len+=Format_Hex(NMEA+Len, Tgt->ID); }
-// #endif
+       Len+=Format_Hex(NMEA+Len, (uint16_t)Addr);
+       if(Tgt->Call[0]) { NMEA[Len++]='!'; Len+=Format_String(NMEA+Len, Tgt->Call); }
+     }
      Len+=NMEA_AppendCheckCRNL(NMEA, Len);
      NMEA[Len]=0;
      return Len; }
