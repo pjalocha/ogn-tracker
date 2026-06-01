@@ -343,7 +343,7 @@ static int Radio_variablePacketLengthMode(uint8_t MaxLen)
 
 static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uint8_t SYNClen=8)         // Radio setup for FLR/OGN/ADS-L
 { int ErrState=0; int State=0;
-  // uint32_t Time=millis();
+  uint32_t msDead=millis();
   // Radio.standby();
   // vTaskDelay(1);
 #ifdef WITH_SX1276
@@ -408,8 +408,8 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
   if(State) ErrState=State;
 #endif
-  // Time = millis()-Time;
-  // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
+  msDead = millis()-msDead;
+  Radio_msDeadTime += msDead;
   return ErrState; }                                                   // this call takes 18-19 ms
 
 static int ManchEncode(uint8_t *Out, const uint8_t *Inp, uint8_t InpLen) // Encode packet bytes as Manchester
@@ -472,6 +472,7 @@ static int Radio_TxManchFSK(const uint8_t *Packet, uint8_t Len)          // tran
 // Radio setup for PilotAware: GFSK, 38.4kbps, +/-12.5kHz and ADS-L/OGN LDR
 static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, const uint8_t *SYNC=SYNC_LDR, uint8_t SYNClen=2)
 { int ErrState=0; int State=0;
+  uint32_t msDead = millis();
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
   { State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
@@ -528,8 +529,8 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
   if(State) ErrState=State;
 #endif
-  // Time = millis()-Time;
-  // Serial.printf("Radio_ConfigManchFSK(%d, ) (%d) %dms\n", PktLen, ErrState, Time);
+  msDead = millis()-msDead;
+  Radio_msDeadTime += msDead;
   return ErrState; }                                                // this call takes 18-19 ms
 
 static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit a PilotAware packet
@@ -552,6 +553,7 @@ static int Radio_TxLDR(const ADSL_Packet &Packet)                   // transmit 
 
 static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uint8_t SYNClen) // Radio setup for O-band ADS-L HDR
 { int ErrState=0; int State=0;
+  uint32_t msDead = millis();
 #ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
   { State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
@@ -614,7 +616,9 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
   if(State) ErrState=State;
 #endif
-return ErrState; }
+  msDead = millis()-msDead;
+  Radio_msDeadTime += msDead;
+  return ErrState; }
 
 static int Radio_TxHDR(const uint8_t *Packet, uint8_t Len)                // transmit a packet on the O-Band/HDR
 { return Radio_TxFSK(Packet, Len); }
@@ -1471,17 +1475,17 @@ void Radio_Task(void *Parms)
     // Serial.printf("Radio: %us %ums %dpkt\n", TimeRef.UTC, millis()-TimeRef.sysTime, PktCountSum);
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d %d:%d  %3.1fdBm live:%ums %u pkts %3.1f pkt/s %3.1fs [%d]",
+     "Radio: Tx: %d:%d:%d:%d:%d:%d:%d  Rx: %d:%d:%d:%d:%d:%d:%d %d:%d  %3.1fdBm %u+%ums %u pkts %3.1f pkt/s %3.1fs [%d]",
        Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[3], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
        Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[3], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
        Radio_RxCount[8], Radio_RxCount[9],
-       Radio_BkgRSSI, Radio_msLiveTime, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit,
+       Radio_BkgRSSI, Radio_msLiveTime, Radio_msDeadTime, PktCountSum, Radio_PktRate, 0.001*Radio_TxCredit,
        uxTaskGetStackHighWaterMark(NULL));
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     PktCountSum=0; Radio_msLiveTime=0;
-    if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 20))
+    if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 30))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
 #ifdef WITH_SDLOG
