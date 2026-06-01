@@ -408,8 +408,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
   if(State) ErrState=State;
 #endif
-  msDead = millis()-msDead;
-  Radio_msDeadTime += msDead;
+  msDead = millis()-msDead; Radio_msDeadTime += msDead;
   return ErrState; }                                                   // this call takes 18-19 ms
 
 static int ManchEncode(uint8_t *Out, const uint8_t *Inp, uint8_t InpLen) // Encode packet bytes as Manchester
@@ -422,19 +421,18 @@ static int ManchEncode(uint8_t *Out, const uint8_t *Inp, uint8_t InpLen) // Enco
 
 #ifdef WITH_SX1262
 static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
-{ uint32_t usTxTime=Radio.getTimeOnAir(Len);                             // [usec]
+{ uint32_t msDead=millis();
+  uint32_t usTxTime=Radio.getTimeOnAir(Len);                             // [usec]
   Radio_TxCredit-=usTxTime/1000;
-  // uint32_t Time=millis();
   int State=Radio.transmit((const uint8_t *)Packet, Len);                                 // transmit
+  msDead = millis()-msDead; Radio_msDeadTime += msDead;
   LED_OGN_TX(20);
-  // Time = millis()-Time;
-  // Serial.printf("Radio_TxManchFSK(, %d=>%d) (%d) %dms\n", Len, TxLen, State, Time);  // for debug
   return State; }                                                        // this call takes 15-16 ms although the actuall packet transmission only 5-6 ms
 #endif
 
 #ifdef WITH_SX1276
 static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
-{ // Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_PAYLOAD_LENGTH_FSK, Len);
+{ uint32_t msDead=millis();
   int State=Radio.startTransmit((const uint8_t *)Packet, Len);
   uint32_t usStart = micros();                                         // [usec] when transmission started
   uint32_t usTxTime=Radio.getTimeOnAir(Len);                           // [usec] predicted transmission time
@@ -456,6 +454,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
   // uint8_t RegFixed = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_PACKET_CONFIG_1);
   // uint8_t RegDIO1 = Radio.mod->SPIreadRegister(RADIOLIB_SX127X_REG_DIO_MAPPING_1);
   // Serial.printf("Radio_TxFSK(, %d) usTxTime:%d, usLeft:%d [%d:%02X:%02X]\n", Len, usTxTime, usLeft, RegPktLen, RegFixed, RegDIO1);
+  msDead = millis()-msDead; Radio_msDeadTime += msDead;
   LED_OGN_TX(20);
   return State; }
 #endif
@@ -529,8 +528,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
   if(State) ErrState=State;
 #endif
-  msDead = millis()-msDead;
-  Radio_msDeadTime += msDead;
+  msDead = millis()-msDead; Radio_msDeadTime += msDead;
   return ErrState; }                                                // this call takes 18-19 ms
 
 static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit a PilotAware packet
@@ -616,8 +614,7 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
   if(State) ErrState=State;
 #endif
-  msDead = millis()-msDead;
-  Radio_msDeadTime += msDead;
+  msDead = millis()-msDead; Radio_msDeadTime += msDead;
   return ErrState; }
 
 static int Radio_TxHDR(const uint8_t *Packet, uint8_t Len)                // transmit a packet on the O-Band/HDR
@@ -723,8 +720,7 @@ static int Radio_Receive(uint32_t msTimeLen, uint8_t PktLen, uint8_t SysID, uint
     uint32_t msTime = Now-msStart;                                 // [ms] time since start
     if(msTime>=msTimeLen) break; }                                 // [ms] when reached the requesten time length then stop
   Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI); // [dBm] measure the noise level at the end of the slot and average
-  uint32_t msLive = millis()-msStart;
-  Radio_msLiveTime+=msLive;
+  uint32_t msLive = millis()-msStart; Radio_msLiveTime+=msLive;
   return PktCount; }                                               // return number of received packets
 
 // =======================================================================================================
@@ -823,10 +819,12 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
 
 // setup Radio for FANET or MESHT
 static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t Sync, uint8_t CRa)
-{                                                                  // first switch to LoRa mode
+{ uint32_t msDead=millis();
+  // first switch to LoRa mode
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
-  { int State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+  { uint32_t msDead=millis();
+    int State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
     if(State==0) Radio_Cache_Clear(); }
   //          Spreadng Factor,   Bandwidth,               Coding Rate,  low-data-rate-optimize
   // int Ret1=Radio.setModulationParams(7, RADIOLIB_SX126X_LORA_BW_250_0, 4+CRa, RADIOLIB_SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_OFF);
@@ -855,15 +853,18 @@ static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t 
 #ifdef WITH_SX1276
   Radio_setSyncWord(Sync);
 #endif
+  msDead = millis()-msDead; Radio_msDeadTime+=msDead;
 }
 
 #ifdef WITH_MESHT
 static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(250.0f, 7, 16, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
 
 static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT packet
-{ Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
+{ uint32_t msDead=millis();
+  Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);       // [usec]
   Radio_TxCredit-=usTxTime/1000;
+  msDead = millis()-msDead; Radio_msDeadTime+=msDead;
   LED_OGN_TX(20); }
 #endif
 
@@ -915,10 +916,12 @@ static int Radio_RxFANET(uint32_t msTimeLen, TimeSync &TimeRef)    // FANET rece
 
 static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a FANET packet
 { // Serial.printf("FNT Tx[%d] %06X\n", Packet.Len, Packet.getAddr());
+  uint32_t msDead = millis();
   Radio.transmit(Packet.Byte, Packet.Len); Packet.Done=1;          // not clear, if we should wait here for the transmission to complete ?
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);                // [usec]
   Radio_TxCredit-=usTxTime/1000;
   Radio_TxCount[Radio_SysID_FNT]++;
+  msDead = millis()-msDead; Radio_msDeadTime+=msDead;
   LED_OGN_TX(20); }
 
 static void Radio_ConfigFANET(float BW=250.0f, uint8_t CRa=1) { Radio_ConfigLoRa(BW, 7, 5, 0xF1, CRa); } // 5 preamble symbols, SYNC=0xF1
@@ -1484,7 +1487,7 @@ void Radio_Task(void *Parms)
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
-    PktCountSum=0; Radio_msLiveTime=0;
+    PktCountSum=0; Radio_msLiveTime=0; Radio_msDeadTime=0;
     if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 30))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
