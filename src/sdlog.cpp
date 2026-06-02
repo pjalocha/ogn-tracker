@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <utime.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "fifo.h"
 
@@ -24,6 +25,13 @@ static FILE *LogFile = 0;
 static   uint16_t  LogDate = 0;                                   // [~days] date = FatTime>>16
 static TickType_t  LogOpenTime;                                   // [msec] when was the log file (re)open
 static const TickType_t LogReopen = 30000;                        // [msec] when to close and re-open the log file
+
+static int EnsureDir(const char *Path)
+{ struct stat Stat;
+  if(stat(Path, &Stat)==0) return S_ISDIR(Stat.st_mode) ? 0 : -1;
+  if(mkdir(Path, 0777)==0) return 0;
+  if(errno==EEXIST && stat(Path, &Stat)==0) return S_ISDIR(Stat.st_mode) ? 0 : -1;
+  return -1; }
 
 const size_t FIFOsize = 16384;
 static FIFO<char, FIFOsize> Log_FIFO;                             // 16K buffer for SD-log
@@ -52,10 +60,9 @@ static int Log_Open(void)
   Format_String(CONS_UART_Write, "\n");
   xSemaphoreGive(CONS_Mutex);
 #endif
+  if(EnsureDir("/sdcard/CONS")<0) return -1;                      // make sure the sub-directory exists
   LogFile = fopen(LogFileName, "at");                             // try to open the file
-  if(LogFile==0)                                                  // if this fails
-  { if(mkdir("/sdcard/CONS", 0777)<0) return -1;                  // try to create the sub-directory
-    LogFile = fopen(LogFileName, "at"); if(LogFile==0) return -1; } // and again attempt to open the log file
+  if(LogFile==0) return -1;
   LogOpenTime=xTaskGetTickCount();
   return 0; }
 
@@ -145,6 +152,7 @@ static void IGC_Close(void)
 static int IGC_Open(const GPS_Position &GPS)
 { IGC_Close();                                                      // close the previous file, if open
   if(!SD_isMounted()) return -1;                                    // -1 => SD not mounted
+  if(EnsureDir(IGC_Path)<0) return -3;                              // -3 => can't create sub-dir
   memcpy(IGC_FileName, IGC_Path, IGC_PathLen);                      // copy path
   IGC_FileName[IGC_PathLen]='/';                                    // slash after the path
   Flight.ShortName(IGC_FileName+IGC_PathLen+1, GPS, IGC_FlightNum, IGC_Serial); // full name
@@ -153,9 +161,6 @@ static int IGC_Open(const GPS_Position &GPS)
   if(IGC_File) { fclose(IGC_File); IGC_File=0; IGC_FlightNum++; return -2; } // -2 => file already exists
   IGC_File=fopen(IGC_FileName, "wt");                               // open for write
   // Format_String(CONS_UART_Write, "IGC_Open() (2)\n");
-  if(IGC_File==0)                                                   // failed: maybe sub-dir does not exist ?
-  { if(mkdir(IGC_Path, 0777)<0) return -3;                          // -3 => can't create sub-dir
-    IGC_File=fopen(IGC_FileName, "wt"); }                           // retry to open for write
   // Format_String(CONS_UART_Write, "IGC_Open() (3)\n");
   if(IGC_File)
   { IGC_SaveTime = TimeSync_Time();
