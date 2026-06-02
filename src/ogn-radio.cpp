@@ -145,7 +145,9 @@ static int Radio_setFrequency(float Freq)                // set receive/transmit
 #ifdef WITH_RADIO_CACHE
   if(Freq==Radio_Cache_Freq) return 0;
 #endif
+  uint32_t msDead = millis();
   int State=Radio.setFrequency(Freq);
+  msDead = millis()-msDead; Radio_msDeadTime+=msDead;
   if(State) return State;
 #ifdef WITH_RADIO_CACHE
   Radio_Cache_Freq = Freq;
@@ -164,9 +166,13 @@ static int Radio_setOutputPower(float TxPower)         // set trannsmitter power
 #ifdef WITH_RADIO_CACHE
   if(TxPower==Radio_Cache_TxPower) return 0;
 #endif
+  uint32_t msDead = millis();
   int State=Radio.setOutputPower(TxPower);
+  msDead = millis()-msDead; Radio_msDeadTime+=msDead;
   if(State) return State;
+  msDead = millis();
   State=Radio.setCurrentLimit(140);                // values are 0 to 140 mA for SX1262, default is 60
+  msDead = millis()-msDead; Radio_msDeadTime+=msDead;
   if(State) return State;
 #ifdef WITH_RADIO_CACHE
   Radio_Cache_TxPower=TxPower;
@@ -1023,7 +1029,7 @@ static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLe
   return PktLen; }
 
 static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CRa=1)
-{
+{ uint32_t msDead = millis();
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
   { int State=Radio.config(RADIOLIB_SX126X_PACKET_TYPE_LORA);
@@ -1053,6 +1059,8 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
 #endif
   Radio_setPreambleLength(8);
   Radio_setCRC(TX);                            // uplink with CRC, downlink without CRC
+
+  msDead=millis()-msDead; Radio_msDeadTime+=msDead;
 
   const float BaseFreq = 867.1;                //
   const float ChanStep =   0.2;
@@ -1245,8 +1253,7 @@ void Radio_Task(void *Parms)
         uint32_t Now = millis();
         uint32_t msTime = Now-msStart;                                 // [ms] time since start
         if(msTime>=msTimeLeft) break; }
-      msLive = millis()-msLive;
-      Radio_msLiveTime += msLive;
+      msLive = millis()-msLive; Radio_msLiveTime += msLive;
       Radio_BkgRSSI+=Radio_BkgUpdate*(Radio_liveRSSI()-Radio_BkgRSSI);
       const ADSL_Packet *AdslPacket = ADSL_TxFIFO.getRead();
       if(AdslPacket)
