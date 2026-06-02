@@ -48,4 +48,3 @@
 
 #define Buzzer_Pin    39 // Beeper/buzzer
 #define Buzzer_Channel 0 // LED controller channel
-

@@ -36,6 +36,10 @@
 #include "ms5611.h"
 #endif
 
+#ifdef WITH_QMC63XX
+#include "qmc63xx.h"
+#endif
+
 #include "atmosphere.h"
 #include "slope.h"
 #include "lowpass2.h"
@@ -327,6 +331,17 @@ static void ProcBaro(void)
 
 #endif // WITH_BMP180/BMP280/BME280
 
+#ifdef WITH_QMC63XX
+QMC63XX MagSensor;                       // QMC6309/QMC6310 magnetic sensor
+
+static uint8_t InitMagSensor(void)
+{ MagSensor.Bus=0;
+  uint8_t Err=MagSensor.Init();
+  if(Err==0) HardwareStatus.Magn=1;
+       else HardwareStatus.Magn=0;
+  return Err==0 ? MagSensor.ADDR:0; }
+#endif
+
 
 
 extern "C"
@@ -347,6 +362,10 @@ void vTaskSENS(void* pvParameters)
   PressDelay.Clear(4*101300);
 
   uint8_t Detected = InitBaro();
+#endif
+
+#ifdef WITH_QMC63XX
+  uint8_t MagDetected = InitMagSensor();
 #endif
 
   xSemaphoreTake(CONS_Mutex, 25);
@@ -382,6 +401,14 @@ void vTaskSENS(void* pvParameters)
          else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
+#ifdef WITH_QMC63XX
+  Format_String(CONS_UART_Write, " ");
+  Format_String(CONS_UART_Write, MagSensor.Name());
+  Format_String(CONS_UART_Write, ": ");
+  if(MagDetected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, MagDetected); }
+            else  Format_String(CONS_UART_Write, "not detected");
+#endif
+
   Format_String(CONS_UART_Write, "\n");
   xSemaphoreGive(CONS_Mutex);
 
@@ -396,4 +423,3 @@ void vTaskSENS(void* pvParameters)
 #endif
   }
 }
-

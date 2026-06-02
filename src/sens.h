@@ -26,6 +26,10 @@ extern MS5607   Baro;                       // MS5607 barometer sensor
 extern MS5611   Baro;                       // MS5611 barometer sensor
 #endif
 
+#ifdef WITH_QMC63XX
+#include "qmc63xx.h"
+extern QMC63XX  MagSensor;                  // QMC6309/QMC6310 magnetic sensor
+#endif
 
 #ifdef __cplusplus
   extern "C"

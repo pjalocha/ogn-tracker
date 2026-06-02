@@ -33,7 +33,7 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.21"
+#define VERSION "0.1.22"
 #endif
 
 // #define SOFT_NAME "dev-14.02" // signal development version
@@ -209,6 +209,7 @@ typedef union
     bool AXP210:1;        // Charge controller chip AXP2101
     bool BMP280:1;        // BMP280 pressure sensor
     bool BME280:1;        // BME280 pressure sensor
+    bool Magn  :1;        // Magnetic sensor
     bool Radio :1;        // SX1276 or SX1262 radio TRX
     bool GPS   :1;        // GPS receiver
     bool SPIFFS:1;        // SPIFFS

@@ -1,0 +1,68 @@
+#ifndef __QMC63XX_H__
+#define __QMC63XX_H__
+
+#include <stdint.h>
+
+#include "hal.h"
+
+class QMC63XX
+{ private:
+   static const uint8_t ADDR_QMC6310A = 0x1C;
+   static const uint8_t ADDR_QMC6310B = 0x3C;
+   static const uint8_t ADDR_QMC6309  = 0x7C;
+
+   static const uint8_t REG_ID        = 0x00;
+   static const uint8_t REG_CTRL1     = 0x0A;
+   static const uint8_t REG_CTRL2     = 0x0B;
+
+  public:
+   enum Type_t
+   { Type_None    = 0,
+     Type_QMC6310 = 1,
+     Type_QMC6309 = 2 };
+
+   uint8_t Bus;                         // which I2C bus
+   uint8_t ADDR;                        // detected I2C address
+   uint8_t ID;                          // chip ID: 0x80 = QMC6310, 0x90 = QMC6309
+   Type_t  Type;
+   uint8_t Error;                       // error on the I2C bus (0=no error)
+
+  public:
+   QMC63XX() : Bus(0), ADDR(0), ID(0), Type(Type_None), Error(0) { }
+
+   const char *Name(void) const
+   { if(Type==Type_QMC6310) return "QMC6310";
+     if(Type==Type_QMC6309) return "QMC6309";
+     return "none"; }
+
+   uint8_t CheckID(void)
+   { static const uint8_t Addr[3] = { ADDR_QMC6310A, ADDR_QMC6310B, ADDR_QMC6309 };
+     ADDR=0; ID=0; Type=Type_None;
+     for(uint8_t Idx=0; Idx<3; Idx++)
+     { uint8_t ChipID=0;
+       Error=I2C_Read(Bus, Addr[Idx], REG_ID, ChipID);
+       if(Error) continue;
+       if(ChipID==0x80)
+       { ADDR=Addr[Idx]; ID=ChipID; Type=Type_QMC6310; return 0; }
+       if(ChipID==0x90)
+       { ADDR=Addr[Idx]; ID=ChipID; Type=Type_QMC6309; return 0; }
+     }
+     return Error ? Error:0xFF; }
+
+   uint8_t Init(void)
+   { Error=CheckID(); if(Error) return Error;
+     uint8_t Data=0x00;
+     Error=I2C_Write(Bus, ADDR, REG_CTRL1, Data); if(Error) return Error; // suspend before changing mode
+     if(Type==Type_QMC6310)
+     { Data=0x00;
+       Error=I2C_Write(Bus, ADDR, REG_CTRL2, Data); if(Error) return Error;
+       Data=0x07; }                                                       // 50Hz continuous mode
+     else
+     { Data=0x00;
+       Error=I2C_Write(Bus, ADDR, REG_CTRL2, Data); if(Error) return Error;
+       Data=0x03; }                                                       // continuous mode
+     Error=I2C_Write(Bus, ADDR, REG_CTRL1, Data);
+     return Error; }
+};
+
+#endif // __QMC63XX_H__

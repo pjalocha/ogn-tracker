@@ -268,6 +268,10 @@ static esp_err_t SD_InitBus(void)
   SD_SlotConfig = (sdspi_device_config_t)SDSPI_DEVICE_CONFIG_DEFAULT();
   SD_SlotConfig.host_id   = (spi_host_device_t)SD_Host.slot;
   SD_SlotConfig.gpio_cs   = (gpio_num_t)SD_PinCS;
+#ifdef IMU_PinCS
+  pinMode(IMU_PinCS, OUTPUT);
+  digitalWrite(IMU_PinCS, HIGH);
+#endif
   pinMode(SD_PinCS, OUTPUT);
   digitalWrite(SD_PinCS, HIGH);
   pinMode(SD_PinMISO, INPUT_PULLUP);
@@ -1540,8 +1544,8 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash / SD copy needs extra stack
 #endif
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  5000, NULL, 1, NULL);  // read data from GPS
-#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280)
-  xTaskCreate(vTaskSENS   ,  "SENS" ,  5000, NULL, 1, NULL);  // read data from pressure sensor
+#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280) || defined(WITH_QMC63XX)
+  xTaskCreate(vTaskSENS   ,  "SENS" ,  5000, NULL, 1, NULL);  // read data from I2C sensors
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  5000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
   xTaskCreate(Radio_Task  ,  "RF"   ,  5000, NULL, 1, NULL);  // transmit/receive packets
