@@ -31,10 +31,10 @@ class QMC63XX
    Type_t  Type;
    uint8_t Error;                       // error on the I2C bus (0=no error)
    uint8_t Status;                      // status register
-   int16_t X, Y, Z;                     // raw magnetic field readout
+   int16_t Mag[3];                      // raw magnetic field readout
 
   public:
-   QMC63XX() : Bus(0), ADDR(0), ID(0), Type(Type_None), Error(0), Status(0), X(0), Y(0), Z(0) { }
+   QMC63XX() : Bus(0), ADDR(0), ID(0), Type(Type_None), Error(0), Status(0), Mag{0,0,0} { }
 
    const char *Name(void) const
    { if(Type==Type_QMC6310) return "QMC6310";
@@ -79,9 +79,9 @@ class QMC63XX
    { uint8_t Data[6];
      Error=I2C_Read(Bus, ADDR, REG_DATA, Data, sizeof(Data));
      if(Error) return Error;
-     X = (int16_t)(((uint16_t)Data[1]<<8) | Data[0]);
-     Y = (int16_t)(((uint16_t)Data[3]<<8) | Data[2]);
-     Z = (int16_t)(((uint16_t)Data[5]<<8) | Data[4]);
+     Mag[0] = (int16_t)(((uint16_t)Data[1]<<8) | Data[0]);
+     Mag[1] = (int16_t)(((uint16_t)Data[3]<<8) | Data[2]);
+     Mag[2] = (int16_t)(((uint16_t)Data[5]<<8) | Data[4]);
      return 0; }
 };
 

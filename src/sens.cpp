@@ -36,11 +36,11 @@
 #include "ms5611.h"
 #endif
 
-#ifdef WITH_QMC63XX
+#ifdef WITH_QMC63XX    // T-Beam-Supreme magnetic sensor
 #include "qmc63xx.h"
 #endif
 
-#ifdef WITH_QMI8658
+#ifdef WITH_QMI8658    // T-Beam-Supreme IMU sensor
 #include "qmi8658.h"
 #endif
 
@@ -109,6 +109,14 @@ static LowPass2<int64_t,10,9,12> PressAver, // low pass (average) filter for pre
 static Delay<int32_t, 8>        PressDelay; // 4-second delay for long-term climb rate
 
 static char Line[128];                      // line to prepare the barometer NMEA sentence
+
+#ifdef WITH_SDLOG
+static void SensorLogLine(const char *Line, int Len, int Wait=10)
+{ if(Log_Free()<Len) return;
+  if(!xSemaphoreTake(Log_Mutex, Wait)) return;
+  if(Log_Free()>=Len) Format_String(Log_Write, Line, 0, Len);
+  xSemaphoreGive(Log_Mutex); }
+#endif
 
 static uint8_t InitBaro(void)
 { Baro.Bus=BARO_I2C;
@@ -277,11 +285,7 @@ static void ProcBaro(void)
         xSemaphoreGive(CONS_Mutex); }
     }
 #ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { if(xSemaphoreTake(Log_Mutex, 20))
-      { Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
-        xSemaphoreGive(Log_Mutex); }
-    }
+    SensorLogLine(Line, Len);
 #endif
 
     Len=0;                                                           // start preparing the PGRMZ NMEA sentence
@@ -298,11 +302,7 @@ static void ProcBaro(void)
         xSemaphoreGive(CONS_Mutex); }
     }
 #ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { if(xSemaphoreTake(Log_Mutex, 20))
-      { Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
-        xSemaphoreGive(Log_Mutex); }
-    }
+    SensorLogLine(Line, Len);
 #endif
 
     Len=0;
@@ -324,11 +324,7 @@ static void ProcBaro(void)
         xSemaphoreGive(CONS_Mutex); }
     }
 #ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { if(xSemaphoreTake(Log_Mutex, 20))
-      { Format_String(Log_Write, Line, 0, Len);                             // send NMEA sentence to the log file
-        xSemaphoreGive(Log_Mutex); }
-    }
+    SensorLogLine(Line, Len);
 #endif
 
 }
@@ -351,56 +347,49 @@ static void ProcMagSensor(void)
   if(Ready==0) return;
   if(Ready>1) { InitMagSensor(); return; }            // if not initialized then initialize
   if(MagSensor.Read()) { InitMagSensor(); return; }   // if read error then re-initialize
-  int Len=sprintf(Line, "Magn: [%+6d,%+6d,%+6d]\n", MagSensor.X, MagSensor.Y, MagSensor.Z);
+  int Len=sprintf(Line, "Magn: [%+6d,%+6d,%+6d]\n",
+                  MagSensor.Mag[0], MagSensor.Mag[1], MagSensor.Mag[2]);
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Format_String(CONS_UART_Write, Line, 0, Len);
     xSemaphoreGive(CONS_Mutex); }
 #ifdef WITH_SDLOG
-  if(Log_Free()>=128)
-  { if(xSemaphoreTake(Log_Mutex, 25))
-    { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
-      xSemaphoreGive(Log_Mutex); } }
+  SensorLogLine(Line, Len);
 #endif
 }
 #endif
 
 #ifdef WITH_QMI8658
 QMI8658 IMUSensor;                        // QMI8658 accelerometer/gyro
+static uint8_t IMU_ErrCount;
 
 static uint8_t InitIMUSensor(void)
-{
-#ifndef WITH_QMI8658_SPI_TEST
-  HardwareStatus.IMU=0;
-  return 0;
-#else
-  uint8_t Err=IMUSensor.Init();
+{ uint8_t Err=IMUSensor.Init();
+  IMU_ErrCount=0;
   if(Err==0) HardwareStatus.IMU=1;
        else HardwareStatus.IMU=0;
   return Err==0 ? IMUSensor.ID:0;
-#endif
 }
 
 static void ProcIMUSensor(void)
 { if(!HardwareStatus.IMU) return;                    // if sensor absent then give up
   uint8_t Ready=IMUSensor.ReadReady();               // check if data ready for read
   if(Ready==0) return;
-  if(Ready>1) { InitIMUSensor(); return; }           // if not initialized then initialize
-  if(IMUSensor.Read()) { InitIMUSensor(); return; }  // if read error then re-initialize
+  if(Ready>1)                                        // SD can temporarily own the shared SPI bus
+  { if(++IMU_ErrCount>=8) InitIMUSensor();
+    return; }
+  if(IMUSensor.Read())                               // if repeated read errors then re-initialize
+  { if(++IMU_ErrCount>=8) InitIMUSensor();
+    return; }
+  IMU_ErrCount=0;
+  int Len=sprintf(Line, "IMU:  [%+6d,%+6d,%+6d] [%+6d,%+6d,%+6d]\n",
+                  IMUSensor.Accel[0], IMUSensor.Accel[1], IMUSensor.Accel[2],
+                  IMUSensor.Gyro [0], IMUSensor.Gyro [1], IMUSensor.Gyro [2]);
   if(xSemaphoreTake(CONS_Mutex, 20))
-  { Format_String(CONS_UART_Write, "IMU: [");
-    Format_SignDec(CONS_UART_Write, IMUSensor.Accel[0], 6);
-    CONS_UART_Write(',');
-    Format_SignDec(CONS_UART_Write, IMUSensor.Accel[1], 6);
-    CONS_UART_Write(',');
-    Format_SignDec(CONS_UART_Write, IMUSensor.Accel[2], 6);
-    Format_String(CONS_UART_Write, "] [");
-    Format_SignDec(CONS_UART_Write, IMUSensor.Gyro[0], 6);
-    CONS_UART_Write(',');
-    Format_SignDec(CONS_UART_Write, IMUSensor.Gyro[1], 6);
-    CONS_UART_Write(',');
-    Format_SignDec(CONS_UART_Write, IMUSensor.Gyro[2], 6);
-    Format_String(CONS_UART_Write, "]\n");
+  { Format_String(CONS_UART_Write, Line, 0, Len);
     xSemaphoreGive(CONS_Mutex); }
+#ifdef WITH_SDLOG
+  SensorLogLine(Line, Len);
+#endif
 }
 #endif
 
@@ -476,12 +465,9 @@ void vTaskSENS(void* pvParameters)
 
 #ifdef WITH_QMI8658
   Format_String(CONS_UART_Write, " QMI8658: ");
-#ifndef WITH_QMI8658_SPI_TEST
-  Format_String(CONS_UART_Write, "disabled");
-#else
   if(IMUDetected) { Format_String(CONS_UART_Write, "ID:"); Format_Hex(CONS_UART_Write, IMUDetected); }
-            else  Format_String(CONS_UART_Write, "not detected");
-#endif
+            else  { Format_String(CONS_UART_Write, "not detected ID:");
+                    Format_Hex(CONS_UART_Write, IMUSensor.ID); }
 #endif
 
   Format_String(CONS_UART_Write, "\n");

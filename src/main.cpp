@@ -253,13 +253,11 @@ void SD_Unmount(void)
 { if(SD_Card)
   { esp_vfs_fat_sdcard_unmount(SD_BasePath, SD_Card);
     SD_Card=0; }
-  if(SD_BusReady)
-  { spi_bus_free((spi_host_device_t)SD_Host.slot);
-    SD_BusReady=false; }
 }
 
 static esp_err_t SD_InitBus(void)
-{ SD_Host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
+{ if(SD_BusReady) return ESP_OK;
+  SD_Host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
 #ifdef SD_SPI_HOST
   SD_Host.slot = SD_SPI_HOST;
 #else

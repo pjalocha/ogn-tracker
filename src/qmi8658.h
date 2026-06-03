@@ -55,13 +55,6 @@ class QMI8658
    uint8_t InitBus(uint8_t Mode=0)
    { pinMode(IMU_PinCS, OUTPUT);
      digitalWrite(IMU_PinCS, HIGH);
-#ifdef SD_PinCS
-     pinMode(SD_PinCS, OUTPUT);
-     digitalWrite(SD_PinCS, HIGH);
-#endif
-     pinMode(SD_PinMISO, INPUT_PULLUP);
-     pinMode(SD_PinMOSI, INPUT_PULLUP);
-     pinMode(SD_PinSCK,  INPUT_PULLUP);
      if(Device) return 0;
      spi_device_interface_config_t DevConfig;
      memset(&DevConfig, 0, sizeof(DevConfig));
@@ -72,6 +65,13 @@ class QMI8658
      esp_err_t Ret = spi_bus_add_device(SpiHost(), &DevConfig, &Device);
      if(Ret==ESP_OK) return 0;
      if(Ret!=ESP_ERR_INVALID_STATE) return Ret;
+#ifdef SD_PinCS
+     pinMode(SD_PinCS, OUTPUT);
+     digitalWrite(SD_PinCS, HIGH);
+#endif
+     pinMode(SD_PinMISO, INPUT_PULLUP);
+     pinMode(SD_PinMOSI, INPUT_PULLUP);
+     pinMode(SD_PinSCK,  INPUT_PULLUP);
      spi_bus_config_t BusConfig =
      { .mosi_io_num = SD_PinMOSI,
        .miso_io_num = SD_PinMISO,
@@ -106,7 +106,7 @@ class QMI8658
      Trans.length = 8*(Len+1);
      Trans.tx_buffer = Tx;
      Trans.rx_buffer = Rx;
-     esp_err_t Ret = spi_device_transmit(Device, &Trans);
+     esp_err_t Ret = spi_device_polling_transmit(Device, &Trans);
      if(Ret!=ESP_OK) return Ret;
      memcpy(Data, Rx+1, Len);
      return 0; }
@@ -118,7 +118,7 @@ class QMI8658
      memset(&Trans, 0, sizeof(Trans));
      Trans.length = 16;
      Trans.tx_buffer = Tx;
-     esp_err_t Ret = spi_device_transmit(Device, &Trans);
+     esp_err_t Ret = spi_device_polling_transmit(Device, &Trans);
      return Ret==ESP_OK ? 0:Ret; }
 
    uint8_t CheckID(void)
