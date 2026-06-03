@@ -14,7 +14,7 @@
 
 // #define DEBUG_PRINT
 
-#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611) || defined(WITH_QMC63XX)
+#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611) || defined(WITH_QMC63XX) || defined(WITH_QMI8658)
 
 #ifdef WITH_BMP180
 #include "bmp180.h"
@@ -38,6 +38,10 @@
 
 #ifdef WITH_QMC63XX
 #include "qmc63xx.h"
+#endif
+
+#ifdef WITH_QMI8658
+#include "qmi8658.h"
 #endif
 
 #include "atmosphere.h"
@@ -360,6 +364,46 @@ static void ProcMagSensor(void)
 }
 #endif
 
+#ifdef WITH_QMI8658
+QMI8658 IMUSensor;                        // QMI8658 accelerometer/gyro
+
+static uint8_t InitIMUSensor(void)
+{
+#ifndef WITH_QMI8658_SPI_TEST
+  HardwareStatus.IMU=0;
+  return 0;
+#else
+  uint8_t Err=IMUSensor.Init();
+  if(Err==0) HardwareStatus.IMU=1;
+       else HardwareStatus.IMU=0;
+  return Err==0 ? IMUSensor.ID:0;
+#endif
+}
+
+static void ProcIMUSensor(void)
+{ if(!HardwareStatus.IMU) return;                    // if sensor absent then give up
+  uint8_t Ready=IMUSensor.ReadReady();               // check if data ready for read
+  if(Ready==0) return;
+  if(Ready>1) { InitIMUSensor(); return; }           // if not initialized then initialize
+  if(IMUSensor.Read()) { InitIMUSensor(); return; }  // if read error then re-initialize
+  if(xSemaphoreTake(CONS_Mutex, 20))
+  { Format_String(CONS_UART_Write, "IMU: [");
+    Format_SignDec(CONS_UART_Write, IMUSensor.Accel[0], 6);
+    CONS_UART_Write(',');
+    Format_SignDec(CONS_UART_Write, IMUSensor.Accel[1], 6);
+    CONS_UART_Write(',');
+    Format_SignDec(CONS_UART_Write, IMUSensor.Accel[2], 6);
+    Format_String(CONS_UART_Write, "] [");
+    Format_SignDec(CONS_UART_Write, IMUSensor.Gyro[0], 6);
+    CONS_UART_Write(',');
+    Format_SignDec(CONS_UART_Write, IMUSensor.Gyro[1], 6);
+    CONS_UART_Write(',');
+    Format_SignDec(CONS_UART_Write, IMUSensor.Gyro[2], 6);
+    Format_String(CONS_UART_Write, "]\n");
+    xSemaphoreGive(CONS_Mutex); }
+}
+#endif
+
 
 extern "C"
 void vTaskSENS(void* pvParameters)
@@ -383,6 +427,10 @@ void vTaskSENS(void* pvParameters)
 
 #ifdef WITH_QMC63XX
   uint8_t MagDetected = InitMagSensor();
+#endif
+
+#ifdef WITH_QMI8658
+  uint8_t IMUDetected = InitIMUSensor();
 #endif
 
   xSemaphoreTake(CONS_Mutex, 25);
@@ -426,6 +474,16 @@ void vTaskSENS(void* pvParameters)
             else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
+#ifdef WITH_QMI8658
+  Format_String(CONS_UART_Write, " QMI8658: ");
+#ifndef WITH_QMI8658_SPI_TEST
+  Format_String(CONS_UART_Write, "disabled");
+#else
+  if(IMUDetected) { Format_String(CONS_UART_Write, "ID:"); Format_Hex(CONS_UART_Write, IMUDetected); }
+            else  Format_String(CONS_UART_Write, "not detected");
+#endif
+#endif
+
   Format_String(CONS_UART_Write, "\n");
   xSemaphoreGive(CONS_Mutex);
 
@@ -438,11 +496,19 @@ void vTaskSENS(void* pvParameters)
 #ifdef WITH_QMC63XX
       ProcMagSensor();
 #endif
+#ifdef WITH_QMI8658
+      ProcIMUSensor();
+#endif
     }
                   else vTaskDelay(100);
 #else
+#if defined(WITH_QMC63XX) || defined(WITH_QMI8658)
 #ifdef WITH_QMC63XX
     ProcMagSensor();
+#endif
+#ifdef WITH_QMI8658
+    ProcIMUSensor();
+#endif
     vTaskDelay(500);
 #else
     vTaskDelay(1000);

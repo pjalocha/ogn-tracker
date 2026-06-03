@@ -210,6 +210,7 @@ typedef union
     bool BMP280:1;        // BMP280 pressure sensor
     bool BME280:1;        // BME280 pressure sensor
     bool Magn  :1;        // Magnetic sensor
+    bool IMU   :1;        // Inertial sensor
     bool Radio :1;        // SX1276 or SX1262 radio TRX
     bool GPS   :1;        // GPS receiver
     bool SPIFFS:1;        // SPIFFS

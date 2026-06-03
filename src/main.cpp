@@ -255,7 +255,8 @@ void SD_Unmount(void)
     SD_Card=0; }
   if(SD_BusReady)
   { spi_bus_free((spi_host_device_t)SD_Host.slot);
-    SD_BusReady=false; } }
+    SD_BusReady=false; }
+}
 
 static esp_err_t SD_InitBus(void)
 { SD_Host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
@@ -278,7 +279,7 @@ static esp_err_t SD_InitBus(void)
   pinMode(SD_PinMOSI, INPUT_PULLUP);
   pinMode(SD_PinSCK, INPUT_PULLUP);
   esp_err_t Ret = spi_bus_initialize((spi_host_device_t)SD_Host.slot, &SD_BusConfig, SD_SPI_DMA);
-  if(Ret!=ESP_OK)
+  if(Ret!=ESP_OK && Ret!=ESP_ERR_INVALID_STATE)
   { Serial.printf("SD spi_bus_initialize failed (%d)\n", Ret);
     return Ret; }
   SD_BusReady = true;
@@ -1544,7 +1545,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   xTaskCreate(vTaskLOG    ,  "LOG"  ,  5000, NULL, 0, NULL);  // log data to flash / SD copy needs extra stack
 #endif
   xTaskCreate(vTaskGPS    ,  "GPS"  ,  5000, NULL, 1, NULL);  // read data from GPS
-#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280) || defined(WITH_QMC63XX)
+#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280) || defined(WITH_QMC63XX) || defined(WITH_QMI8658)
   xTaskCreate(vTaskSENS   ,  "SENS" ,  5000, NULL, 1, NULL);  // read data from I2C sensors
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  5000, NULL, 0, NULL);  // process received packets, prepare packets for transmission

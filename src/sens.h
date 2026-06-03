@@ -31,6 +31,11 @@ extern MS5611   Baro;                       // MS5611 barometer sensor
 extern QMC63XX  MagSensor;                  // QMC6309/QMC6310 magnetic sensor
 #endif
 
+#ifdef WITH_QMI8658
+#include "qmi8658.h"
+extern QMI8658  IMUSensor;                  // QMI8658 accelerometer/gyro
+#endif
+
 #ifdef __cplusplus
   extern "C"
 #endif
