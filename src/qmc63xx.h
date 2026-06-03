@@ -12,8 +12,12 @@ class QMC63XX
    static const uint8_t ADDR_QMC6309  = 0x7C;
 
    static const uint8_t REG_ID        = 0x00;
+   static const uint8_t REG_DATA      = 0x01;
+   static const uint8_t REG_STATUS    = 0x09;
    static const uint8_t REG_CTRL1     = 0x0A;
    static const uint8_t REG_CTRL2     = 0x0B;
+   static const uint8_t STATUS_DRDY   = 0x01;
+   static const uint8_t CTRL2_RNG_2G  = 0x0C; // QMC6310: 15000 LSB/G = 150 LSB/uT
 
   public:
    enum Type_t
@@ -26,9 +30,11 @@ class QMC63XX
    uint8_t ID;                          // chip ID: 0x80 = QMC6310, 0x90 = QMC6309
    Type_t  Type;
    uint8_t Error;                       // error on the I2C bus (0=no error)
+   uint8_t Status;                      // status register
+   int16_t X, Y, Z;                     // raw magnetic field readout
 
   public:
-   QMC63XX() : Bus(0), ADDR(0), ID(0), Type(Type_None), Error(0) { }
+   QMC63XX() : Bus(0), ADDR(0), ID(0), Type(Type_None), Error(0), Status(0), X(0), Y(0), Z(0) { }
 
    const char *Name(void) const
    { if(Type==Type_QMC6310) return "QMC6310";
@@ -54,7 +60,7 @@ class QMC63XX
      uint8_t Data=0x00;
      Error=I2C_Write(Bus, ADDR, REG_CTRL1, Data); if(Error) return Error; // suspend before changing mode
      if(Type==Type_QMC6310)
-     { Data=0x00;
+     { Data=CTRL2_RNG_2G;
        Error=I2C_Write(Bus, ADDR, REG_CTRL2, Data); if(Error) return Error;
        Data=0x07; }                                                       // 50Hz continuous mode
      else
@@ -63,6 +69,20 @@ class QMC63XX
        Data=0x03; }                                                       // continuous mode
      Error=I2C_Write(Bus, ADDR, REG_CTRL1, Data);
      return Error; }
+
+   uint8_t ReadReady(void)
+   { Error=I2C_Read(Bus, ADDR, REG_STATUS, Status);
+     if(Error) return Error;
+     return (Status&STATUS_DRDY) ? 1:0; }
+
+   uint8_t Read(void)
+   { uint8_t Data[6];
+     Error=I2C_Read(Bus, ADDR, REG_DATA, Data, sizeof(Data));
+     if(Error) return Error;
+     X = (int16_t)(((uint16_t)Data[1]<<8) | Data[0]);
+     Y = (int16_t)(((uint16_t)Data[3]<<8) | Data[2]);
+     Z = (int16_t)(((uint16_t)Data[5]<<8) | Data[4]);
+     return 0; }
 };
 
 #endif // __QMC63XX_H__

@@ -14,7 +14,7 @@
 
 // #define DEBUG_PRINT
 
-#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611)
+#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611) || defined(WITH_QMC63XX)
 
 #ifdef WITH_BMP180
 #include "bmp180.h"
@@ -340,8 +340,25 @@ static uint8_t InitMagSensor(void)
   if(Err==0) HardwareStatus.Magn=1;
        else HardwareStatus.Magn=0;
   return Err==0 ? MagSensor.ADDR:0; }
-#endif
 
+static void ProcMagSensor(void)
+{ if(!HardwareStatus.Magn) return;                    // if sensor absent then give up
+  uint8_t Ready=MagSensor.ReadReady();                // check if data ready for read
+  if(Ready==0) return;
+  if(Ready>1) { InitMagSensor(); return; }            // if not initialized then initialize
+  if(MagSensor.Read()) { InitMagSensor(); return; }   // if read error then re-initialize
+  int Len=sprintf(Line, "Magn: [%+6d,%+6d,%+6d]\n", MagSensor.X, MagSensor.Y, MagSensor.Z);
+  if(xSemaphoreTake(CONS_Mutex, 20))
+  { Format_String(CONS_UART_Write, Line, 0, Len);
+    xSemaphoreGive(CONS_Mutex); }
+#ifdef WITH_SDLOG
+  if(Log_Free()>=128)
+  { if(xSemaphoreTake(Log_Mutex, 25))
+    { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
+      xSemaphoreGive(Log_Mutex); } }
+#endif
+}
+#endif
 
 
 extern "C"
@@ -416,10 +433,20 @@ void vTaskSENS(void* pvParameters)
   {
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611)
          if(Baro.ADDR==0) { vTaskDelay(500); InitBaro(); }
-    else if(PowerMode) ProcBaro();
+    else if(PowerMode)
+    { ProcBaro();
+#ifdef WITH_QMC63XX
+      ProcMagSensor();
+#endif
+    }
                   else vTaskDelay(100);
 #else
+#ifdef WITH_QMC63XX
+    ProcMagSensor();
+    vTaskDelay(500);
+#else
     vTaskDelay(1000);
+#endif
 #endif
   }
 }
