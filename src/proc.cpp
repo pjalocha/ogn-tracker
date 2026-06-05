@@ -37,7 +37,7 @@ static GDL90_REPORT    GDL_REPORT;
 #ifdef WITH_THINKNODE_M5
 uint8_t AlarmThresh = 4;              // 0: all alarms, 1: only 1 or higher, 2: only 2 or higher, 3: only three or higher, 4: all blocked
 #else
-const uint8_t AlarmThresh = 1;
+const uint8_t AlarmThresh = 0;
 #endif
 uint8_t AlarmLevel = 0;               // current alarm level, from Lookout, 0=no alarm
 uint8_t GhostSilent = 0;              // if the Ghost-mode is silent
@@ -589,11 +589,11 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
         xSemaphoreGive(CONS_Mutex); } }
 #endif
 #ifdef WITH_BEEPER
-    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    // if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                         // if Knob>12 => make a beep for every received packet
+    // if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                         // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
 
@@ -721,11 +721,11 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
       xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef WITH_BEEPER
-    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
+    // if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | (7+2*Warn), 3+16*Warn);
 #endif
 #else // if not WITH_LOOKOUT
 #ifdef WITH_BEEPER
-    if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
+    // if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
 
@@ -793,7 +793,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
           RxPkt->Channel, RxPkt->Bytes, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
 #endif
   if(CorrErr<0) return;
-  RxProc_Count[Radio_SysID_ADSL]++;
+  RxProc_Count[RxPkt->SysID]++;
   memcpy(&(RxPacket->Packet.Version), RxPkt->Data, RxPacket->Packet.TxBytes-3);
   RxPacket->RxErr   = CorrErr;
   RxPacket->RxChan  = RxPkt->Channel;
@@ -817,13 +817,13 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
       CRC8 = PAW_Packet::CRC8(RxPkt->Data, 25); }
   }
   if(CRC8!=0x00) return;
-  RxProc_Count[Radio_SysID_LDR]++;
   if(CRC24==0x000000)
   { // Serial.printf("LDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
     // RxPkt->Bytes--;
     DecodeRxADSL(RxPkt);
     return; }
+  RxProc_Count[Radio_SysID_LDR]++;
   PAW_Packet::Whiten(RxPkt->Data, 24);
   if(PAW_Packet::IntCRC(RxPkt->Data, 24)!=0x00) return;
   // Serial.printf("LDR: good PAW\n");
@@ -851,7 +851,6 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
   if(CRC24==0x000000)
   { // Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
-    RxProc_Count[Radio_SysID_HDR]++;
     DecodeRxADSL(RxPkt); }
   // else Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de !%06X!\n",
   //            (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount(), CRC);
@@ -1250,7 +1249,18 @@ void vTaskPROC(void* pvParameters)
         if(Warn>2) Flasher_Play(Flasher_PattDouble);
 #endif
 #ifdef WITH_BEEPER                                                         // make the sound according to the level
-        if(Warn<=1)
+        static uint8_t NearBackOff=0;
+        if(Warn==0)
+        { if(AlarmThresh<=1)
+          { uint8_t NearAcft=Look.countNearAcft();
+            if(NearAcft)
+            { if(NearBackOff) NearBackOff--;
+              else { Play(Play_Vol_1 | Play_Oct_1 | 0, 20); NearBackOff=10; }
+            }
+            else NearBackOff=10;
+          }
+        }
+        else if(Warn<=1)
         { if(AlarmThresh<=1)
           { Play(Play_Vol_1 | Play_Oct_1 | 4, 200); }
         }

@@ -335,9 +335,9 @@ static void ProcMagSensor(void)
   if(MagSensor.Read()) { InitMagSensor(); return; }   // if read error then re-initialize
   int Len=sprintf(Line, "Magn: [%+6d,%+6d,%+6d]\n",
                   MagSensor.Mag[0], MagSensor.Mag[1], MagSensor.Mag[2]);
-  if(xSemaphoreTake(CONS_Mutex, 20))
-  { Format_String(CONS_UART_Write, Line, 0, Len);
-    xSemaphoreGive(CONS_Mutex); }
+  // if(xSemaphoreTake(CONS_Mutex, 20))
+  // { Format_String(CONS_UART_Write, Line, 0, Len);
+  //   xSemaphoreGive(CONS_Mutex); }
   SysLog_Line(Line, Len, 0, 10, 1);
 }
 #endif
@@ -368,9 +368,9 @@ static void ProcIMUSensor(void)
   int Len=sprintf(Line, "IMU:  [%+6d,%+6d,%+6d] [%+6d,%+6d,%+6d]\n",
                   IMUSensor.Accel[0], IMUSensor.Accel[1], IMUSensor.Accel[2],
                   IMUSensor.Gyro [0], IMUSensor.Gyro [1], IMUSensor.Gyro [2]);
-  if(xSemaphoreTake(CONS_Mutex, 20))
-  { Format_String(CONS_UART_Write, Line, 0, Len);
-    xSemaphoreGive(CONS_Mutex); }
+  // if(xSemaphoreTake(CONS_Mutex, 20))
+  // { Format_String(CONS_UART_Write, Line, 0, Len);
+  //   xSemaphoreGive(CONS_Mutex); }
   SysLog_Line(Line, Len, 0, 10, 1);
 }
 #endif

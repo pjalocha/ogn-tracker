@@ -1486,11 +1486,11 @@ void Radio_Task(void *Parms)
     // Serial.printf("Radio: %us %ums %dpkt\n", TimeRef.UTC, millis()-TimeRef.sysTime, PktCountSum);
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %u:%u:%u:%u:%u:%u  Rx: %u:%u:%u:%u:%u:%u %u:%u  %u:%u:%u:%u:%u  %3.1fdBm %u+%ums %u:%3.1f/s",
+     "Radio: Tx: %u:%u:%u:%u:%u:%u  Rx: %u:%u:%u:%u:%u:%u %u:%u  %u:%u:%u:%u:%u:%u  %3.1fdBm %u+%ums %u:%3.1f/s",
        Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
        Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
        Radio_RxCount[8], Radio_RxCount[9],
-       RxProc_Count[0], RxProc_Count[1], RxProc_Count[2], RxProc_Count[5], RxProc_Count[6],
+       RxProc_Count[0], RxProc_Count[1], RxProc_Count[2], RxProc_Count[4], RxProc_Count[5], RxProc_Count[6],
        Radio_BkgRSSI, Radio_msLiveTime, Radio_msDeadTime, PktCountSum, Radio_PktRate /*, 0.001*Radio_TxCredit, */
        /* uxTaskGetStackHighWaterMark(NULL) */ );
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',

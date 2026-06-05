@@ -54,10 +54,6 @@ class LookOut_Target           // describes a flying aircrafts
      }  __attribute__((packed));
    } ;
 
-   uint32_t calcSafeDist(void)
-   { if(WarnLevel) return 0xFF-WarnLevel;
-     return ((uint32_t)TimeMargin<<16) + DistMargin; }
-
    int16_t        dX;        // [0.5m]   relative position of target
    int16_t        dY;        // [0.5m]
    int16_t        dZ;        // [0.5m]
@@ -76,6 +72,10 @@ class LookOut_Target           // describes a flying aircrafts
 
   public:
    void Clear(void) { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF; }
+
+   uint32_t calcSafeDist(void)
+   { if(WarnLevel) return 0xFF-WarnLevel;
+     return ((uint32_t)TimeMargin<<16) + DistMargin; }
 
    bool isMoving(void) const { return Pos.isMoving; }
 
@@ -234,6 +234,14 @@ template <const uint8_t MaxTgts=32>
        Sort[SortSize++]=Tgt; }
      if(SortSize<=1) return;
      std::sort(Sort, Sort+SortSize, Lower_Dist); }
+
+   uint8_t countNearAcft(void) const
+   { uint8_t Count=0;
+     for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
+     { const LookOut_Target *Tgt = Target+Idx; if(!Tgt->Alloc) continue;
+       if(!Tgt->isMoving()) continue;
+       if(Tgt->DistMargin==0) Count++; }
+     return Count; }
 
    bool isMoving(void) const { return Pos.isMoving; }
 

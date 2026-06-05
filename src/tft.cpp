@@ -465,23 +465,23 @@ int TFT_DrawRFcounts(void)
   TFT_SetMainFont();
   int Vert=TFT_TopVert;
 
-  sprintf(Line, "FLR: %d", Radio_RxCount[0]);
+  sprintf(Line, "FLR: %d", RxProc_Count[0]);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
-  sprintf(Line, "OGN: %d", Radio_RxCount[1]);
+  sprintf(Line, "OGN: %d", RxProc_Count[1]);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
-  sprintf(Line, "MDR: %d", Radio_RxCount[2]);
+  sprintf(Line, "MDR: %d", RxProc_Count[2]);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
-  sprintf(Line, "LDR: %d", Radio_RxCount[5]);
+  sprintf(Line, "LDR: %d", RxProc_Count[5]);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
-  sprintf(Line, "HDR: %d", Radio_RxCount[6]);
+  sprintf(Line, "HDR: %d", RxProc_Count[6]);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
 
