@@ -955,13 +955,13 @@ static void Radio_ConfigFANET(uint8_t CRa=4)                       // setup Radi
   Radio.setCodingRate(4+CRa);
   Radio.invertIQ(false);
 #ifdef WITH_SX1262
-  Radio.setSyncWord(0xF1, 0x44);
+  Radio_setSyncWord(0xF1, 0x44);
 #endif
 #ifdef WITH_SX1276
-  Radio.setSyncWord(0xF1);
+  Radio_setSyncWord(0xF1);
 #endif
-  Radio.setPreambleLength(5);
-  Radio.setCRC(true); }
+  Radio_setPreambleLength(5);
+  Radio_setCRC(true); }
 */
 
 // reception slot with a possible transmission if TxPacket != NULL
@@ -1498,13 +1498,8 @@ void Radio_Task(void *Parms)
     if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 30))
     { Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { Line[LineLen++]='\n'; Line[LineLen]=0;
-      if(xSemaphoreTake(Log_Mutex, 25))
-      { Format_String(Log_Write, Line, 0, LineLen);
-        xSemaphoreGive(Log_Mutex); } }
-#endif
+    Line[LineLen++]='\n'; Line[LineLen]=0;
+    SysLog_Line(Line, LineLen, 0, 25, 1);
   }
 }
 

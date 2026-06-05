@@ -426,12 +426,7 @@ static void ReadStatus(OGN_Packet &Packet)
     if(xSemaphoreTake(CONS_Mutex, 25))
     { Format_String(CONS_UART_Write, Line, 0, Len);                          // send the NMEA out to the console
       xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { if(xSemaphoreTake(Log_Mutex, 25))
-      { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
-        xSemaphoreGive(Log_Mutex); } }
-#endif
+    SysLog_Line(Line, Len, 0, 25, 1);
   }
 }
 
@@ -572,12 +567,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       if(xSemaphoreTake(CONS_Mutex, 25))
       { Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-      if(Log_Free()>=128)
-      { if(xSemaphoreTake(Log_Mutex, 25))
-        { Format_String(Log_Write, Line, 0, Len);
-          xSemaphoreGive(Log_Mutex); } }
-#endif
+      SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif
 //     Len=RxPacket->Packet.WriteAPRS(Line, RxTime);                                     // print on the console as APRS message
@@ -628,12 +618,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       if(xSemaphoreTake(CONS_Mutex, 25))
       { Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-      if(Len>0 && Log_Free()>=128)
-      { if(xSemaphoreTake(Log_Mutex, 25))
-        { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
-          xSemaphoreGive(Log_Mutex); } }
-#endif
+      if(Len>0) SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif // WITH_PFLAA
 /*
@@ -762,12 +747,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
       if(xSemaphoreTake(CONS_Mutex, 25))
       { Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-      if(Len>0 && Log_Free()>=128)
-      { if(xSemaphoreTake(Log_Mutex, 25))
-        { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
-          xSemaphoreGive(Log_Mutex); } }
-#endif
+      if(Len>0) SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif // WITH_PFLAA
 /*
@@ -1240,12 +1220,7 @@ void vTaskPROC(void* pvParameters)
       { if(xSemaphoreTake(CONS_Mutex, 25))
         { Look.WritePFLA(CONS_UART_Write);                                // produce PFLAU and PFLAA for all tracked targets
           xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-        if(Log_Free()>=512)
-        { if(xSemaphoreTake(Log_Mutex, 25))
-          { Look.WritePFLA(Log_Write);
-            xSemaphoreGive(Log_Mutex); } }
-#endif // WITH_SDLOG
+        Look.WritePFLA(SysLog_Line, 0, 25, 1);
       }
 #else // WITH_PFLAA
       if(Parameters.Verbose & 0b01)
@@ -1253,12 +1228,7 @@ void vTaskPROC(void* pvParameters)
         if(xSemaphoreTake(CONS_Mutex, 25))
         { Format_String(CONS_UART_Write, Line, 0, Len);
           xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-        if(Log_Free()>=128)
-        { if(xSemaphoreTake(Log_Mutex, 25))
-          { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
-            xSemaphoreGive(Log_Mutex); } }
-#endif // WITH_SDLOG
+        SysLog_Line(Line, Len, 0, 25, 1);
       }
 #endif // WITH_PFLAA
       uint8_t Warn = 0;
@@ -1301,12 +1271,7 @@ void vTaskPROC(void* pvParameters)
         if(xSemaphoreTake(CONS_Mutex, 25))
         { Format_String(CONS_UART_Write, Line, 0, Len);
           xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-        if(Log_Free()>=128)
-        { if(xSemaphoreTake(Log_Mutex, 25))
-          { Format_String(Log_Write, Line, 0, Len);                              // send the NMEA out to the log file
-            xSemaphoreGive(Log_Mutex); } }
-#endif // WITH_SDLOG
+        SysLog_Line(Line, Len, 0, 25, 1);
       }
 #endif // WITH_PFLAA
 #endif // WITH_LOOKOUT

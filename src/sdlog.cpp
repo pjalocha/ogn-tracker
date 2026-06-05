@@ -5,6 +5,7 @@
 #include <utime.h>
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 
 #include "fifo.h"
 
@@ -42,6 +43,50 @@ void Log_Write(char Byte)                                         // write a byt
   while(Log_FIFO.Write(Byte)<=0) vTaskDelay(1); }                 // wait while the FIFO is full - we have to use vTaskDelay not TaskYIELD
 
 int Log_Free(void) { return Log_FIFO.Free(); }                    // how much space left in the buffer
+
+void SysLog_Line(const char *Line, int LineLen, bool Timestamp, int msTimeout, bool LogOnly)
+{
+  if(Line==0 || LineLen<=0) return;
+#ifdef WITH_SDLOG
+  bool AddNL = Line[LineLen-1]!='\n';
+  if(!LogOnly)
+  { if(CONS_Mutex && xSemaphoreTake(CONS_Mutex, msTimeout))
+    { Format_String(CONS_UART_Write, Line, 0, LineLen);
+      if(AddNL) CONS_UART_Write('\n');
+      xSemaphoreGive(CONS_Mutex); } }
+  if(Log_Mutex==0) return;
+  char Time[16];
+  int TimeLen=0;
+  if(Timestamp)
+  { TimeLen+=Format_HHMMSS(Time+TimeLen, TimeSync_Time());
+    Time[TimeLen++]='.';
+    TimeLen+=Format_UnsDec(Time+TimeLen, (uint32_t)TimeSync_msTime(), 3);
+    Time[TimeLen++]=' '; }
+  int Need=TimeLen+LineLen+(AddNL ? 1:0);
+  if(Log_Free()<Need) return;
+  if(!xSemaphoreTake(Log_Mutex, msTimeout)) return;
+  if(Log_Free()>=Need)
+  { if(TimeLen) Format_String(Log_Write, Time, 0, TimeLen);
+    Format_String(Log_Write, Line, 0, LineLen);
+    if(AddNL) Log_Write('\n'); }
+  xSemaphoreGive(Log_Mutex);
+#else
+  (void)Line;
+  (void)LineLen;
+  (void)Timestamp;
+  (void)msTimeout;
+  (void)LogOnly;
+#endif
+}
+
+void SysLog_Line(const char *Line, bool Timestamp, int msTimeout, bool LogOnly)
+{ SysLog_Line(Line, Line ? strlen(Line):0, Timestamp, msTimeout, LogOnly); }
+
+void SysLog_Line(const char *Line, int LineLen, bool Timestamp, int msTimeout)
+{ SysLog_Line(Line, LineLen, Timestamp, msTimeout, 0); }
+
+void SysLog_Line(const char *Line, bool Timestamp, int msTimeout)
+{ SysLog_Line(Line, Line ? strlen(Line):0, Timestamp, msTimeout, 0); }
 
 static int Log_Open(void)
 { int32_t Day   =  GPS_DateTime.Day;                                 // get day, month, year

@@ -268,6 +268,16 @@ template <const uint8_t MaxTgts=32>
      }
    }
 
+   void WritePFLA(void (*Output)(const char *, int, bool, int, bool), bool Timestamp, int msTimeout, bool LogOnly)
+   { uint8_t Len=WritePFLAU(Line); Output(Line, Len, Timestamp, msTimeout, LogOnly);
+     for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
+     { if(!Target[Idx].Alloc) continue;                    // skip empty slots
+       if(WarnLevel>0 && Target[Idx].DistMargin) continue;  // skip slots with distance margin remaining
+       Len=Target[Idx].WritePFLAA(Line);
+       Output(Line, Len, Timestamp, msTimeout, LogOnly);
+     }
+   }
+
    uint8_t WritePFLAU(char *NMEA)                          // produce the FLAM anti-collision status
    { const LookOut_Target *Tgt = 0;
      if(WarnLevel>0) Tgt = Target + WorstTgtIdx;

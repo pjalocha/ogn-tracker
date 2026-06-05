@@ -33,7 +33,7 @@ uint32_t getUniqueAddress(void);
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.22"
+#define VERSION "0.1.23"
 #endif
 
 // #define SOFT_NAME "dev-14.02" // signal development version
@@ -219,5 +219,7 @@ typedef union
 
 extern HardItems HardwareStatus;
 
-inline void SysLog_Line(const char *Line, int LineLen, bool Timestamp, int msTimeout) { }
-inline void SysLog_Line(const char *Line, bool Timestamp, int msTimeout)              { }
+void SysLog_Line(const char *Line, int LineLen, bool Timestamp, int msTimeout, bool LogOnly);
+void SysLog_Line(const char *Line, bool Timestamp, int msTimeout, bool LogOnly);
+void SysLog_Line(const char *Line, int LineLen, bool Timestamp, int msTimeout);
+void SysLog_Line(const char *Line, bool Timestamp, int msTimeout);

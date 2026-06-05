@@ -722,14 +722,11 @@ static void GPS_NMEA(bool Correct=1)                                        // w
         CONS_UART_Write('\r'); CONS_UART_Write('\n');
         xSemaphoreGive(CONS_Mutex); }
     }
-#ifdef WITH_SDLOG
-    if(Log_Free()>=128)
-    { if(xSemaphoreTake(Log_Mutex, 10))
-      { Format_String(Log_Write, (const char *)NMEA.Data, 0, NMEA.Len);
-        Log_Write('\r'); Log_Write('\n');
-        xSemaphoreGive(Log_Mutex); }
-    }
-#endif
+    if(NMEA.Len+2<=sizeof(Line))
+    { for(int Idx=0; Idx<NMEA.Len; Idx++) Line[Idx]=NMEA.Data[Idx];
+      Line[NMEA.Len  ]='\r';
+      Line[NMEA.Len+1]='\n';
+      SysLog_Line(Line, NMEA.Len+2, 0, 10, 1); }
   }
 }
 

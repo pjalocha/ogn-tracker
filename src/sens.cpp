@@ -110,14 +110,6 @@ static Delay<int32_t, 8>        PressDelay; // 4-second delay for long-term clim
 
 static char Line[128];                      // line to prepare the barometer NMEA sentence
 
-#ifdef WITH_SDLOG
-static void SensorLogLine(const char *Line, int Len, int Wait=10)
-{ if(Log_Free()<Len) return;
-  if(!xSemaphoreTake(Log_Mutex, Wait)) return;
-  if(Log_Free()>=Len) Format_String(Log_Write, Line, 0, Len);
-  xSemaphoreGive(Log_Mutex); }
-#endif
-
 static uint8_t InitBaro(void)
 { Baro.Bus=BARO_I2C;
   uint8_t Err=Baro.CheckID();
@@ -284,9 +276,7 @@ static void ProcBaro(void)
       { Format_String(CONS_UART_Write, Line, 0, Len);                       // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }
     }
-#ifdef WITH_SDLOG
-    SensorLogLine(Line, Len);
-#endif
+    SysLog_Line(Line, Len, 0, 10, 1);
 
     Len=0;                                                           // start preparing the PGRMZ NMEA sentence
     Len+=Format_String(Line+Len, "$PGRMZ,");
@@ -301,9 +291,7 @@ static void ProcBaro(void)
       { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }
     }
-#ifdef WITH_SDLOG
-    SensorLogLine(Line, Len);
-#endif
+    SysLog_Line(Line, Len, 0, 10, 1);
 
     Len=0;
     Len+=Format_String(Line+Len, "$LK8EX1,");
@@ -323,9 +311,7 @@ static void ProcBaro(void)
       { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
         xSemaphoreGive(CONS_Mutex); }
     }
-#ifdef WITH_SDLOG
-    SensorLogLine(Line, Len);
-#endif
+    SysLog_Line(Line, Len, 0, 10, 1);
 
 }
 
@@ -352,9 +338,7 @@ static void ProcMagSensor(void)
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Format_String(CONS_UART_Write, Line, 0, Len);
     xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-  SensorLogLine(Line, Len);
-#endif
+  SysLog_Line(Line, Len, 0, 10, 1);
 }
 #endif
 
@@ -387,9 +371,7 @@ static void ProcIMUSensor(void)
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Format_String(CONS_UART_Write, Line, 0, Len);
     xSemaphoreGive(CONS_Mutex); }
-#ifdef WITH_SDLOG
-  SensorLogLine(Line, Len);
-#endif
+  SysLog_Line(Line, Len, 0, 10, 1);
 }
 #endif
 
