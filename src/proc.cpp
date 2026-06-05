@@ -520,6 +520,8 @@ static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
+uint32_t RxProc_Count[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
 static const int32_t MaxRxDist = 25000;  // [m] assumed maximum reception distance, what is more is asusmed be badly decoded and dropped
 
 // process received OGN packets
@@ -777,6 +779,7 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
      RxPkt->ErrCount(), RxPacket->RxErr, Check, RxPacketIdx);
 #endif
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
+  RxProc_Count[Radio_SysID_OGN]++;
   RxPacket->Packet.Dewhiten();
   ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
 
@@ -790,6 +793,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
           RxPkt->Channel, RxPkt->Bytes, RxPkt->ErrCount(), CorrErr, RxPacketIdx);
 #endif
   if(CorrErr<0) return;
+  RxProc_Count[Radio_SysID_ADSL]++;
   memcpy(&(RxPacket->Packet.Version), RxPkt->Data, RxPacket->Packet.TxBytes-3);
   RxPacket->RxErr   = CorrErr;
   RxPacket->RxChan  = RxPkt->Channel;
@@ -813,6 +817,7 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
       CRC8 = PAW_Packet::CRC8(RxPkt->Data, 25); }
   }
   if(CRC8!=0x00) return;
+  RxProc_Count[Radio_SysID_LDR]++;
   if(CRC24==0x000000)
   { // Serial.printf("LDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
@@ -846,6 +851,7 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
   if(CRC24==0x000000)
   { // Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
+    RxProc_Count[Radio_SysID_HDR]++;
     DecodeRxADSL(RxPkt); }
   // else Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de !%06X!\n",
   //            (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount(), CRC);
@@ -883,6 +889,7 @@ static void DecodeRxFLR(FSK_RxPacket *RxPkt)
   int CorrBits=Flarm_Packet::Correct(RxPkt->Data, RxPkt->Err, 4);
   uint16_t CRC=Flarm_Packet::checkCRC(RxPkt->Data, Flarm_Packet::Bytes);
   if(CorrBits<0 || CRC!=0x0000) return;
+  RxProc_Count[Radio_SysID_FLR]++;
   Flarm_Packet *FLR = (Flarm_Packet *)RxPkt->Data;
   FLR->Time = RxPkt->Time;
   if(GPS_TimeSinceLock<=10) return;
