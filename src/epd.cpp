@@ -264,8 +264,19 @@ static bool PrevGPSLock = false;
 static bool hasStableGPSLock(void)
 { return GPS_TimeSinceLock>10; }
 
+static uint16_t TrafficMapHeading(void)
+{
+#ifdef WITH_LOOKOUT
+  if(Look.Pos.Speed>2) return Look.Pos.Heading;                  // [0.5m/s] use track-up above 1m/s
+#endif
+  return 0;                                                      // otherwise north-up
+}
+
 static void DrawTrafficGrid(void)
 { char Line[8];
+  uint16_t Heading = TrafficMapHeading();
+  uint16_t Degrees = ((uint32_t)Heading*45+0x1000)>>13;
+  if(Degrees>=360) Degrees-=360;
   EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius, GxEPD_BLACK);
   EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius/2, GxEPD_BLACK);
   EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius/4, GxEPD_BLACK);
@@ -274,8 +285,10 @@ static void DrawTrafficGrid(void)
   EPD.drawLine(TrafficMapCenterX-3, TrafficMapCenterY, TrafficMapCenterX+3, TrafficMapCenterY, GxEPD_BLACK);
   EPD.drawLine(TrafficMapCenterX, TrafficMapCenterY-3, TrafficMapCenterX, TrafficMapCenterY+3, GxEPD_BLACK);
   EPD.setTextColor(GxEPD_BLACK);
-  EPD.setFont(&FreeMono9pt7b);
-  EPD.drawChar(TrafficMapCenterX-5, TrafficMapCenterY-TrafficMapRadius+14, 'N', GxEPD_BLACK, GxEPD_WHITE, 1);
+  EPD.setFont(&FreeMonoBold9pt7b);
+  sprintf(Line, "%03u", Degrees);
+  EPD.setCursor(TrafficMapCenterX-18, TrafficMapCenterY-TrafficMapRadius+14);
+  EPD.print(Line);
   if(TrafficMapRange[TrafficMapRangeIdx]<1000) sprintf(Line, "%dm", TrafficMapRange[TrafficMapRangeIdx]);
                                           else sprintf(Line, "%dkm", TrafficMapRange[TrafficMapRangeIdx]/1000);
   EPD.setFont(&FreeMonoBold9pt7b);
@@ -301,7 +314,7 @@ static void DrawTrafficTarget(int16_t X, int16_t Y, uint16_t Heading, uint8_t Wa
 static uint32_t CalcTrafficMapHash(void)
 {
 #ifdef WITH_LOOKOUT
-  uint32_t Hash = Look.Targets + ((uint32_t)TrafficMapRangeIdx<<24);
+  uint32_t Hash = Look.Targets + ((uint32_t)TrafficMapRangeIdx<<24) + ((uint32_t)TrafficMapHeading()<<8);
   for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
   { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
     int32_t dX = (int32_t)Tgt->Pos.X - Look.Pos.X;
@@ -320,19 +333,24 @@ static void DrawTrafficMap(void)
 { DrawTrafficGrid();
 #ifdef WITH_LOOKOUT
   const int32_t MaxDist = (int32_t)TrafficMapRange[TrafficMapRangeIdx]*2; // [0.5m]
+  uint16_t Heading = TrafficMapHeading();
+  int16_t Sin = Isin(Heading);
+  int16_t Cos = Icos(Heading);
   for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
   { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
     int32_t dX = (int32_t)Tgt->Pos.X - Look.Pos.X;
     int32_t dY = (int32_t)Tgt->Pos.Y - Look.Pos.Y;
     int32_t Dist = Acft_RelPos::FastDistance((int16_t)dX, (int16_t)dY);
+    int32_t Fwd = (dX*Cos + dY*Sin + 0x800)>>12;
+    int32_t Right = (dY*Cos - dX*Sin + 0x800)>>12;
     int16_t X, Y;
     if(Dist>MaxDist && Dist>0)
-    { X = TrafficMapCenterX + (dY*TrafficMapRadius)/Dist;
-      Y = TrafficMapCenterY - (dX*TrafficMapRadius)/Dist; }
+    { X = TrafficMapCenterX + (Right*TrafficMapRadius)/Dist;
+      Y = TrafficMapCenterY - (Fwd*TrafficMapRadius)/Dist; }
     else
-    { X = TrafficMapCenterX + (dY*TrafficMapRadius)/MaxDist;
-      Y = TrafficMapCenterY - (dX*TrafficMapRadius)/MaxDist; }
-    DrawTrafficTarget(X, Y, Tgt->Pos.Heading, Tgt->WarnLevel); }
+    { X = TrafficMapCenterX + (Right*TrafficMapRadius)/MaxDist;
+      Y = TrafficMapCenterY - (Fwd*TrafficMapRadius)/MaxDist; }
+    DrawTrafficTarget(X, Y, Tgt->Pos.Heading-Heading, Tgt->WarnLevel); }
 #endif
 }
 
