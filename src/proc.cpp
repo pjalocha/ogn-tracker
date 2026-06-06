@@ -860,14 +860,15 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
 
 static int FLR2ADSL(ADSL_Packet &ADSL, Flarm_Packet &FLR, int32_t RefLat, int32_t RefLon)
 { if(FLR.FAMP.MsgType!=2) return 0;
-  FLR.FAMP.Decrypt(FLR.Nonce, FLR.Time);
+  FLR.FAMP.Decrypt(FLR.Nonce, FLR.Time);     // decrypt FAMP packet based on the Time
   ADSL.Init();
   ADSL.setAddrTable(FLR.FAMP.AddrType+4);    // address-type
   ADSL.setAddress(FLR.FAMP.Address);         // address
   ADSL.setAcftTypeOGN(FLR.FAMP.AcftType);    // [aircraft-type]
   int8_t qSec=0;
   uint32_t PosTime=FLR.FAMP.getPosTime(qSec, FLR.Time);  // here we could check if PosTime==FLR.Time
-  ADSL.TimeStamp=(PosTime%15)<<2;               // [1/4 sec]
+  if(qSec!=0 || (PosTime!=FLR.Time && PosTime!=FLR.Time+1)) return 0;
+  ADSL.TimeStamp=((PosTime%15)<<2)+qSec;        // [1/4 sec]
   ADSL.setAlt(FLR.FAMP.getAltitude());          // [m] HAE
   int32_t Lat = FLR.FAMP.getLatitude(RefLat);
   int32_t Lon = FLR.FAMP.getLongitude(RefLon, Lat);
