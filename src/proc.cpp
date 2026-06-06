@@ -808,14 +808,16 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=25 || RxPkt->Manchester) return;
   uint32_t CRC24 = ADSL_Packet::checkCRC24(RxPkt->Data, 24);
   uint8_t CRC8 = PAW_Packet::CRC8(RxPkt->Data, 25);
+  uint8_t CorrErr=0;
   if(CRC24!=0x000000 && CRC8==0x00)
   { uint8_t ErrBit=ADSL_Packet::FindCRC24syndrome(CRC24);
     if(ErrBit!=0xFF)
     { ADSL_Packet::FlipBit(RxPkt->Data, ErrBit);
       ADSL_Packet::FlipBit(RxPkt->Err , ErrBit);
-      CRC24=0x000000;
+      CRC24=0x000000; CorrErr=1;
       CRC8 = PAW_Packet::CRC8(RxPkt->Data, 25); }
   }
+  // Serial.printf("DecodeRxLDR() CRC:%06X:%02X %de\n", CRC24, CRC8, CorrErr);
   if(CRC8!=0x00) return;
   if(CRC24==0x000000)
   { // Serial.printf("LDR: %02ds+%dms #%d %+4.1fdBm %de\n",

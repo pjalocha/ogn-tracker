@@ -416,6 +416,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(State) ErrState=State;
 #endif
   msDead = millis()-msDead; Radio_msDeadTime += msDead;
+  // Serial.printf("Radio_ConfigManchFSK() %ums\n", msDead);
   return ErrState; }                                                   // this call takes 18-19 ms
 
 static int ManchEncode(uint8_t *Out, const uint8_t *Inp, uint8_t InpLen) // Encode packet bytes as Manchester
@@ -536,6 +537,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   if(State) ErrState=State;
 #endif
   msDead = millis()-msDead; Radio_msDeadTime += msDead;
+  // Serial.printf("Radio_ConfigLDR() %ums\n", msDead);
   return ErrState; }                                                // this call takes 18-19 ms
 
 static int Radio_TxLDR(const uint8_t *Packet, uint8_t PktSize=24)   // transmit a PilotAware packet
@@ -671,18 +673,19 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
     RxPkt->Bytes=PktLen; }
   else                                                                   // if no Manchester encoding expected
   { Radio.readData(RxPkt->Data, RxPktLen);                               // get packet into the Data
+    // Radio.startReceive();
     memset(RxPkt->Err, 0, RxPktLen);
     RxPkt->Bytes=RxPktLen; }                                               // [bytes] actual packet size
   RxPkt->Manchester = Manch;
   RxPkt->Channel = Channel;                                              // Radio channel
 #ifdef DEBUG_RX
-    if( /* SysID==Radio_SysID_LDR && */ xSemaphoreTake(CONS_Mutex, 20))
-    { Serial.printf("RadioRx: Sys:%02X [%02d%c]/%d #%d %+6.1fdBm ",
-         SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
-      for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
-      { Serial.printf("%02X", RxPkt->Data[Idx]); }
-      Serial.printf("\n");
-      xSemaphoreGive(CONS_Mutex); }
+  if( SysID==Radio_SysID_LDR && xSemaphoreTake(CONS_Mutex, 20))
+  { Serial.printf("RadioRx: Sys:%02X [%02d%c]/%d #%d %+6.1fdBm ",
+       SysID, PktLen, Manch?'m':'_', RxLen, Channel, -0.5*RxPkt->RSSI);
+    for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
+    { Serial.printf("%02X", RxPkt->Data[Idx]); }
+    Serial.printf("\n");
+    xSemaphoreGive(CONS_Mutex); }
 #endif
   RxPkt->SysID   = SysID;                                                // Radio-system-ID
   SysID = RxPkt->DecodeSysID();
