@@ -702,6 +702,24 @@ uint16_t StratuxPort;
     Line[Len]=0; return Len; }
 #endif
 
+  int ReadPFLAC(NMEA_RxMsg &NMEA)
+  { char *Req  = (char *)NMEA.ParmPtr(0); if(Req ==0) return 0;
+    char *Parm = (char *)NMEA.ParmPtr(1); if(Parm==0) return 0;
+    char *Val  = (char *)NMEA.ParmPtr(2); if(Val ==0) return 0;
+    if(Req[0]!='S') return 0;
+    // if(strcmp(Parm, "DEF", 3)==0) /// reset to defaults
+    // if(strcmp(Parm, "ID", 2)==0) ///  ICAO address
+    // if(strcmp(Parm, "ACFT", 4)==0) /// aircraft-type
+    // if(strcmp(Parm, "PILOT", 5)==0) /// Pilot name
+    // if(strcmp(Parm, "GLIDERID", 8)==0) /// registraction
+    // if(strcmp(Parm, "PRIV", 4)==0) /// stealth
+    // if(strcmp(Parm, "NOTRACK", 7)==0) /// no-track
+    // if(strcmp(Parm, "THRE", 4)==0) /// threshold speed for takeoff
+    // UI 0/1/2/3
+    // AUDIOOUT 0/1
+    // AUDIOVOLUME 0..100
+    return 0; }
+
   int ReadPOGNS(NMEA_RxMsg &NMEA)
   { int Count=0;
     for(uint8_t Idx=0; ; Idx++)

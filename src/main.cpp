@@ -1674,10 +1674,28 @@ static void ListLogFile(void)
 }
 #endif
 
+#ifdef WITH_CONFIG
+static void ReadPFLAC(void)  // read parameters requested by the user in the NMEA
+{ if((!NMEA.hasCheck()) || NMEA.isChecked() )
+  { PrintParameters();
+    // if(NMEA.Parms==0) { PrintPOGNS(); return; }                              // if no parameter given
+    Parameters.ReadPFLAC(NMEA);
+    PrintParameters();
+    esp_err_t Err = Parameters.WriteToNVS();                                                  // erase and write the parameters into >
+  }
+}
+#endif
+
+static void ReadPFLA(void)  // read and interprete $PFLAx NMEA
+{ if(NMEA.isPFLAC()) return ReadPFLAC();
+
+}
+
 static void ProcessNMEA(void)     // process a valid NMEA that we got to the console
 {
 #ifdef WITH_CONFIG
   if(NMEA.isPOGNS()) ReadParameters();
+  if(NMEA.isPFLA()) ReadPFLA();
 #endif
 #ifdef WITH_LOG
   if(NMEA.isPOGNL()) ListLogFile();

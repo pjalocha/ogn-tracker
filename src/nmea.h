@@ -2,6 +2,7 @@
 #define __NMEA_H__
 
 #include <stdint.h>
+#include <string.h>
 
 uint8_t NMEA_Check(uint8_t *NMEA, uint8_t Len);
 uint8_t NMEA_AppendCheck(uint8_t *NMEA, uint8_t Len);
@@ -240,33 +241,33 @@ inline uint8_t NMEA_AppendCheckCRNL(char *NMEA, uint8_t Len) { return NMEA_Appen
    { return Data[1]=='P'; }
 
    uint8_t isPOGN(void) const                    // OGN dedicated NMEA sentence
-     { if(Data[1]!='P') return 0;
-       if(Data[2]!='O') return 0;
-       if(Data[3]!='G') return 0;
-       return Data[4]=='N'; }
+   { return memcmp(Data+1, "POGN", 4)==0; }
 
    uint8_t isPOGNB(void)                         // barometric report from the OGN tracker
-     { if(!isPOGN()) return 0;
+   { if(!isPOGN()) return 0;
        return Data[5]=='B'; }
 
    uint8_t isPOGNT(void)                         // other aircraft position (tracking) report from OGN trackers
-     { if(!isPOGN()) return 0;
-       return Data[5]=='T'; }
+   { if(!isPOGN()) return 0;
+     return Data[5]=='T'; }
 
    uint8_t isPOGNS(void)                         // tracker parameters setup
-     { if(!isPOGN()) return 0;
-       return Data[5]=='S'; }
+   { if(!isPOGN()) return 0;
+     return Data[5]=='S'; }
 
    uint8_t isPGRMZ(void)                         // barometric pressure report
-     { if(!isP()) return 0;
-       if(Data[2]!='G') return 0;
-       if(Data[3]!='R') return 0;
-       if(Data[4]!='M') return 0;
-       return Data[5]=='Z'; }
+   { return memcmp(Data+1, "PGRMZ", 5)==0; }
 
    uint8_t isPOGNL(void)                         // log file list request
-     { if(!isPOGN()) return 0;
-       return Data[5]=='L'; }
+   { if(!isPOGN()) return 0;
+     return Data[5]=='L'; }
+
+   uint8_t isPFLA(void) const                    // FLARM dedicated NMEA sentence
+   { return memcmp(Data+1, "PFLA", 4)==0; }
+
+   uint8_t isPFLAC(void)                         // configuration
+   { if(!isPFLA()) return 0;
+     return Data[5]=='C'; }
 
 } ;
 

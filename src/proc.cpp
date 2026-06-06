@@ -1257,7 +1257,7 @@ void vTaskPROC(void* pvParameters)
           { uint8_t NearAcft=Look.countNearAcft();
             if(NearAcft)
             { if(NearBackOff) NearBackOff--;
-              else { Play(Play_Vol_1 | Play_Oct_1 | 0, 20); NearBackOff=10; }
+              else { Play(Play_Vol_1 | Play_Oct_1 | 0, 50); NearBackOff=10; }
             }
             else NearBackOff=10;
           }
