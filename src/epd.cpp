@@ -4,6 +4,7 @@
 #include "proc.h"
 #include "gps.h"
 #include "intmath.h"
+#include "ogn-radio.h"
 
 #ifdef WITH_EPAPER
 
@@ -134,7 +135,45 @@ static bool UpdateAlarmThresh(void)
 
 // ========================================================================================================================
 
+static void DrawPktRateBar(void)
+{ const int16_t X = 2;
+  const int16_t Y = 58;
+  const int16_t W = 6;
+  const int16_t H = 104;
+  float Rate = Radio_PktRate;
+  if(Rate<0.0f) Rate=0.0f;
+  if(Rate>10.0f) Rate=10.0f;
+  int16_t Fill = (int16_t)(Rate*H/10.0f+0.5f);
+  EPD.drawRect(X, Y, W, H, GxEPD_BLACK);
+  EPD.drawLine(X, Y+H/2, X+W+2, Y+H/2, GxEPD_BLACK);            // 5Hz tick
+  if(Fill>0) EPD.fillRect(X+1, Y+H-Fill, W-2, Fill, GxEPD_BLACK); }
+
+static uint8_t PktRateLevel(void)
+{ if(Radio_PktRate<0.0f) return 0;
+  if(Radio_PktRate>10.0f) return 100;
+  return (uint8_t)(Radio_PktRate*10.0f+0.5f); }                 // [0.1Hz]
+
+static uint8_t PrevPktRateLevel = 0xFF;
+
+static bool UpdatePktRateBar(void)
+{ if(GPS_TimeSinceLock>10) return 0;                            // on radar page this is updated with the map
+  uint8_t Level = PktRateLevel();
+  if(Level==PrevPktRateLevel) return 0;
+  PrevPktRateLevel=Level;
+  EPD.setPartialWindow(0, 54, 12, 112);
+  EPD.firstPage();
+  EPD.fillRect(0, 54, 12, 112, GxEPD_WHITE);
+  DrawPktRateBar();
+  EPD.nextPage();
+  return 1; }
+
+// ========================================================================================================================
+
 static uint8_t PrevAcftCount = 0xFF;
+static bool PrevAcftCountVisible = false;
+
+static bool AcftCountVisible(void)
+{ return GPS_TimeSinceLock>10; }
 
 static uint8_t getAcftCount(void)
 {
@@ -153,9 +192,12 @@ static void DrawAcftIcon(int16_t X, int16_t Y, uint8_t Color=GxEPD_BLACK)
 
 static void DrawAcftCount(void)
 { char Line[8];
+  bool Visible = AcftCountVisible();
+  PrevAcftCountVisible=Visible;
   uint8_t Count = getAcftCount();
   if(Count>99) Count=99;
   DrawAcftIcon(86, 9);
+  if(!Visible) return;
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold12pt7b);
   EPD.setCursor(69, 35);
@@ -164,9 +206,10 @@ static void DrawAcftCount(void)
   PrevAcftCount=Count; }
 
 static bool UpdateAcftCount(void)
-{ uint8_t Count = getAcftCount();
+{ bool Visible = AcftCountVisible();
+  uint8_t Count = getAcftCount();
   if(Count>99) Count=99;
-  if(PrevAcftCount==Count) return 0;
+  if(PrevAcftCountVisible==Visible && (!Visible || PrevAcftCount==Count)) return 0;
   EPD.setPartialWindow(68, 0, 38, 38);                         // partial update
   EPD.fillRect(68, 0, 38, 38, GxEPD_WHITE);                    // clear the area to be redrawn
   EPD.firstPage();
@@ -367,8 +410,9 @@ static void DrawTrafficAlert(uint16_t MapHeading)
 
 static uint32_t CalcTrafficMapHash(void)
 {
+  uint8_t Rate = PktRateLevel();
 #ifdef WITH_LOOKOUT
-  uint32_t Hash = Look.Targets + ((uint32_t)TrafficMapRangeIdx<<24) + ((uint32_t)TrafficMapHeading()<<8);
+  uint32_t Hash = Rate + Look.Targets + ((uint32_t)TrafficMapRangeIdx<<24) + ((uint32_t)TrafficMapHeading()<<8);
   Hash += ((uint32_t)Look.WarnLevel<<29) + ((uint32_t)Look.WorstTgtIdx<<20);
   for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
   { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
@@ -381,12 +425,13 @@ static uint32_t CalcTrafficMapHash(void)
     Hash += ((uint32_t)Tgt->WarnLevel)<<28; }
   return Hash;
 #else
-  return 0;
+  return Rate;
 #endif
 }
 
 static void DrawTrafficMap(void)
 { DrawTrafficGrid();
+  DrawPktRateBar();
 #ifdef WITH_LOOKOUT
   const int32_t MaxDist = (int32_t)TrafficMapRange[TrafficMapRangeIdx]*2; // [0.5m]
   uint16_t Heading = TrafficMapHeading();
@@ -470,6 +515,8 @@ void EPD_DrawID(void)
   DrawAcftCount();
   DrawAlarmThresh();
   DrawBattFrame();
+  DrawPktRateBar();
+  PrevPktRateLevel=PktRateLevel();
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
   UpdateTime = millis();
   RedrawTime=UpdateTime;
@@ -491,6 +538,7 @@ void EPD_UpdateID(void)
   PartUpd+=UpdateAcftCount();
   PartUpd+=UpdateBatt();
   PartUpd+=UpdateSatMon();
+  PartUpd+=UpdatePktRateBar();
   PartUpd+=UpdateTrafficMap();
   UpdateTime=msTime; }
 
