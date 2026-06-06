@@ -85,6 +85,9 @@ static bool UpdateSatMon(void)
 // ========================================================================================================================
 
 static uint8_t PrevAlarmThresh = 0;
+static const int16_t AlarmX = 124;
+static const int16_t AlarmY = 0;
+static const int16_t AlarmW = 34;
 
 static void DrawAlarmFrame(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_BLACK)
 { int16_t W2 = W/2;
@@ -93,19 +96,61 @@ static void DrawAlarmFrame(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_
   EPD.drawLine(X-W2, Y+W, X+W2, Y+W, Color); }
 
 static void DrawAlarmThresh(void)
-{ DrawAlarmFrame(110, 0, 34);
+{ DrawAlarmFrame(AlarmX, AlarmY, AlarmW);
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold12pt7b);
-  EPD.drawChar(110-6, 28, '0'+AlarmThresh, GxEPD_BLACK, GxEPD_WHITE, 1);
+  EPD.drawChar(AlarmX-6, 28, '0'+AlarmThresh, GxEPD_BLACK, GxEPD_WHITE, 1);
   PrevAlarmThresh=AlarmThresh; }
 
 static bool UpdateAlarmThresh(void)
 { if(PrevAlarmThresh==AlarmThresh) return 0;
   // PrevAlarmThresh=AlarmThresh;
-  EPD.setPartialWindow(110-17, 0, 35, 35);                       // partial update
-  EPD.fillRect(110-17, 0, 35, 35, GxEPD_WHITE);                  // clear the area to be redrawn
+  EPD.setPartialWindow(AlarmX-17, AlarmY, 35, 35);               // partial update
+  EPD.fillRect(AlarmX-17, AlarmY, 35, 35, GxEPD_WHITE);          // clear the area to be redrawn
   EPD.firstPage();
   DrawAlarmThresh();
+  EPD.nextPage();
+  return 1; }
+
+// ========================================================================================================================
+
+static uint8_t PrevAcftCount = 0xFF;
+
+static uint8_t getAcftCount(void)
+{
+#ifdef WITH_LOOKOUT
+  return Look.Targets;
+#else
+  return 0;
+#endif
+}
+
+static void DrawAcftIcon(int16_t X, int16_t Y, uint8_t Color=GxEPD_BLACK)
+{ EPD.drawLine(X-11, Y,   X+10, Y,   Color); // fuselage
+  EPD.drawLine(X,    Y-7, X,    Y+7, Color); // wings
+  EPD.drawLine(X-8,  Y-3, X-8,  Y+3, Color); // tail
+  EPD.drawPixel(X+11, Y, Color); }
+
+static void DrawAcftCount(void)
+{ char Line[8];
+  uint8_t Count = getAcftCount();
+  if(Count>99) Count=99;
+  DrawAcftIcon(86, 9);
+  EPD.setTextColor(GxEPD_BLACK);
+  EPD.setFont(&FreeMonoBold12pt7b);
+  EPD.setCursor(69, 35);
+  sprintf(Line, "%2u", Count);
+  EPD.print(Line);
+  PrevAcftCount=Count; }
+
+static bool UpdateAcftCount(void)
+{ uint8_t Count = getAcftCount();
+  if(Count>99) Count=99;
+  if(PrevAcftCount==Count) return 0;
+  EPD.setPartialWindow(68, 0, 38, 38);                         // partial update
+  EPD.fillRect(68, 0, 38, 38, GxEPD_WHITE);                    // clear the area to be redrawn
+  EPD.firstPage();
+  DrawAcftCount();
   EPD.nextPage();
   return 1; }
 
@@ -188,6 +233,7 @@ void EPD_DrawID(void)
   EPD.setCursor(0, 195);
   EPD.print(Line);
   // drawSpeaker(110, 16, 32, GxEPD_BLACK);
+  DrawAcftCount();
   DrawAlarmThresh();
   DrawBattFrame();
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
@@ -203,6 +249,7 @@ void EPD_UpdateID(void)
   { msAge = msTime-UpdateTime;
     if(msAge<1000) return; }                                     // do not update more frequent than once per 2 seconds
   PartUpd+=UpdateAlarmThresh();
+  PartUpd+=UpdateAcftCount();
   PartUpd+=UpdateBatt();
   PartUpd+=UpdateSatMon();
   UpdateTime=msTime; }
