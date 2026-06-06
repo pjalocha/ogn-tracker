@@ -89,24 +89,43 @@ static const int16_t AlarmX = 124;
 static const int16_t AlarmY = 0;
 static const int16_t AlarmW = 34;
 
-static void DrawAlarmFrame(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_BLACK)
+static void DrawBellFrame(int16_t X, int16_t Y, int16_t W, uint8_t Color=GxEPD_BLACK)
 { int16_t W2 = W/2;
-  EPD.drawLine(X, Y, X+W2, Y+W, Color);
-  EPD.drawLine(X, Y, X-W2, Y+W, Color);
-  EPD.drawLine(X-W2, Y+W, X+W2, Y+W, Color); }
+  int16_t L = X-W2+4;
+  int16_t R = X+W2-4;
+  int16_t Top = Y+4;
+  int16_t BellTop = Y+8;
+  int16_t Bottom = Y+W-5;
+  EPD.drawLine(X-3, Top, X+3, Top, Color);                  // hanger
+  EPD.drawLine(X-8, BellTop+4, X-8, Bottom-4, Color);       // left side
+  EPD.drawLine(X+8, BellTop+4, X+8, Bottom-4, Color);       // right side
+  EPD.drawLine(X-8, BellTop+4, X-5, BellTop, Color);        // upper left curve
+  EPD.drawLine(X+8, BellTop+4, X+5, BellTop, Color);        // upper right curve
+  EPD.drawLine(X-5, BellTop, X+5, BellTop, Color);          // top arch
+  EPD.drawLine(L, Bottom, R, Bottom, Color);                // lower rim
+  EPD.drawLine(L, Bottom, X-W2, Bottom+4, Color);
+  EPD.drawLine(R, Bottom, X+W2, Bottom+4, Color);
+  EPD.drawLine(X-W2, Bottom+4, X+W2, Bottom+4, Color);
+  EPD.fillCircle(X, Bottom+6, 2, Color); }                  // clapper
 
 static void DrawAlarmThresh(void)
-{ DrawAlarmFrame(AlarmX, AlarmY, AlarmW);
-  EPD.setTextColor(GxEPD_BLACK);
-  EPD.setFont(&FreeMonoBold12pt7b);
-  EPD.drawChar(AlarmX-6, 28, '0'+AlarmThresh, GxEPD_BLACK, GxEPD_WHITE, 1);
+{ DrawBellFrame(AlarmX, AlarmY, AlarmW);
+  if(AlarmThresh>=4)
+  { EPD.drawLine(AlarmX-6, 15, AlarmX+6, 27, GxEPD_BLACK);
+    EPD.drawLine(AlarmX-5, 15, AlarmX+7, 27, GxEPD_BLACK);
+    EPD.drawLine(AlarmX+6, 15, AlarmX-6, 27, GxEPD_BLACK);
+    EPD.drawLine(AlarmX+5, 15, AlarmX-7, 27, GxEPD_BLACK); }
+  else if(AlarmThresh>0)
+  { EPD.setTextColor(GxEPD_BLACK);
+    EPD.setFont(&FreeMonoBold9pt7b);
+    EPD.drawChar(AlarmX-5, 25, '0'+AlarmThresh, GxEPD_BLACK, GxEPD_WHITE, 1); }
   PrevAlarmThresh=AlarmThresh; }
 
 static bool UpdateAlarmThresh(void)
 { if(PrevAlarmThresh==AlarmThresh) return 0;
   // PrevAlarmThresh=AlarmThresh;
-  EPD.setPartialWindow(AlarmX-17, AlarmY, 35, 35);               // partial update
-  EPD.fillRect(AlarmX-17, AlarmY, 35, 35, GxEPD_WHITE);          // clear the area to be redrawn
+  EPD.setPartialWindow(AlarmX-17, AlarmY, 35, 39);               // partial update
+  EPD.fillRect(AlarmX-17, AlarmY, 35, 39, GxEPD_WHITE);          // clear the area to be redrawn
   EPD.firstPage();
   DrawAlarmThresh();
   EPD.nextPage();
