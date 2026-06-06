@@ -676,6 +676,20 @@ uint16_t BatterySense(int Samples)  // [mV] read battery voltage from power-cont
 
 // =======================================================================================================
 
+#if defined(Button1_Pin) && defined(WITH_EPAPER)   // middle button on ThinkNode-M5: traffic map range
+static Button2 RangeButton(Button1_Pin);
+
+static void RangeButton_Single(Button2 Butt)
+{ EPD_TrafficRange_Next(); }
+
+static void RangeButton_Init(void)
+{ pinMode(Button1_Pin, INPUT);
+  RangeButton.setLongClickTime(2000);
+  RangeButton.setClickHandler(RangeButton_Single); }
+#endif
+
+// =======================================================================================================
+
 #ifdef Button2_Pin                       // the "option" button, only on ThinkNode-M5
 static Button2 OptButton(Button2_Pin);
 static bool OptButton_isPressed(void) { return digitalRead(Button2_Pin)==0; }
@@ -1100,6 +1114,9 @@ void setup()
 
 #ifdef Button_Pin
   Button_Init();
+#endif
+#if defined(Button1_Pin) && defined(WITH_EPAPER)
+  RangeButton_Init();
 #endif
 #ifdef Button2_Pin
   OptButton_Init();
@@ -1867,6 +1884,9 @@ void loop()
   OGN_LED_Flash();                 // flash LEDs as requested by Radio Tx/Rx
 #ifdef Button_Pin
   Button.loop();                   // handle button presses
+#endif
+#if defined(Button1_Pin) && defined(WITH_EPAPER)
+  RangeButton.loop();              // handle traffic range button
 #endif
 #ifdef Button2_Pin
   OptButton.loop();                // handle button presses

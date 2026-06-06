@@ -3,6 +3,7 @@
 
 #include "proc.h"
 #include "gps.h"
+#include "intmath.h"
 
 #ifdef WITH_EPAPER
 
@@ -233,6 +234,17 @@ static void DrawLogo(void)
   EPD.drawBitmap(0, 0, BitMap, OGN_Logo_200x200_width, OGN_Logo_200x200_height, GxEPD_BLACK);
   free(BitMap); }                                              // free the allocated bitmap
 
+static void DrawLogoCopyright(void)
+{ const char *Text = "v" VERSION " (c) Pawel Jalocha";
+  EPD.fillRect(188, 68, 12, 112, GxEPD_WHITE);
+  EPD.setTextColor(GxEPD_BLACK);
+  EPD.setFont(0);
+  EPD.setTextSize(1);
+  EPD.setRotation(3);
+  EPD.setCursor(28, 193);
+  EPD.print(Text);
+  EPD.setRotation(0); }
+
 // ========================================================================================================================
 
 static const int16_t TrafficMapX = 0;
@@ -242,7 +254,8 @@ static const int16_t TrafficMapH = 140;
 static const int16_t TrafficMapCenterX = 100;
 static const int16_t TrafficMapCenterY = 112;
 static const int16_t TrafficMapRadius  = 68;
-static const int16_t TrafficMapRange   = 4000;                  // [m] map range: outer circle
+static const int16_t TrafficMapRange[] = { 250, 500, 1000, 2000, 4000, 8000, 16000 }; // [m] map range: outer circle
+static uint8_t TrafficMapRangeIdx = 4;
 
 static uint32_t TrafficMapHash = 0;
 static uint32_t TrafficMapTime = 0;
@@ -252,7 +265,8 @@ static bool hasStableGPSLock(void)
 { return GPS_TimeSinceLock>10; }
 
 static void DrawTrafficGrid(void)
-{ EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius, GxEPD_BLACK);
+{ char Line[8];
+  EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius, GxEPD_BLACK);
   EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius/2, GxEPD_BLACK);
   EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius/4, GxEPD_BLACK);
   EPD.drawLine(TrafficMapCenterX, TrafficMapCenterY-TrafficMapRadius, TrafficMapCenterX, TrafficMapCenterY+TrafficMapRadius, GxEPD_BLACK);
@@ -261,24 +275,40 @@ static void DrawTrafficGrid(void)
   EPD.drawLine(TrafficMapCenterX, TrafficMapCenterY-3, TrafficMapCenterX, TrafficMapCenterY+3, GxEPD_BLACK);
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMono9pt7b);
-  EPD.drawChar(TrafficMapCenterX-5, TrafficMapCenterY-TrafficMapRadius+14, 'N', GxEPD_BLACK, GxEPD_WHITE, 1); }
+  EPD.drawChar(TrafficMapCenterX-5, TrafficMapCenterY-TrafficMapRadius+14, 'N', GxEPD_BLACK, GxEPD_WHITE, 1);
+  if(TrafficMapRange[TrafficMapRangeIdx]<1000) sprintf(Line, "%dm", TrafficMapRange[TrafficMapRangeIdx]);
+                                          else sprintf(Line, "%dkm", TrafficMapRange[TrafficMapRangeIdx]/1000);
+  EPD.setFont(&FreeMonoBold9pt7b);
+  EPD.setCursor(158, 179);
+  EPD.print(Line); }
 
-static void DrawTrafficTarget(int16_t X, int16_t Y, uint8_t Warn)
-{ if(Warn)
-  { EPD.fillCircle(X, Y, 3+Warn, GxEPD_BLACK);
-    return; }
-  EPD.drawLine(X-3, Y, X+3, Y, GxEPD_BLACK);
-  EPD.drawLine(X, Y-3, X, Y+3, GxEPD_BLACK); }
+static void DrawTrafficTarget(int16_t X, int16_t Y, uint16_t Heading, uint8_t Warn)
+{ const int16_t Nose = 8;
+  const int16_t Tail = 5;
+  const int16_t Wing = 6;
+  int16_t Sin = Isin(Heading);
+  int16_t Cos = Icos(Heading);
+  int16_t NoseX = X + ((int32_t)Nose*Sin+0x800)/0x1000;
+  int16_t NoseY = Y - ((int32_t)Nose*Cos+0x800)/0x1000;
+  int16_t TailX = X - ((int32_t)Tail*Sin+0x800)/0x1000;
+  int16_t TailY = Y + ((int32_t)Tail*Cos+0x800)/0x1000;
+  int16_t WingX = ((int32_t)Wing*Cos+0x800)/0x1000;
+  int16_t WingY = ((int32_t)Wing*Sin+0x800)/0x1000;
+  EPD.drawLine(TailX, TailY, NoseX, NoseY, GxEPD_BLACK);
+  EPD.drawLine(X-WingX, Y-WingY, X+WingX, Y+WingY, GxEPD_BLACK);
+  if(Warn) EPD.drawCircle(X, Y, 4+Warn, GxEPD_BLACK); }
 
 static uint32_t CalcTrafficMapHash(void)
 {
 #ifdef WITH_LOOKOUT
-  uint32_t Hash = Look.Targets;
+  uint32_t Hash = Look.Targets + ((uint32_t)TrafficMapRangeIdx<<24);
   for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
   { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
+    int32_t dX = (int32_t)Tgt->Pos.X - Look.Pos.X;
+    int32_t dY = (int32_t)Tgt->Pos.Y - Look.Pos.Y;
     Hash += Tgt->ID;
-    Hash += ((uint32_t)(Tgt->dX>>5)&0x7FF)<< 0;
-    Hash += ((uint32_t)(Tgt->dY>>5)&0x7FF)<<11;
+    Hash += ((uint32_t)(dX>>5)&0x7FF)<< 0;
+    Hash += ((uint32_t)(dY>>5)&0x7FF)<<11;
     Hash += ((uint32_t)Tgt->WarnLevel)<<28; }
   return Hash;
 #else
@@ -289,12 +319,12 @@ static uint32_t CalcTrafficMapHash(void)
 static void DrawTrafficMap(void)
 { DrawTrafficGrid();
 #ifdef WITH_LOOKOUT
-  const int32_t MaxDist = (int32_t)TrafficMapRange*2;            // [0.5m]
+  const int32_t MaxDist = (int32_t)TrafficMapRange[TrafficMapRangeIdx]*2; // [0.5m]
   for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
   { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
-    int32_t dX = Tgt->dX;
-    int32_t dY = Tgt->dY;
-    int32_t Dist = Tgt->getHorDist();
+    int32_t dX = (int32_t)Tgt->Pos.X - Look.Pos.X;
+    int32_t dY = (int32_t)Tgt->Pos.Y - Look.Pos.Y;
+    int32_t Dist = Acft_RelPos::FastDistance((int16_t)dX, (int16_t)dY);
     int16_t X, Y;
     if(Dist>MaxDist && Dist>0)
     { X = TrafficMapCenterX + (dY*TrafficMapRadius)/Dist;
@@ -302,7 +332,7 @@ static void DrawTrafficMap(void)
     else
     { X = TrafficMapCenterX + (dY*TrafficMapRadius)/MaxDist;
       Y = TrafficMapCenterY - (dX*TrafficMapRadius)/MaxDist; }
-    DrawTrafficTarget(X, Y, Tgt->WarnLevel); }
+    DrawTrafficTarget(X, Y, Tgt->Pos.Heading, Tgt->WarnLevel); }
 #endif
 }
 
@@ -327,6 +357,12 @@ static bool UpdateTrafficMap(void)
   EPD.nextPage();
   return 1; }
 
+void EPD_TrafficRange_Next(void)
+{ TrafficMapRangeIdx++;
+  if(TrafficMapRangeIdx>=sizeof(TrafficMapRange)/sizeof(TrafficMapRange[0])) TrafficMapRangeIdx=0;
+  TrafficMapHash=~CalcTrafficMapHash();
+  TrafficMapTime=0; }
+
 // ========================================================================================================================
 
 static uint32_t UpdateTime = 0;
@@ -340,7 +376,7 @@ void EPD_DrawID(void)
   EPD.fillScreen(GxEPD_WHITE);                                   // all-white screen
   PrevGPSLock=hasStableGPSLock();
   if(PrevGPSLock) DrawTrafficMap();
-            else DrawLogo();
+            else { DrawLogo(); DrawLogoCopyright(); }
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold9pt7b);                               // use bold font: more readable
   sprintf(Line, "%X:%d:%06X %s", Parameters.AcftType, Parameters.AddrType, Parameters.Address, Parameters.Reg);
