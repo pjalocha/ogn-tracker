@@ -259,6 +259,7 @@ static uint8_t TrafficMapRangeIdx = 4;
 
 static uint32_t TrafficMapHash = 0;
 static uint32_t TrafficMapTime = 0;
+static uint8_t  TrafficMapWarn = 0;
 static bool PrevGPSLock = false;
 
 static bool hasStableGPSLock(void)
@@ -311,10 +312,64 @@ static void DrawTrafficTarget(int16_t X, int16_t Y, uint16_t Heading, uint8_t Wa
   EPD.drawLine(X-WingX, Y-WingY, X+WingX, Y+WingY, GxEPD_BLACK);
   if(Warn) EPD.drawCircle(X, Y, 4+Warn, GxEPD_BLACK); }
 
+static void DrawThickLine(int16_t X1, int16_t Y1, int16_t X2, int16_t Y2)
+{ EPD.drawLine(X1,   Y1,   X2,   Y2,   GxEPD_BLACK);
+  EPD.drawLine(X1-1, Y1,   X2-1, Y2,   GxEPD_BLACK);
+  EPD.drawLine(X1+1, Y1,   X2+1, Y2,   GxEPD_BLACK);
+  EPD.drawLine(X1,   Y1-1, X2,   Y2-1, GxEPD_BLACK);
+  EPD.drawLine(X1,   Y1+1, X2,   Y2+1, GxEPD_BLACK); }
+
+static void DrawTrafficAlert(uint16_t MapHeading)
+{
+#ifdef WITH_LOOKOUT
+  if(Look.WarnLevel==0) return;
+  if(Look.WorstTgtIdx>=Look.MaxTargets) return;
+  const LookOut_Target *Tgt = Look.Target+Look.WorstTgtIdx;
+  if(!Tgt->Alloc) return;
+
+  int32_t dX = (int32_t)Tgt->Pos.X - Look.Pos.X;
+  int32_t dY = (int32_t)Tgt->Pos.Y - Look.Pos.Y;
+  int32_t Dist = Acft_RelPos::FastDistance((int16_t)dX, (int16_t)dY);
+  if(Dist<=0) return;
+
+  int16_t Sin = Isin(MapHeading);
+  int16_t Cos = Icos(MapHeading);
+  int32_t Fwd = (dX*Cos + dY*Sin + 0x800)>>12;
+  int32_t Right = (dY*Cos - dX*Sin + 0x800)>>12;
+
+  const int16_t ArrowRadius = TrafficMapRadius-9;
+  int16_t TipX = TrafficMapCenterX + (Right*ArrowRadius)/Dist;
+  int16_t TipY = TrafficMapCenterY - (Fwd*ArrowRadius)/Dist;
+  int16_t VecX = TipX-TrafficMapCenterX;
+  int16_t VecY = TipY-TrafficMapCenterY;
+  int16_t Len = Acft_RelPos::FastDistance(VecX, VecY);
+  if(Len<=0) return;
+
+  int16_t BaseX = TipX - ((int32_t)VecX*15)/Len;
+  int16_t BaseY = TipY - ((int32_t)VecY*15)/Len;
+  int16_t WingX = ((int32_t)VecY*8)/Len;
+  int16_t WingY = ((int32_t)VecX*8)/Len;
+
+  DrawThickLine(TrafficMapCenterX, TrafficMapCenterY, TipX, TipY);
+  DrawThickLine(TipX, TipY, BaseX+WingX, BaseY-WingY);
+  DrawThickLine(TipX, TipY, BaseX-WingX, BaseY+WingY);
+
+  char Line[12];
+  EPD.fillRect(70, 120, 60, 20, GxEPD_WHITE);
+  EPD.setTextColor(GxEPD_BLACK);
+  EPD.setFont(&FreeMonoBold12pt7b);
+  EPD.setCursor(76, 138);
+  if(Tgt->TimeMargin<0xFF) sprintf(Line, "%us", (Tgt->TimeMargin+1)/2);
+                      else sprintf(Line, "W%u", Look.WarnLevel);
+  EPD.print(Line);
+#endif
+}
+
 static uint32_t CalcTrafficMapHash(void)
 {
 #ifdef WITH_LOOKOUT
   uint32_t Hash = Look.Targets + ((uint32_t)TrafficMapRangeIdx<<24) + ((uint32_t)TrafficMapHeading()<<8);
+  Hash += ((uint32_t)Look.WarnLevel<<29) + ((uint32_t)Look.WorstTgtIdx<<20);
   for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
   { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
     int32_t dX = (int32_t)Tgt->Pos.X - Look.Pos.X;
@@ -322,6 +377,7 @@ static uint32_t CalcTrafficMapHash(void)
     Hash += Tgt->ID;
     Hash += ((uint32_t)(dX>>5)&0x7FF)<< 0;
     Hash += ((uint32_t)(dY>>5)&0x7FF)<<11;
+    Hash += ((uint32_t)(Tgt->Pos.Heading>>8)&0xFF)<<19;
     Hash += ((uint32_t)Tgt->WarnLevel)<<28; }
   return Hash;
 #else
@@ -351,6 +407,7 @@ static void DrawTrafficMap(void)
     { X = TrafficMapCenterX + (Right*TrafficMapRadius)/MaxDist;
       Y = TrafficMapCenterY - (Fwd*TrafficMapRadius)/MaxDist; }
     DrawTrafficTarget(X, Y, Tgt->Pos.Heading-Heading, Tgt->WarnLevel); }
+  DrawTrafficAlert(Heading);
 #endif
 }
 
@@ -361,12 +418,20 @@ static bool UpdateTrafficMap(void)
     return 1; }
   if(!GPSLock) return 0;
 
-  uint32_t msTime = millis();
-  if(msTime-TrafficMapTime<3000) return 0;
   uint32_t NewHash = CalcTrafficMapHash();
   if(NewHash==TrafficMapHash) return 0;
+  uint32_t msTime = millis();
+  uint32_t MinPeriod = 3000;
+#ifdef WITH_LOOKOUT
+  if(Look.WarnLevel!=TrafficMapWarn) MinPeriod=0;
+  else if(Look.WarnLevel) MinPeriod=500;
+#endif
+  if(msTime-TrafficMapTime<MinPeriod) return 0;
   TrafficMapHash=NewHash;
   TrafficMapTime=msTime;
+#ifdef WITH_LOOKOUT
+  TrafficMapWarn=Look.WarnLevel;
+#endif
 
   EPD.setPartialWindow(TrafficMapX, TrafficMapY, TrafficMapW, TrafficMapH);
   EPD.firstPage();
@@ -410,6 +475,9 @@ void EPD_DrawID(void)
   RedrawTime=UpdateTime;
   TrafficMapTime=UpdateTime;
   TrafficMapHash=CalcTrafficMapHash();
+#ifdef WITH_LOOKOUT
+  TrafficMapWarn=Look.WarnLevel;
+#endif
   PartUpd=0; }
 
 void EPD_UpdateID(void)
