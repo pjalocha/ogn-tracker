@@ -235,6 +235,100 @@ static void DrawLogo(void)
 
 // ========================================================================================================================
 
+static const int16_t TrafficMapX = 0;
+static const int16_t TrafficMapY = 42;
+static const int16_t TrafficMapW = 200;
+static const int16_t TrafficMapH = 140;
+static const int16_t TrafficMapCenterX = 100;
+static const int16_t TrafficMapCenterY = 112;
+static const int16_t TrafficMapRadius  = 68;
+static const int16_t TrafficMapRange   = 4000;                  // [m] map range: outer circle
+
+static uint32_t TrafficMapHash = 0;
+static uint32_t TrafficMapTime = 0;
+static bool PrevGPSLock = false;
+
+static bool hasStableGPSLock(void)
+{ return GPS_TimeSinceLock>10; }
+
+static void DrawTrafficGrid(void)
+{ EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius, GxEPD_BLACK);
+  EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius/2, GxEPD_BLACK);
+  EPD.drawCircle(TrafficMapCenterX, TrafficMapCenterY, TrafficMapRadius/4, GxEPD_BLACK);
+  EPD.drawLine(TrafficMapCenterX, TrafficMapCenterY-TrafficMapRadius, TrafficMapCenterX, TrafficMapCenterY+TrafficMapRadius, GxEPD_BLACK);
+  EPD.drawLine(TrafficMapCenterX-TrafficMapRadius, TrafficMapCenterY, TrafficMapCenterX+TrafficMapRadius, TrafficMapCenterY, GxEPD_BLACK);
+  EPD.drawLine(TrafficMapCenterX-3, TrafficMapCenterY, TrafficMapCenterX+3, TrafficMapCenterY, GxEPD_BLACK);
+  EPD.drawLine(TrafficMapCenterX, TrafficMapCenterY-3, TrafficMapCenterX, TrafficMapCenterY+3, GxEPD_BLACK);
+  EPD.setTextColor(GxEPD_BLACK);
+  EPD.setFont(&FreeMono9pt7b);
+  EPD.drawChar(TrafficMapCenterX-5, TrafficMapCenterY-TrafficMapRadius+14, 'N', GxEPD_BLACK, GxEPD_WHITE, 1); }
+
+static void DrawTrafficTarget(int16_t X, int16_t Y, uint8_t Warn)
+{ if(Warn)
+  { EPD.fillCircle(X, Y, 3+Warn, GxEPD_BLACK);
+    return; }
+  EPD.drawLine(X-3, Y, X+3, Y, GxEPD_BLACK);
+  EPD.drawLine(X, Y-3, X, Y+3, GxEPD_BLACK); }
+
+static uint32_t CalcTrafficMapHash(void)
+{
+#ifdef WITH_LOOKOUT
+  uint32_t Hash = Look.Targets;
+  for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
+  { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
+    Hash += Tgt->ID;
+    Hash += ((uint32_t)(Tgt->dX>>5)&0x7FF)<< 0;
+    Hash += ((uint32_t)(Tgt->dY>>5)&0x7FF)<<11;
+    Hash += ((uint32_t)Tgt->WarnLevel)<<28; }
+  return Hash;
+#else
+  return 0;
+#endif
+}
+
+static void DrawTrafficMap(void)
+{ DrawTrafficGrid();
+#ifdef WITH_LOOKOUT
+  const int32_t MaxDist = (int32_t)TrafficMapRange*2;            // [0.5m]
+  for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
+  { const LookOut_Target *Tgt = Look.Target+Idx; if(!Tgt->Alloc) continue;
+    int32_t dX = Tgt->dX;
+    int32_t dY = Tgt->dY;
+    int32_t Dist = Tgt->getHorDist();
+    int16_t X, Y;
+    if(Dist>MaxDist && Dist>0)
+    { X = TrafficMapCenterX + (dY*TrafficMapRadius)/Dist;
+      Y = TrafficMapCenterY - (dX*TrafficMapRadius)/Dist; }
+    else
+    { X = TrafficMapCenterX + (dY*TrafficMapRadius)/MaxDist;
+      Y = TrafficMapCenterY - (dX*TrafficMapRadius)/MaxDist; }
+    DrawTrafficTarget(X, Y, Tgt->WarnLevel); }
+#endif
+}
+
+static bool UpdateTrafficMap(void)
+{ bool GPSLock = hasStableGPSLock();
+  if(GPSLock!=PrevGPSLock)
+  { EPD_DrawID();
+    return 1; }
+  if(!GPSLock) return 0;
+
+  uint32_t msTime = millis();
+  if(msTime-TrafficMapTime<3000) return 0;
+  uint32_t NewHash = CalcTrafficMapHash();
+  if(NewHash==TrafficMapHash) return 0;
+  TrafficMapHash=NewHash;
+  TrafficMapTime=msTime;
+
+  EPD.setPartialWindow(TrafficMapX, TrafficMapY, TrafficMapW, TrafficMapH);
+  EPD.firstPage();
+  EPD.fillRect(TrafficMapX, TrafficMapY, TrafficMapW, TrafficMapH, GxEPD_WHITE);
+  DrawTrafficMap();
+  EPD.nextPage();
+  return 1; }
+
+// ========================================================================================================================
+
 static uint32_t UpdateTime = 0;
 static uint32_t RedrawTime = 0;
 static uint8_t PartUpd = 0;
@@ -244,7 +338,9 @@ void EPD_DrawID(void)
   EPD.setFullWindow();                                           // this will be full page update
   EPD.firstPage();
   EPD.fillScreen(GxEPD_WHITE);                                   // all-white screen
-  DrawLogo();
+  PrevGPSLock=hasStableGPSLock();
+  if(PrevGPSLock) DrawTrafficMap();
+            else DrawLogo();
   EPD.setTextColor(GxEPD_BLACK);
   EPD.setFont(&FreeMonoBold9pt7b);                               // use bold font: more readable
   sprintf(Line, "%X:%d:%06X %s", Parameters.AcftType, Parameters.AddrType, Parameters.Address, Parameters.Reg);
@@ -258,6 +354,8 @@ void EPD_DrawID(void)
   EPD.nextPage();                                                // put full page onto the e-paper (takes 2 sec)
   UpdateTime = millis();
   RedrawTime=UpdateTime;
+  TrafficMapTime=UpdateTime;
+  TrafficMapHash=CalcTrafficMapHash();
   PartUpd=0; }
 
 void EPD_UpdateID(void)
@@ -271,6 +369,7 @@ void EPD_UpdateID(void)
   PartUpd+=UpdateAcftCount();
   PartUpd+=UpdateBatt();
   PartUpd+=UpdateSatMon();
+  PartUpd+=UpdateTrafficMap();
   UpdateTime=msTime; }
 
 // ========================================================================================================================
