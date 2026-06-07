@@ -564,8 +564,15 @@ template <const uint8_t MaxTgts=32>
 
      return New; }
 
+   void calcRelPos(LookOut_Target *Tgt)
+   { Tgt->dX = Tgt->Pos.X - Pos.X;                                     // [0.5m] relative distance
+     Tgt->dY = Tgt->Pos.Y - Pos.Y;                                     // [0.5m]
+     Tgt->dZ = Tgt->Pos.Z - Pos.Z;                                     // [0.5m]
+     Tgt->HorDist = Acft_RelPos::FastDistance(Tgt->dX, Tgt->dY); }     // [0.5m] estimate horizontal distance
+
    uint8_t calcTarget(LookOut_Target *Tgt)                                              // calculate the safety margin for the (new) target
    {
+     calcRelPos(Tgt);                                                                    // keep dX/dY/dZ fresh even when threat calc. exits early
      Tgt->TimeMargin=0xFF;                                                              // initially set inf. time margin
      Tgt->WarnLevel=0;                                                                  // warning level=0
      Tgt->MissTime=0;
@@ -644,8 +651,7 @@ template <const uint8_t MaxTgts=32>
      return Tgt->WarnLevel; }
 
    uint16_t calcVertMargin(LookOut_Target *Tgt)                        // calculate vertical savety margin
-   { Tgt->dZ = Tgt->Pos.Z     - Pos.Z;                                 // [0.5m] relative vertical distance
-     Tgt->Vz = Tgt->Pos.Climb - Pos.Climb;                             // [0.5ms/s] relative vertical speed
+   { Tgt->Vz = Tgt->Pos.Climb - Pos.Climb;                             // [0.5ms/s] relative vertical speed
      int16_t VertError = Pos.Error+Tgt->Pos.Error; VertError+=VertError/2; // [0.5m] est. total vertical error
      VertError += 2*MinVertSepar;                                      // [0.5m]
      if(abs(Tgt->dZ)<=VertError) return 0;                             // if vertical distance less than margin required: return zero margin
@@ -664,10 +670,7 @@ template <const uint8_t MaxTgts=32>
    }                                                                   // return the vertical margin: if positive: we are safe, if zero: we are too close
 
    uint16_t calcHorizMargin(LookOut_Target *Tgt)
-   { Tgt->dX = Tgt->Pos.X - Pos.X;                                     // [0.5m] relative distance
-     Tgt->dY = Tgt->Pos.Y - Pos.Y;                                     // [0.5m]
-     Tgt->HorDist = Acft_RelPos::FastDistance(Tgt->dX, Tgt->dY);       // [0.5m] estimate horizontal distance
-     int16_t HorError = Pos.Error+Tgt->Pos.Error;                      // [0.5m] sum GPS error from me and the target
+   { int16_t HorError = Pos.Error+Tgt->Pos.Error;                      // [0.5m] sum GPS error from me and the target
      HorError += 2*MinHorizSepar;                                      // [0.5m] add the min. separation required
      int16_t dT    = abs(Tgt->Pos.T - Pos.T);                          // [0.5m] time difference between my data and target data
      int32_t MaxDistT = ((int32_t)Tgt->Pos.Speed * (2*(WarnTime+4)+dT))>>1; // [0.5m] possible distance covered by the target
