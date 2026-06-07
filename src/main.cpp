@@ -114,6 +114,10 @@
 #include "sdlog.h"
 #endif
 
+#if defined(WITH_SD) && defined(WITH_LOOKOUT)
+#include "ddb.h"
+#endif
+
 #ifdef WITH_SDLOG
 IGC_Key IGC_SignKey;
 #endif
@@ -686,6 +690,66 @@ static void RangeButton_Init(void)
 { pinMode(Button1_Pin, INPUT);
   RangeButton.setLongClickTime(2000);
   RangeButton.setClickHandler(RangeButton_Single); }
+#endif
+
+// =======================================================================================================
+
+#if defined(WITH_SD) && defined(WITH_LOOKOUT)
+
+static FILE *DDB_File = 0;
+static uint32_t DDB_NextScan = 0;
+static uint32_t DDB_NextOpen = 0;
+static const char *DDB_FileName = "/sdcard/ddb.csv";
+
+static bool DDB_NeedLookup(void)
+{ for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
+  { const LookOut_Target *Tgt = Look.Target+Idx;
+    if(Tgt->Alloc && Tgt->Call[0]==0) return true; }
+  return false; }
+
+static bool DDB_MatchLookout(const DDB_ID &ID)
+{ const char *Call = ID.RegCall[0] ? ID.RegCall : ID.TailCall;
+  if(Call[0]==0) return false;
+  for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
+  { LookOut_Target *Tgt = Look.Target+Idx;
+    if(!Tgt->Alloc) continue;
+    if(Tgt->Call[0]) continue;
+    if(Tgt->ID!=ID.ID) continue;
+    strncpy(Tgt->Call, Call, 10);
+    Tgt->Call[10]=0;
+    return true; }
+  return false; }
+
+static int DDB_Loop(uint8_t MaxLines=10)
+{ char Line[128];
+  uint32_t Now=millis();
+  if(Now<DDB_NextScan) return 0;
+  DDB_NextScan=Now+200;
+  if(!DDB_NeedLookup())
+  { if(DDB_File) { fclose(DDB_File); DDB_File=0; }
+    return 0; }
+  if(!SD_isMounted())
+  { DDB_File=0;
+    return 0; }
+  if(DDB_File==0)
+  { if(Now<DDB_NextOpen) return 0;
+    DDB_File=fopen(DDB_FileName, "rt");
+    if(DDB_File==0)
+    { DDB_NextOpen=Now+30000;
+      return 0; } }
+
+  DDB_ID ID;
+  uint8_t Count=0;
+  for( ; Count<MaxLines; Count++ )
+  { if(fgets(Line, sizeof(Line), DDB_File)==0)
+    { fclose(DDB_File);
+      DDB_File=0;
+      DDB_NextScan=Now+1000;
+      return Count; }
+    if(ID.Read(Line)<=0) continue;
+    DDB_MatchLookout(ID); }
+  return Count; }
+
 #endif
 
 // =======================================================================================================
@@ -1899,6 +1963,9 @@ void loop()
   else
   if(PMU_ShortPress)
     PrimaryButton_Single();
+#endif
+#if defined(WITH_SD) && defined(WITH_LOOKOUT)
+  DDB_Loop();
 #endif
 #ifdef WITH_BLE_SPP
   BLE_SPP_Check();                 // handle Bluetooth
