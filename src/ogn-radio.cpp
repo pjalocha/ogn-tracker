@@ -103,6 +103,8 @@ static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ1); }
 #define WITH_RADIO_CACHE
 #endif
 
+// #define WITH_SX1276_AFC
+
 #ifdef WITH_RADIO_CACHE
 static float Radio_Cache_Freq = -1.0f;
 static float Radio_Cache_TxPower = -1000.0f;
@@ -143,7 +145,7 @@ static void Radio_Cache_Clear(void)
 #endif
 }
 
-#ifdef WITH_SX1276
+#if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
 static int Radio_setupAFC(float Bandwidth)
 { int ErrState=0; int State=0;
   State=Radio.setAFC(false);
@@ -408,11 +410,15 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   State=Radio_setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
   if(State) ErrState=State;
 #endif
-#ifdef WITH_SX1276
+#if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
   if(RxMode)
   { State=Radio_setRxBandwidth(200.0);                                // [kHz]  bandwidth - single side
     if(State) ErrState=State;
     State=Radio_setupAFC(250.0);
+    if(State) ErrState=State; }
+#elif defined(WITH_SX1276)
+  if(RxMode)
+  { State=Radio_setRxBandwidth(200.0);                                // [kHz]  bandwidth - single side
     if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
@@ -529,7 +535,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   if(State) ErrState=State;
   State=Radio_setRxBandwidth(58.6);                                 // [kHz]  50kHz bandwidth
   if(State) ErrState=State;
-#ifdef WITH_SX1276
+#if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
   if(RxMode)
   { State=Radio_setupAFC(58.6);
     if(State) ErrState=State; }
@@ -610,11 +616,15 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   State=Radio_setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
   if(State) ErrState=State;
 #endif
-#ifdef WITH_SX1276
+#if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
   if(RxMode)
   { State=Radio_setRxBandwidth(250.0);                                // [kHz]  bandwidth - single side
     if(State) ErrState=State;
     State=Radio_setupAFC(250.0);
+    if(State) ErrState=State; }
+#elif defined(WITH_SX1276)
+  if(RxMode)
+  { State=Radio_setRxBandwidth(250.0);                                // [kHz]  bandwidth - single side
     if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
