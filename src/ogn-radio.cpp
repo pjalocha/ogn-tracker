@@ -99,7 +99,9 @@ static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ1); }
 
 // =======================================================================================================
 
+#ifdef WITH_SX1262
 #define WITH_RADIO_CACHE
+#endif
 
 #ifdef WITH_RADIO_CACHE
 static float Radio_Cache_Freq = -1.0f;
