@@ -349,7 +349,8 @@ static int Radio_SysSYNC(const uint8_t * &SYNC, uint8_t &PktLen, uint8_t SysID)
 { int SyncLen = FSK_RxPacket::SysSYNC(SYNC, PktLen, SysID);
 #ifdef WITH_SX1276
   if(SysID==Radio_SysID_HDR && SyncLen>0)
-  { PktLen=24; }                                                  // SX1276 HDR: fixed 24-byte ADS-L packet
+  { PktLen=24;                                                    // SX1276 HDR: fixed 24-byte ADS-L packet
+    if(SyncLen<3) SyncLen=3; }                                    // fixed mode includes the 0x18 byte in SYNC
 #endif
   return SyncLen; }
 
