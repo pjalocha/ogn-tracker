@@ -143,6 +143,27 @@ static void Radio_Cache_Clear(void)
 #endif
 }
 
+#ifdef WITH_SX1276
+static int Radio_setupAFC(float Bandwidth)
+{ int ErrState=0; int State=0;
+  State=Radio.setAFC(false);
+  if(State) ErrState=State;
+  State=Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_AFC_FEI, RADIOLIB_SX127X_AFC_CLEAR, 1, 1);
+  if(State) ErrState=State;
+  State=Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_AFC_FEI, 0, 1, 1);
+  if(State) ErrState=State;
+  // Every packet may have a different transmitter offset, so clear the AFC correction at each AFC start.
+  State=Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_AFC_FEI, RADIOLIB_SX127X_AFC_AUTO_CLEAR_ON, 0, 0);
+  if(State) ErrState=State;
+  State=Radio.setAFCBandwidth(Bandwidth);                           // [kHz]  auto-frequency-tune bandwidth
+  if(State) ErrState=State;
+  State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT);
+  if(State) ErrState=State;
+  State=Radio.setAFC(true);                                          // run AFC at each receiver startup
+  if(State) ErrState=State;
+  return ErrState; }
+#endif
+
 static int Radio_setFrequency(float Freq)                // set receive/transmit frequency
 { Freq += (0.0000001f*Parameters.RFchipFreqCorr)*Freq;   // apply frequency correction
 #ifdef WITH_RADIO_CACHE
@@ -391,11 +412,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(RxMode)
   { State=Radio_setRxBandwidth(200.0);                                // [kHz]  bandwidth - single side
     if(State) ErrState=State;
-    State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
-    if(State) ErrState=State;
-    State=Radio.setAFC(0);                                            // enable AFC
-    if(State) ErrState=State;
-    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+    State=Radio_setupAFC(250.0);
     if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
@@ -514,12 +531,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   if(State) ErrState=State;
 #ifdef WITH_SX1276
   if(RxMode)
-  { State=Radio.setAFC(0);                                            // disable AFC
-    State=Radio.setAFCBandwidth(58.6);                                // [kHz]  auto-frequency-tune bandwidth
-    if(State) ErrState=State;
-    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
-    if(State) ErrState=State;
-    State=Radio.setAFC(0);                                            // enable AFC
+  { State=Radio_setupAFC(58.6);
     if(State) ErrState=State; }
 #endif
   State=Radio_setPreambleLength(RxMode?16:40);                      // [bits] very long preamble for Pilot-Aware
@@ -602,11 +614,7 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   if(RxMode)
   { State=Radio_setRxBandwidth(250.0);                                // [kHz]  bandwidth - single side
     if(State) ErrState=State;
-    State=Radio.setAFCBandwidth(250.0);                               // [kHz]  auto-frequency-tune bandwidth
-    if(State) ErrState=State;
-    State=Radio.setAFC(0);                                            // enable AFC
-    if(State) ErrState=State;
-    State=Radio.setAFCAGCTrigger(RADIOLIB_SX127X_RX_TRIGGER_PREAMBLE_DETECT); //
+    State=Radio_setupAFC(250.0);
     if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
@@ -796,9 +804,6 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   Radio.standby();
   Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);       // configure for reception
   Radio_setFrequency(RxFreq);                                       // set frequency
-#ifdef WITH_SX1276
-  // Radio.setAFC(0);                                               // enable AFC
-#endif
   Radio.startReceive();                                             // start receiving
   XorShift64(Random.Word);                                          // randomize
   if(TxPacket)                                                      // if there is packet to be sent out
@@ -830,9 +835,6 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     Radio.standby();
     Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);        // configure for reception
     Radio_setFrequency(RxFreq);                                        //
-#ifdef WITH_SX1276
-    // Radio.setAFC(0);                                                // enable AFC
-#endif
     Radio.startReceive(); }                                            // start receiving again
   uint32_t Now = millis();
   uint32_t msTime = Now-msStart;                                  // keep receiving till the end of slot
