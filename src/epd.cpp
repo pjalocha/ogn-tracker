@@ -145,7 +145,9 @@ static void DrawPktRateBar(void)
   if(Rate>10.0f) Rate=10.0f;
   int16_t Fill = (int16_t)(Rate*H/10.0f+0.5f);
   EPD.drawRect(X, Y, W, H, GxEPD_BLACK);
-  EPD.drawLine(X, Y+H/2, X+W+2, Y+H/2, GxEPD_BLACK);            // 5Hz tick
+  for(uint8_t Tick=2; Tick<10; Tick+=2)
+  { int16_t TickY = Y+H-((int32_t)Tick*H)/10;
+    EPD.drawLine(X, TickY, X+W+2, TickY, GxEPD_BLACK); }
   if(Fill>0) EPD.fillRect(X+1, Y+H-Fill, W-2, Fill, GxEPD_BLACK); }
 
 static uint8_t PktRateLevel(void)
