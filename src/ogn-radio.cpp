@@ -344,6 +344,16 @@ static int Radio_variablePacketLengthMode(uint8_t MaxLen)
   return 0; }
 
 // =======================================================================================================
+
+static int Radio_SysSYNC(const uint8_t * &SYNC, uint8_t &PktLen, uint8_t SysID)
+{ int SyncLen = FSK_RxPacket::SysSYNC(SYNC, PktLen, SysID);
+#ifdef WITH_SX1276
+  if(SysID==Radio_SysID_HDR && SyncLen>0)
+  { PktLen=24; }                                                  // SX1276 HDR: fixed 24-byte ADS-L packet
+#endif
+  return SyncLen; }
+
+// =======================================================================================================
 // Errors:
 //   0 => RADIOLIB_ERR_NONE
 //  -1 => RADIOLIB_ERR_UNKNOWN
@@ -564,6 +574,9 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
 { int ErrState=0; int State=0;
   uint32_t msDead = millis();
 #ifdef WITH_SX1276
+  if(PktLen==0) PktLen=24;                                      // SX1276: avoid variable-length HDR packets
+#endif
+#ifdef WITH_SX1276
   if(Radio.getActiveModem()!=RADIOLIB_SX127X_FSK_OOK)
   { State=Radio.setActiveModem(RADIOLIB_SX127X_FSK_OOK);
     if(State==0) Radio_Cache_Clear(); }
@@ -761,9 +774,9 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   uint8_t RxPktLen;
   const uint8_t *TxSYNC;
   const uint8_t *RxSYNC;
-  int TxSyncLen = FSK_RxPacket::SysSYNC(TxSYNC, TxPktLen, TxSysID); // get SYNC and packet length for the transmittion system
+  int TxSyncLen = Radio_SysSYNC(TxSYNC, TxPktLen, TxSysID);       // get SYNC and packet length for the transmittion system
   // if(TxPktLen==0 && TxSysID==Radio_SysID_HDR) TxPktLen=24;        // a hack for variable HDR packet size
-  int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID); // get SYNC and packet length for the reception system
+  int RxSyncLen = Radio_SysSYNC(RxSYNC, RxPktLen, RxSysID);       // get SYNC and packet length for the reception system
   if(TxSyncLen<=0 || RxSyncLen<=0) return 0;
   if(RxSysID==Radio_SysID_LDR) RxPktLen+=7;                         // a hack !
   bool SameChan = TxChannel==RxChannel;                             // same frequency channel
@@ -1244,7 +1257,7 @@ void Radio_Task(void *Parms)
       uint8_t RxChannel = 2;
       uint8_t RxPktLen;
       const uint8_t *RxSYNC;
-      int RxSyncLen = FSK_RxPacket::SysSYNC(RxSYNC, RxPktLen, RxSysID);
+      int RxSyncLen = Radio_SysSYNC(RxSYNC, RxPktLen, RxSysID);
       float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);
       uint32_t msStart = millis();                                      // [ms] note then slot starts
       Radio.standby();
