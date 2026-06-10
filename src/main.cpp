@@ -569,10 +569,15 @@ const  uint8_t  OLED_Pages      = 9;       // number of OLED pages
 static uint8_t  OLED_Page       = 0;       // page currently on display
 static uint8_t  OLED_PageChange = 0;       // signal the page has been changed
 static uint8_t  OLED_PageOFF    = 0;       // Backlight to be OFF
+static uint8_t  OLED_Rotate     = 0;       // rotate OLED by 180 degrees
 #ifdef WITH_OLED_DIM
 static uint32_t OLED_PageActive = 0;       // [ms] last time the page was active (button pressed)
 const  uint32_t OLED_PageTimeout = (uint32_t)60000*WITH_OLED_DIM;  // [ms] timeout to turn off the TFT backlight
 #endif
+
+static void OLED_SetRotation(void)
+{ OLED.setDisplayRotation(OLED_Rotate ? U8G2_R2 : U8G2_R0);
+  OLED_PageChange=1; }
 
 static void OLED_NextPage(void)
 { OLED_Page++;
@@ -807,7 +812,21 @@ static void PrimaryButton_Single(void)
 #endif
 }
 
-static void PrimaryButton_Long(void)
+static void PrimaryButton_DisplayLong(void)
+{
+#ifdef WITH_OLED
+  switch(OLED_Page)
+  { default:
+      OLED_Rotate = !OLED_Rotate;
+      OLED_SetRotation();
+      break; }
+  #ifdef WITH_OLED_DIM
+  OLED_PageActive=millis();
+  #endif
+#endif
+}
+
+static void PrimaryButton_PowerOff(void)
 {
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   TFT.fillScreen(ST77XX_DARKBLUE);
@@ -872,6 +891,15 @@ static void PrimaryButton_Long(void)
 #endif
   esp_deep_sleep_start();
 #endif // WITH_SLEEP
+}
+
+static void PrimaryButton_Long(void)
+{
+#ifdef WITH_OLED
+  PrimaryButton_DisplayLong();
+#else
+  PrimaryButton_PowerOff();
+#endif
 }
 
 #ifdef Button_Pin                       // primary button to switch display pages
@@ -1564,10 +1592,11 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #ifdef WITH_OLED
   OLED.begin();
 #if defined(WITH_TBEAMS3) || defined(WITH_OLED_FLIP)
-   OLED.setDisplayRotation(U8G2_R2);
+  OLED_Rotate=1;
 #else
-  OLED.setDisplayRotation(U8G2_R0);
+  OLED_Rotate=0;
 #endif
+  OLED.setDisplayRotation(OLED_Rotate ? U8G2_R2 : U8G2_R0);
   OLED.clearBuffer();
   OLED_DrawLogo(OLED.getU8g2(), 0);
   OLED.sendBuffer();
@@ -1971,7 +2000,7 @@ void loop()
   bool PMU_ShortPress=false, PMU_LongPress=false;
   PMU_ButtonPress(PMU_ShortPress, PMU_LongPress);
   if(PMU_LongPress)
-    PrimaryButton_Long();
+    PrimaryButton_PowerOff();
   else
   if(PMU_ShortPress)
     PrimaryButton_Single();
