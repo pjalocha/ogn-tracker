@@ -28,7 +28,12 @@ extern MS5611   Baro;                       // MS5611 barometer sensor
 
 #ifdef WITH_QMC63XX
 #include "qmc63xx.h"
+#include "vect.h"
 extern QMC63XX  MagSensor;                  // QMC6309/QMC6310 magnetic sensor
+extern uint16_t Magn_Calibrate;
+extern Vector3D<int32_t> Magn_Raw;
+extern Vector3D<int32_t> Magn;
+void Magn_CalibStart(void);
 #endif
 
 #ifdef WITH_QMI8658

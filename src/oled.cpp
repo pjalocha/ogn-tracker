@@ -6,7 +6,9 @@
 
 #include "gps.h"
 #include "proc.h"
+#include "sens.h"
 #include "format.h"
+#include "intmath.h"
 
 #include "ogn-radio.h"
 
@@ -390,6 +392,55 @@ void OLED_DrawPower(u8g2_t *OLED, const GPS_Position *GPS)
 #endif // WITH_XPOWERS
 
 
+}
+
+static int16_t OLED_ClipInt16(int32_t Value)
+{ if(Value> 32767) return  32767;
+  if(Value<-32768) return -32768;
+  return Value; }
+
+void OLED_DrawCompass(u8g2_t *OLED, const GPS_Position *GPS)
+{ char Line[32];
+  u8g2_SetFont(OLED, u8g2_font_7x13_tf);
+#ifdef WITH_QMC63XX
+  if(!HardwareStatus.Magn) { u8g2_DrawStr(OLED, 0, 28, "No magn. sensor"); return; }
+  if(Magn_Calibrate)
+  { u8g2_SetFont(OLED, u8g2_font_7x13_tf);
+    u8g2_DrawStr(OLED, 0, 24, "Calibrating...");
+    u8g2_DrawStr(OLED, 0, 36, "Turn device");
+    u8g2_DrawStr(OLED, 0, 48, "along all axes");
+    sprintf(Line, "Samples: %02d", Magn_Calibrate);
+    u8g2_DrawStr(OLED, 0, 60, Line);
+    return; }
+  int Vert=24;
+  u8g2_DrawStr(OLED, 0, Vert, "   [uT]"); Vert+=12;
+  const char *AxisName = "XYZ";
+  for(int Idx=0; Idx<3; Idx++)
+  { sprintf(Line, "%c: %+6.1f", AxisName[Idx], (1.0f/150.0f)*Magn.A[Idx]);
+    u8g2_DrawStr(OLED, 0, Vert, Line); Vert+=12; }
+
+  const int16_t Xc =  96;
+  const int16_t Yc =  37;
+  const int16_t R  =  26;
+  const int16_t dR =  10;
+  const int16_t dHead = 0x800;
+  // uint16_t Heading = IntAtan2(OLED_ClipInt16(Magn.Y), OLED_ClipInt16(Magn.X));
+  uint16_t Heading = IntAtan2(OLED_ClipInt16(Magn.X), OLED_ClipInt16(Magn.Y));
+  if(!OLED_Rotate) Heading+=0x8000;
+  uint16_t Deg = ((uint32_t)Heading*45+0x1000)>>13;
+  u8g2_SetFont(OLED, u8g2_font_fub20_tr);
+  int Len=Format_UnsDec(Line, (uint32_t)Deg, 3); Line[Len]=0;
+  uint8_t TextWidth = u8g2_GetStrWidth(OLED, Line);
+  u8g2_DrawStr(OLED, Xc-TextWidth/2, Yc+10, Line);
+  u8g2_DrawCircle(OLED, Xc, Yc, R, U8G2_DRAW_ALL);
+  int16_t Xm = ((int32_t)R*Icos(Heading)+0x800)>>12;
+  int16_t Ym = ((int32_t)R*Isin(Heading)+0x800)>>12;
+  int16_t XmL = ((int32_t)(R-dR)*Icos(Heading-dHead)+0x800)>>12;
+  int16_t YmL = ((int32_t)(R-dR)*Isin(Heading-dHead)+0x800)>>12;
+  int16_t XmR = ((int32_t)(R-dR)*Icos(Heading+dHead)+0x800)>>12;
+  int16_t YmR = ((int32_t)(R-dR)*Isin(Heading+dHead)+0x800)>>12;
+  u8g2_DrawTriangle(OLED, Xc-Ym, Yc-Xm, Xc-YmL, Yc-XmL, Xc-YmR, Yc-XmR);
+#endif
 }
 
 #endif // WITH_OLED

@@ -8,6 +8,7 @@ extern U8G2_SH1106_128X64_NONAME_F_HW_I2C OLED;
 #else
 extern U8G2_SSD1306_128X64_NONAME_F_HW_I2C OLED;
 #endif
+extern uint8_t OLED_Rotate;
 
 void OLED_DrawLogo     (u8g2_t *OLED, const GPS_Position *GPS=0);  // draw logo and hardware options in software
 void OLED_DrawStatusBar(u8g2_t *OLED, const GPS_Position *GPS=0);  // status bar on top of the OLED
@@ -20,6 +21,6 @@ void OLED_DrawRFcounts (u8g2_t *OLED, const GPS_Position *GPS=0);
 void OLED_DrawRelayOGN (u8g2_t *OLED, const GPS_Position *GPS=0);
 void OLED_DrawRelayADSL(u8g2_t *OLED, const GPS_Position *GPS=0);
 void OLED_DrawPower    (u8g2_t *OLED, const GPS_Position *GPS=0);
+void OLED_DrawCompass  (u8g2_t *OLED, const GPS_Position *GPS=0);
 
 #endif // WITH_OLED
-

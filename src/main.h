@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <stdint.h>
+#include "nvs.h"
 
 #ifdef WITH_XPOWERS
 #include "XPowersLib.h"
@@ -28,6 +29,9 @@ extern IGC_Key IGC_SignKey;
 uint64_t getUniqueMAC(void);
 uint64_t getUniqueID(void);
 uint32_t getUniqueAddress(void);
+
+esp_err_t WriteToNVS (void *Blob, size_t BlobSize, const char *Name, const char *NameSpace="TRACKER");
+esp_err_t ReadFromNVS(void *Blob, size_t BlobSize, const char *Name, const char *NameSpace="TRACKER");
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)

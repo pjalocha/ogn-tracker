@@ -149,6 +149,28 @@ static int NVS_Init(void)
     Err=nvs_flash_init(); }
   return Err; }
 
+esp_err_t WriteToNVS(void *Blob, size_t BlobSize, const char *Name, const char *NameSpace)
+{ nvs_handle Handle;
+  esp_err_t Err = nvs_open(NameSpace, NVS_READWRITE, &Handle);
+  if(Err!=ESP_OK) return Err;
+  Err = nvs_set_blob(Handle, Name, Blob, BlobSize);
+  if(Err==ESP_OK) Err = nvs_commit(Handle);
+  nvs_close(Handle);
+  return Err; }
+
+esp_err_t ReadFromNVS(void *Blob, size_t BlobSize, const char *Name, const char *NameSpace)
+{ nvs_handle Handle;
+  esp_err_t Err = nvs_open(NameSpace, NVS_READWRITE, &Handle);
+  if(Err!=ESP_OK) return Err;
+  size_t Size=0;
+  Err = nvs_get_blob(Handle, Name, 0, &Size);
+  if(Err==ESP_OK && Size==BlobSize)
+    Err = nvs_get_blob(Handle, Name, Blob, &Size);
+  else
+    Err=ESP_ERR_NVS_NOT_FOUND;
+  nvs_close(Handle);
+  return Err; }
+
 // =======================================================================================================
 
 SemaphoreHandle_t CONS_Mutex;                // Mut-Ex for the Console
@@ -565,11 +587,21 @@ static void TFT_SetPowerSave(uint8_t PageOFF)
 
 #ifdef WITH_OLED
 
-const  uint8_t  OLED_Pages      = 9;       // number of OLED pages
+static const uint8_t OLED_Page_ID          = 0;
+static const uint8_t OLED_Page_GPS         = 1;
+static const uint8_t OLED_Page_SatSNR      = 2;
+static const uint8_t OLED_Page_Baro        = 3;
+static const uint8_t OLED_Page_RF          = 4;
+static const uint8_t OLED_Page_RFcounts    = 5;
+static const uint8_t OLED_Page_Power       = 6;
+static const uint8_t OLED_Page_RelayOGN    = 7;
+static const uint8_t OLED_Page_RelayADSL   = 8;
+static const uint8_t OLED_Page_Compass     = 9;
+const  uint8_t  OLED_Pages      = 10;      // number of OLED pages
 static uint8_t  OLED_Page       = 0;       // page currently on display
 static uint8_t  OLED_PageChange = 0;       // signal the page has been changed
 static uint8_t  OLED_PageOFF    = 0;       // Backlight to be OFF
-static uint8_t  OLED_Rotate     = 0;       // rotate OLED by 180 degrees
+uint8_t         OLED_Rotate     = 0;       // rotate OLED by 180 degrees
 #ifdef WITH_OLED_DIM
 static uint32_t OLED_PageActive = 0;       // [ms] last time the page was active (button pressed)
 const  uint32_t OLED_PageTimeout = (uint32_t)60000*WITH_OLED_DIM;  // [ms] timeout to turn off the TFT backlight
@@ -579,24 +611,55 @@ static void OLED_SetRotation(void)
 { OLED.setDisplayRotation(OLED_Rotate ? U8G2_R2 : U8G2_R0);
   OLED_PageChange=1; }
 
+static bool OLED_PageAvailable(uint8_t Page)
+{ switch(Page)
+  { case OLED_Page_ID:
+    case OLED_Page_GPS:
+    case OLED_Page_SatSNR:
+    case OLED_Page_RF:
+    case OLED_Page_RFcounts:
+    case OLED_Page_Power:
+    case OLED_Page_RelayOGN:
+    case OLED_Page_RelayADSL:
+      return true;
+    case OLED_Page_Compass:
+#ifdef WITH_QMC63XX
+      return HardwareStatus.Magn;
+#else
+      return false;
+#endif
+    case OLED_Page_Baro:
+#if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_MS5607) || defined(WITH_BME280) || defined(WITH_MS5611)
+      return true;
+#else
+      return false;
+#endif
+    default:
+      return false; } }
+
 static void OLED_NextPage(void)
-{ OLED_Page++;
-  if(OLED_Page>=OLED_Pages) OLED_Page=0;
+{ for(uint8_t Idx=0; Idx<OLED_Pages; Idx++)
+  { OLED_Page++;
+    if(OLED_Page>=OLED_Pages) OLED_Page=0;
+    if(OLED_PageAvailable(OLED_Page)) break; }
   OLED_PageChange=1; }
 
 static int OLED_DrawPage(const GPS_Position *GPS)
 { if(OLED_PageOFF) return 1;
+  if(!OLED_PageAvailable(OLED_Page)) return 0;
   OLED.clearBuffer();
   switch(OLED_Page)
-  { case 0: OLED_DrawID      (OLED.getU8g2(), GPS); break;
-    case 1: OLED_DrawGPS     (OLED.getU8g2(), GPS); break;
-    case 2: OLED_DrawSatSNR  (OLED.getU8g2(), GPS); break;
-    case 3: OLED_DrawBaro    (OLED.getU8g2(), GPS); break;
-    case 4: OLED_DrawRF      (OLED.getU8g2(), GPS); break;
-    case 5: OLED_DrawRFcounts(OLED.getU8g2(), GPS); break;
-    case 6: OLED_DrawPower   (OLED.getU8g2(), GPS); break;
-    case 7: OLED_DrawRelayOGN(OLED.getU8g2(), GPS); break;
-    case 8: OLED_DrawRelayADSL(OLED.getU8g2(), GPS); break; }
+  { case OLED_Page_ID:        OLED_DrawID       (OLED.getU8g2(), GPS); break;
+    case OLED_Page_GPS:       OLED_DrawGPS      (OLED.getU8g2(), GPS); break;
+    case OLED_Page_SatSNR:    OLED_DrawSatSNR   (OLED.getU8g2(), GPS); break;
+    case OLED_Page_Baro:      OLED_DrawBaro     (OLED.getU8g2(), GPS); break;
+    case OLED_Page_RF:        OLED_DrawRF       (OLED.getU8g2(), GPS); break;
+    case OLED_Page_RFcounts:  OLED_DrawRFcounts (OLED.getU8g2(), GPS); break;
+    case OLED_Page_Power:     OLED_DrawPower    (OLED.getU8g2(), GPS); break;
+    case OLED_Page_RelayOGN:  OLED_DrawRelayOGN (OLED.getU8g2(), GPS); break;
+    case OLED_Page_RelayADSL: OLED_DrawRelayADSL(OLED.getU8g2(), GPS); break;
+    case OLED_Page_Compass:   OLED_DrawCompass  (OLED.getU8g2(), GPS); break;
+    default: return 0; }
   OLED_DrawStatusBar(OLED.getU8g2(), GPS);
   if(xSemaphoreTake(I2C_Mutex, 50))
   { OLED.sendBuffer();
@@ -816,7 +879,14 @@ static void PrimaryButton_DisplayLong(void)
 {
 #ifdef WITH_OLED
   switch(OLED_Page)
-  { default:
+  {
+#ifdef WITH_QMC63XX
+    case OLED_Page_Compass:
+      Magn_CalibStart();
+      OLED_PageChange=1;
+      break;
+#endif
+    default:
       OLED_Rotate = !OLED_Rotate;
       OLED_SetRotation();
       break; }
@@ -2000,7 +2070,7 @@ void loop()
   bool PMU_ShortPress=false, PMU_LongPress=false;
   PMU_ButtonPress(PMU_ShortPress, PMU_LongPress);
   if(PMU_LongPress)
-    PrimaryButton_PowerOff();
+    PrimaryButton_Long();
   else
   if(PMU_ShortPress)
     PrimaryButton_Single();
@@ -2022,6 +2092,14 @@ void loop()
     if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }
 #endif
 #ifdef WITH_OLED
+#ifdef WITH_QMC63XX
+  if(OLED_Page==OLED_Page_Compass && Magn_Calibrate)
+  { static uint32_t OLED_CompassCalibTime=0;
+    uint32_t Now=millis();
+    if(Now-OLED_CompassCalibTime>=250)
+    { OLED_CompassCalibTime=Now;
+      OLED_PageChange=1; } }
+#endif
   if(OLED_PageChange)
   { OLED_PageChange=0;
     if(OLED_DrawPage(GPS)==0) OLED_NextPage(); }

@@ -38,6 +38,7 @@
 
 #ifdef WITH_QMC63XX    // T-Beam-Supreme magnetic sensor
 #include "qmc63xx.h"
+#include "vect.h"
 #endif
 
 #ifdef WITH_QMI8658    // T-Beam-Supreme IMU sensor
@@ -319,6 +320,27 @@ static void ProcBaro(void)
 
 #ifdef WITH_QMC63XX
 QMC63XX MagSensor;                       // QMC6309/QMC6310 magnetic sensor
+uint16_t Magn_Calibrate = 0;
+Vector3D<int32_t> Magn_Raw;
+Vector3D<int32_t> Magn;
+
+static SphereFitInt<int32_t> Magn_OfsFit;
+static Vector3D<int32_t> Magn_Ofs;
+static Vector3D<int32_t> Magn_Min;
+static Vector3D<int32_t> Magn_Max;
+
+static void Magn_CalibReset(void)
+{ Magn_Ofs.Set(0);
+  Magn_Raw.Set(0);
+  Magn.Set(0); }
+
+void Magn_CalibStart(void)
+{ Magn_Calibrate=64;
+  Magn_Min.Set(0x7FFFFFFF);
+  Magn_Max.Set((int32_t)0x80000000);
+  Magn_OfsFit.O.Set(0);
+  Magn_OfsFit.R = 10000;                       // expected field in QMC raw units
+  Magn_OfsFit.Clear(); }
 
 static uint8_t InitMagSensor(void)
 { MagSensor.Bus=0;
@@ -333,8 +355,31 @@ static void ProcMagSensor(void)
   if(Ready==0) return;
   if(Ready>1) { InitMagSensor(); return; }            // if not initialized then initialize
   if(MagSensor.Read()) { InitMagSensor(); return; }   // if read error then re-initialize
+  for(uint8_t Idx=0; Idx<3; Idx++)
+  { Magn_Raw.A[Idx] = MagSensor.Mag[Idx];
+    Magn.A[Idx] = Magn_Raw.A[Idx]-Magn_Ofs.A[Idx]; }
+  if(Magn_Calibrate)
+  { Magn_OfsFit.Process(Magn);
+    Magn_Min.Min(Magn);
+    Magn_Max.Max(Magn);
+    Magn_Calibrate--;
+    if(Magn_Calibrate==0)
+    { Vector3D<int32_t> ExtrCorr;
+      ExtrCorr.X = (Magn_Min.X+Magn_Max.X+1)/2;
+      ExtrCorr.Y = (Magn_Min.Y+Magn_Max.Y+1)/2;
+      ExtrCorr.Z = (Magn_Min.Z+Magn_Max.Z+1)/2;
+      Magn_Ofs.Add(ExtrCorr);
+      Vector3D<int32_t> FitCorr;
+      Magn_OfsFit.getO(FitCorr);
+      int32_t R=0, Resid=0; Magn_OfsFit.getR(R, Resid);
+      int Len=sprintf(Line, "Magn.calib: [%+5ld,%+5ld,%+5ld] %+ld/%ld [%+5ld,%+5ld,%+5ld] => [%+5ld,%+5ld,%+5ld]\n",
+                      (long)FitCorr.X, (long)FitCorr.Y, (long)FitCorr.Z, (long)R, (long)Resid,
+                      (long)ExtrCorr.X, (long)ExtrCorr.Y, (long)ExtrCorr.Z,
+                      (long)Magn_Ofs.X, (long)Magn_Ofs.Y, (long)Magn_Ofs.Z);
+      SysLog_Line(Line, Len, 1, 25, 0);
+      WriteToNVS(&Magn_Ofs, sizeof(Magn_Ofs), "Magn_Calib"); } }
   int Len=sprintf(Line, "Magn: [%+6d,%+6d,%+6d]\n",
-                  MagSensor.Mag[0], MagSensor.Mag[1], MagSensor.Mag[2]);
+                  (int)Magn.X, (int)Magn.Y, (int)Magn.Z);
   // if(xSemaphoreTake(CONS_Mutex, 20))
   // { Format_String(CONS_UART_Write, Line, 0, Len);
   //   xSemaphoreGive(CONS_Mutex); }
@@ -397,6 +442,8 @@ void vTaskSENS(void* pvParameters)
 #endif
 
 #ifdef WITH_QMC63XX
+  Magn_CalibReset();
+  ReadFromNVS(&Magn_Ofs, sizeof(Magn_Ofs), "Magn_Calib");
   uint8_t MagDetected = InitMagSensor();
 #endif
 
