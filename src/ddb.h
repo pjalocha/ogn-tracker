@@ -27,27 +27,48 @@ class DDB_ID
    void setRegCall  (const char *Call , int Len) { if(Len>12) Len=12; memcpy(RegCall,   Call,  Len); RegCall  [Len]=0; }
    void setTailCall (const char *Call , int Len) { if(Len> 7) Len= 7; memcpy(TailCall,  Call,  Len); TailCall [Len]=0; }
 
+   static int HexDigit(char ch)
+   { if(ch>='0' && ch<='9') return ch-'0';
+     if(ch>='A' && ch<='F') return ch-'A'+10;
+     if(ch>='a' && ch<='f') return ch-'a'+10;
+     return -1; }
+
    uint32_t getAddress (void) const { return ID&0xFFFFFF; }
    uint8_t  getAddrType(void) const { return (ID>>24)&0xFF; }
 
-   int Read(char *Line)
-   { int LineLen=strlen(Line);
-     if(LineLen<8) return 0;
+   int ReadID(const char *Line)
+   { if(Line==0) return 0;
+     while(*Line==' ' || *Line=='\t') Line++;
      if(Line[0]=='#') return 0;
-     char *Token = strtok(Line, ","); // device-type as a letter: I,F,O
-     if(Token==0) return 0;
-     char AddrType;
-     if(sscanf(Token, "'%c'", &AddrType)!=1) return 0;
-     Token = strtok(0, ",");          // device address: hex
-     if(Token==0) return 0;
-     unsigned Addr;
-     if(sscanf(Token, "'%06x'", &Addr)!=1) return 0;
+     if(Line[0]!='\'' || Line[2]!='\'') return 0;
+     char AddrType = Line[1];
+     const char *AddrStr = strchr(Line+3, ',');
+     if(AddrStr==0) return 0;
+     AddrStr++;
+     if(AddrStr[0]!='\'') return 0;
+     AddrStr++;
+     uint32_t Addr=0;
+     for(uint8_t Idx=0; Idx<6; Idx++)
+     { int Digit=HexDigit(AddrStr[Idx]);
+       if(Digit<0) return 0;
+       Addr = (Addr<<4) | Digit; }
+     if(AddrStr[6]!='\'') return 0;
      ID = Addr&0xFFFFFF;
      switch(AddrType)
      { case 'I': ID|=0x05000000; break;
        case 'F': ID|=0x06000000; break;
        case 'O': ID|=0x07000000; break;
        default: return 0; }
+     return 1; }
+
+   int Read(char *Line)
+   { int LineLen=strlen(Line);
+     if(LineLen<8) return 0;
+     if(ReadID(Line)<=0) return 0;
+     char *Token = strtok(Line, ","); // device-type as a letter: I,F,O
+     if(Token==0) return 0;
+     Token = strtok(0, ",");          // device address: hex
+     if(Token==0) return 0;
      Token = strtok(0, ",");          // aircraft model
      if(Token==0 || Token[0]!='\'') return 0;
      int Len=strlen(Token);

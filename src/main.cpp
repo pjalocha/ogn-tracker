@@ -707,6 +707,14 @@ static bool DDB_NeedLookup(void)
     if(Tgt->Alloc && Tgt->Call[0]==0) return true; }
   return false; }
 
+static bool DDB_NeedID(uint32_t ID)
+{ for(uint8_t Idx=0; Idx<Look.MaxTargets; Idx++)
+  { const LookOut_Target *Tgt = Look.Target+Idx;
+    if(!Tgt->Alloc) continue;
+    if(Tgt->Call[0]) continue;
+    if(Tgt->ID==ID) return true; }
+  return false; }
+
 static bool DDB_MatchLookout(const DDB_ID &ID)
 { const char *Call = ID.RegCall[0] ? ID.RegCall : ID.TailCall;
   if(Call[0]==0) return false;
@@ -720,11 +728,11 @@ static bool DDB_MatchLookout(const DDB_ID &ID)
     return true; }
   return false; }
 
-static int DDB_Loop(uint8_t MaxLines=10)
+static int DDB_Loop(uint16_t MaxLines=100)
 { char Line[128];
   uint32_t Now=millis();
   if(Now<DDB_NextScan) return 0;
-  DDB_NextScan=Now+200;
+  DDB_NextScan=Now+20;
   if(!DDB_NeedLookup())
   { if(DDB_File) { fclose(DDB_File); DDB_File=0; }
     return 0; }
@@ -739,15 +747,19 @@ static int DDB_Loop(uint8_t MaxLines=10)
       return 0; } }
 
   DDB_ID ID;
-  uint8_t Count=0;
+  uint16_t Count=0;
   for( ; Count<MaxLines; Count++ )
   { if(fgets(Line, sizeof(Line), DDB_File)==0)
     { fclose(DDB_File);
       DDB_File=0;
       DDB_NextScan=Now+1000;
       return Count; }
+    if(ID.ReadID(Line)<=0) continue;
+    if(!DDB_NeedID(ID.ID)) continue;
     if(ID.Read(Line)<=0) continue;
-    DDB_MatchLookout(ID); }
+    if(DDB_MatchLookout(ID))
+    { DDB_NextScan=Now+1000;
+      return Count+1; } }
   return Count; }
 
 #endif
