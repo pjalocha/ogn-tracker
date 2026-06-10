@@ -796,7 +796,7 @@ static bool DDB_MatchLookout(const DDB_ID &ID)
     return true; }
   return false; }
 
-static int DDB_Loop(uint16_t MaxLines=100)
+static int DDB_Loop(uint16_t MaxLines=50)
 { char Line[128];
   uint32_t Now=millis();
   if(Now<DDB_NextScan) return 0;
