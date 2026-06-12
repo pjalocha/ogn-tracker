@@ -49,8 +49,9 @@ typedef union
 
 extern Status GPS_Status;                   // GPS status bits
 
-extern char GPS_Hardware[12];
-extern char GPS_Firmware[244];
+extern char GPS_Hardware[16];
+extern char GPS_Firmware[32];
+extern char GPS_FirmExt[8][32];
 
 uint32_t GPS_getBaudRate(void);             // [bps]
 

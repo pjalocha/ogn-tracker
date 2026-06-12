@@ -65,8 +65,9 @@ static   TickType_t Burst_Tick;            // [msec] System Tick when the data b
 
          Status     GPS_Status;            // GPS status flags
 
-         char GPS_Hardware[12] = { 0 };    // hardware info read from the GPS
-         char GPS_Firmware[244] = { 0 };    // software info read from the GPS
+         char GPS_Hardware  [16]  = { 0 }; // hardware info read from the GPS
+         char GPS_Firmware  [32]  = { 0 }; // software info read from the GPS
+         char GPS_FirmExt[8][32]  = { 0 }; // software extensions
 
 GPS_SatList GPS_SatMon;              // list of satellites for SNR monitoring
 
@@ -733,13 +734,14 @@ static void GPS_NMEA(bool Correct=1)                                        // w
 #ifdef WITH_GPS_UBX
 #ifdef DEBUG_PRINT
 static void DumpUBX(void)
-{ Format_String(CONS_UART_Write, "UBX: ");
-  Format_UnsDec(CONS_UART_Write, xTaskGetTickCount(), 6, 3);
+{ Format_String(CONS_UART_Write, "UBX:");
+  // Format_UnsDec(CONS_UART_Write, xTaskGetTickCount(), 6, 3);
   CONS_UART_Write(' '); Format_Hex(CONS_UART_Write, UBX.Class);
   CONS_UART_Write(':'); Format_Hex(CONS_UART_Write, UBX.ID);
-  CONS_UART_Write('_'); Format_UnsDec(CONS_UART_Write, (uint16_t)UBX.Bytes);
+  CONS_UART_Write('_'); Format_UnsDec(CONS_UART_Write, (uint32_t)UBX.Bytes);
+  CONS_UART_Write(':');
   for(uint8_t Idx=0; Idx<UBX.Bytes; Idx++)
-  { CONS_UART_Write(' '); Format_Hex(CONS_UART_Write, UBX.Byte[Idx]); }
+  { Format_Hex(CONS_UART_Write, UBX.Byte[Idx]); }
   Format_String(CONS_UART_Write, "\n"); }
 #endif // DEBUG_PRINT
 
@@ -765,19 +767,24 @@ static void GPS_UBX(void)                                                       
   { class UBX_MON_VER *VER = (class UBX_MON_VER *)UBX.Word;                       // create pointer to the packet content
     strncpy(GPS_Firmware, VER->swVersion, 30); GPS_Firmware[30]=0;
     strncpy(GPS_Hardware, VER->hwVersion, 10); GPS_Hardware[10]=0;
+    int ExtIdx=0;
     int ExtLen=strlen(GPS_Firmware);
     for(uint16_t Idx=30+10; Idx<UBX.Bytes; Idx+=30)
     { int Len=strlen((const char *)UBX.Byte+Idx); if(Len>=30) break;
-      GPS_Firmware[ExtLen++]=':';
-      strcpy(GPS_Firmware+ExtLen, (const char *)UBX.Byte+Idx);
-      ExtLen+=Len; }
+      strcpy(GPS_FirmExt[ExtIdx], (const char *)UBX.Byte+Idx);
+      ExtLen+=Len; ExtIdx++; if(ExtIdx>=8) break; }
+    // GPS_FirmExt[ExtIdx][0]=0;
     if(xSemaphoreTake(CONS_Mutex, 10))
     { Format_String(CONS_UART_Write, "MON-VER [");
       Format_UnsDec(CONS_UART_Write, UBX.Bytes);
-      Format_String(CONS_UART_Write, "] ");
+      Format_String(CONS_UART_Write, "]\nHard: ");
       Format_String(CONS_UART_Write, GPS_Hardware);
-      CONS_UART_Write(':');
+      Format_String(CONS_UART_Write, "\nSoft: ");
       Format_String(CONS_UART_Write, GPS_Firmware);
+      for(int ExtIdx=0; ExtIdx<8; ExtIdx++)
+      { if(GPS_FirmExt[ExtIdx][0]==0) break;
+        Format_String(CONS_UART_Write, "\nExt: ");
+        Format_String(CONS_UART_Write, GPS_FirmExt[ExtIdx]); }
       CONS_UART_Write('\n');
       xSemaphoreGive(CONS_Mutex); }
   }
@@ -835,6 +842,9 @@ static void GPS_UBX(void)                                                       
     CFG->scanmode2=0;
     UBX.RecalcCheck();                                                          // reclaculate the check sum
     UBX.Send(GPS_UART_Write);                                                   // send this UBX packet
+  }
+  if(UBX.isCFG_GNSS())                                                          // if CFG-GNSS
+  { class UBX_CFG_GNSS *CFG = (class UBX_CFG_GNSS *)UBX.Word;
   }
 #ifdef DEBUG_PRINT
   if(UBX.isACK())

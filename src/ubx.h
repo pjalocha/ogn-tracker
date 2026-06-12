@@ -433,6 +433,7 @@ class UBX_RxMsg // receiver for the UBX sentences
    bool isCFG_PRT    (void) const { return isCFG() && (ID==0x00); }
    bool isCFG_SBAS   (void) const { return isCFG() && (ID==0x16); }
    bool isCFG_NAV5   (void) const { return isCFG() && (ID==0x24); }
+   bool isCFG_GNSS   (void) const { return isCFG() && (ID==0x3E); }
 
    bool isMON_VER    (void) const { return isMON() && (ID==0x04); }
 } ;
