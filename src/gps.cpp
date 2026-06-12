@@ -773,7 +773,6 @@ static void GPS_UBX(void)                                                       
     { int Len=strlen((const char *)UBX.Byte+Idx); if(Len>=30) break;
       strcpy(GPS_FirmExt[ExtIdx], (const char *)UBX.Byte+Idx);
       ExtLen+=Len; ExtIdx++; if(ExtIdx>=8) break; }
-    // GPS_FirmExt[ExtIdx][0]=0;
     if(xSemaphoreTake(CONS_Mutex, 10))
     { Format_String(CONS_UART_Write, "MON-VER [");
       Format_UnsDec(CONS_UART_Write, UBX.Bytes);
@@ -845,6 +844,13 @@ static void GPS_UBX(void)                                                       
   }
   if(UBX.isCFG_GNSS())                                                          // if CFG-GNSS
   { class UBX_CFG_GNSS *CFG = (class UBX_CFG_GNSS *)UBX.Word;
+    if(xSemaphoreTake(CONS_Mutex, 10))
+    { uint8_t Blocks = CFG->numConfigBlocks;
+      Serial.printf("CFG-GNSS Chan:%d:%d [%d]\n", CFG->numTrkChHw, CFG->numTrkChUse, Blocks);
+      for(uint8_t Idx=0; Idx<Blocks;  Idx++)
+      { class UBX_CFG_GNSS_Block &Block = CFG->Block[Idx];
+        Serial.printf(" %s: %2d:%2d 0x%08X\n", Block.gnssName(), Block.resTrkCh, Block.maxTrkCh, Block.flags); }
+      xSemaphoreGive(CONS_Mutex); }
   }
 #ifdef DEBUG_PRINT
   if(UBX.isACK())

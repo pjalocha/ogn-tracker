@@ -212,6 +212,13 @@ class UBX_CFG_GNSS_Block
    uint8_t maxTrkCh;      // 
    uint8_t reserved;
    uint32_t flags;        // bit #0 = enable, bit #16..23 = sigCfgMask
+
+  public:
+   static const char *gnssName(uint8_t Id)
+   { static const char *Name[8] = { "GP", "SB", "GA", "BD", "IM", "QZ", "GL", "--" };
+     if(Id<8) return Name[Id];
+     return Name[7]; }
+   const char *gnssName(void) const { return gnssName(gnssId); }
 } ;
 
 class UBX_CFG_GNSS        // 0x06 0x3E
