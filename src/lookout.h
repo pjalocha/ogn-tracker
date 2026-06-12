@@ -568,6 +568,13 @@ template <const uint8_t MaxTgts=32>
    { Tgt->dX = Tgt->Pos.X - Pos.X;                                     // [0.5m] relative distance
      Tgt->dY = Tgt->Pos.Y - Pos.Y;                                     // [0.5m]
      Tgt->dZ = Tgt->Pos.Z - Pos.Z;                                     // [0.5m]
+     int16_t dT = Pos.T - Tgt->Pos.T;                                  // [0.5s] target time difference against own position
+     if(dT)
+     { int16_t Vx,Vy,Vz;                                                // [0.5m/s] target speed vector
+       Tgt->Pos.getSpeedVector(Vx, Vy); Vz=Tgt->Pos.Climb;              // [0.5m/s]
+       Tgt->dX += (dT*Vx)>>1;                                           // extrapolate target to own position time
+       Tgt->dY += (dT*Vy)>>1;
+       Tgt->dZ += (dT*Vz)>>1; }
      Tgt->HorDist = Acft_RelPos::FastDistance(Tgt->dX, Tgt->dY); }     // [0.5m] estimate horizontal distance
 
    uint8_t calcTarget(LookOut_Target *Tgt)                                              // calculate the safety margin for the (new) target
@@ -589,14 +596,6 @@ template <const uint8_t MaxTgts=32>
 #endif
      Tgt->calcVel(Pos);                                                                 // calculate relative velocity
      // uint32_t RelVelSqr  = Tgt->VelSqr();                                               // [0.25(m/s)^2] velocity square
-     int16_t dT = Pos.T - Tgt->Pos.T;                                                   // [0.5s] we need to recalc. the distance if the target time is not same as mine
-     if(dT)                                                                             // [0.5s] if time difference is non-zero
-     { int16_t Vx,Vy,Vz;                                                                // [0.5m/s] Target speed vector
-       Tgt->Pos.getSpeedVector(Vx, Vy); Vz=Tgt->Pos.Climb;                              // [0.5m/s]
-       Tgt->dX += (dT*Vx)>>1;                                                           // update Target relative distance
-       Tgt->dY += (dT*Vy)>>1;
-       Tgt->dZ += (dT*Vz)>>1;
-       Tgt->HorDist = Acft_RelPos::FastDistance(Tgt->dX, Tgt->dY); }                    // update Target horizontal distance
      // uint32_t RelDistSqr = Tgt->DistSqr();                                              // [0.25m^2]     distance square
      // uint32_t WarnTimeSqr = (uint32_t)WarnTime*WarnTime;                                // [s] warning time square
      // printf("calcTarget(0x%08X) ...\n", Tgt->ID);
