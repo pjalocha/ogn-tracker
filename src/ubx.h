@@ -209,7 +209,7 @@ class UBX_CFG_GNSS_Block
 { public:
    uint8_t gnssId;        // system identifier: 0=GPS, 1=SBAS, 2=Galileo, 3=BeiDou, 4=IMES, 5=QZSS, 6=Glonass
    uint8_t resTrkCh;      // number of reserved tracking channels
-   uint8_t maxTrkCh;      // 
+   uint8_t maxTrkCh;      //
    uint8_t reserved;
    uint32_t flags;        // bit #0 = enable, bit #16..23 = sigCfgMask
 
@@ -219,15 +219,21 @@ class UBX_CFG_GNSS_Block
      if(Id<8) return Name[Id];
      return Name[7]; }
    const char *gnssName(void) const { return gnssName(gnssId); }
+
+   bool isEnabled(void) const { return flags&1; }
+   void setEnable(bool Enable=1)
+   { if(Enable) flags|=0x00000001;
+           else flags&=0xFFFFFFFE; }
+
 } ;
 
-class UBX_CFG_GNSS        // 0x06 0x3E
+class UBX_CFG_GNSS                // 0x06 0x3E
 { public:
-   uint8_t msgVer;        // version = 0
-   uint8_t numTrkChHw;    // number of hardware tracking channels (read-only)
-   uint8_t numTrkChUse;   // number of tracker channels to use (0xFF = use max. allowed by hardware)
-   uint8_t numConfigBlocks; // number of config. blocks which follows: 8 bytes per block
-   UBX_CFG_GNSS_Block Block[6];   // 5 or 6 blocks
+   uint8_t msgVer;                // version = 0
+   uint8_t numTrkChHw;            // number of hardware tracking channels (read-only)
+   uint8_t numTrkChUse;           // number of tracker channels to use (0xFF = use max. allowed by hardware)
+   uint8_t numConfigBlocks;       // number of config. blocks which follows: 8 bytes per block
+   UBX_CFG_GNSS_Block Block[8];   // 5-7 blocks
 } ;
 
 class UBX_CFG_NAV5        // 0x06 0x24
