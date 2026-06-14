@@ -85,7 +85,7 @@ static Delay<uint16_t, 32> BatteryVoltagePipe;
 uint32_t BatteryVoltage = 0;          // [1/256 mV] low-pass filtered battery voltage
  int32_t BatteryVoltageRate = 0;      // [1/256 mV/sec] low-pass filtered battery voltage rise/drop rate
 
-static char           Line[160];      // for printing out to the console, etc.
+static char           Line[640];      // for printing out to the console, etc.
 
 static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN Gallager/LDPC code
 
@@ -830,6 +830,7 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   if(PAW_Packet::IntCRC(RxPkt->Data, 24)!=0x00) return;
   // Serial.printf("LDR: good PAW\n");
   PAW_Packet *PAW = (PAW_Packet *)RxPkt->Data;
+  if(!PAW->isPos()) return;
   uint8_t RxPacketIdx  = OGN_RelayQueue.getNew();
   OGN_RxPacket<OGN_Packet> *RxPacket = OGN_RelayQueue[RxPacketIdx];
   PAW->Write(RxPacket->Packet);
@@ -903,7 +904,17 @@ static void DecodeRxFLR(FSK_RxPacket *RxPkt)
   ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time, !FLR->FAMP.NoTrack); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
-{ if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
+{
+#ifdef WITH_SDLOG
+  // if(Parameters.Verbose&0b10)
+  { int Len=sprintf(Line, ">%u:%4d [%d:%d] #%d %+4.1fdBm ",                // dump received packet to the SD log
+          RxPkt->Time, RxPkt->msTime, RxPkt->SysID, RxPkt->Bytes, RxPkt->Channel, -0.5*RxPkt->RSSI);
+    for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
+    { Len+=Format_Hex(Line+Len, RxPkt->Data[Idx]); }
+    Line[Len++]='\n'; Line[Len]=0;
+    SysLog_Line(Line, Len, 0, 25, 1); }
+#endif
+  if(RxPkt->SysID==Radio_SysID_OGN ) return DecodeRxOGN (RxPkt);
   if(RxPkt->SysID==Radio_SysID_ADSL) return DecodeRxADSL(RxPkt);
   if(RxPkt->SysID==Radio_SysID_LDR ) return DecodeRxLDR (RxPkt);
   if(RxPkt->SysID==Radio_SysID_HDR ) return DecodeRxHDR (RxPkt);
@@ -1229,7 +1240,7 @@ void vTaskPROC(void* pvParameters)
       { if(xSemaphoreTake(CONS_Mutex, 25))
         { Look.WritePFLA(CONS_UART_Write);                                // produce PFLAU and PFLAA for all tracked targets
           xSemaphoreGive(CONS_Mutex); }
-        Look.WritePFLA(SysLog_Line, 0, 25, 1);
+        Look.WritePFLA(SysLog_Line, 0, 25, 1);                            // write all PFLA'a to the console/sys-log
       }
 #else // WITH_PFLAA
       if(Parameters.Verbose & 0b01)

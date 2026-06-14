@@ -19,6 +19,8 @@
 // #define DEBUG_RX    // print debug info for received packets
 // #define DEBUG_SLOT  // print debug info when the TX/RX slot starts
 
+static char Line[640];
+
 // =======================================================================================================
 
  FreqPlan Radio_FreqPlan;       // RF frequency hopping scheme
@@ -845,7 +847,19 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     Radio.standby();
     Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);        // configure for reception
     Radio_setFrequency(RxFreq);                                        //
-    Radio.startReceive(); }                                            // start receiving again
+    Radio.startReceive();
+    // if(Parameters.Verbose>=2)
+    { uint32_t msTime = millis()-GPS_TimeSync.sysTime;
+      uint8_t PktLen=24; if(TxPktLen) PktLen=TxPktLen;
+      int Len=sprintf(Line, "<%10u:%4d [%d:%d] #%d %3.1fdBm ",
+          GPS_TimeSync.UTC, msTime, TxSysID, PktLen, TxChannel, TxPower);
+      for(uint8_t Idx=0; Idx<PktLen; Idx++)
+      { Len+=Format_Hex(Line+Len, TxPacket[Idx]); }
+      Line[Len++]='\n'; Line[Len]=0;
+      // Serial.printf("Radio_Slot() %s", Line);
+      SysLog_Line(Line, Len, 0, 20, 1);
+    }
+  }                                            // start receiving again
   uint32_t Now = millis();
   uint32_t msTime = Now-msStart;                                  // keep receiving till the end of slot
   if(msTimeLen>msTime)
@@ -1109,8 +1123,6 @@ template <class Type>
 const int Slot1_Start =  450; // [ms]
 const int Slot2_Start =  825; // [ms]
 const int Slot2_End   = 1200; // [ms]
-
-static char Line[256];
 
 void Radio_Task(void *Parms)
 {

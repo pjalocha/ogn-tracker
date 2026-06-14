@@ -260,7 +260,7 @@ template <const uint8_t MaxTgts=32>
    { WritePFLAU(Line); printf("%s", Line);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;
-       if(WarnLevel>0 && Target[Idx].DistMargin) continue;
+       // if(WarnLevel>0 && Target[Idx].DistMargin) continue;
        Target[Idx].WritePFLAA(Line);
        printf("%s", Line);
      }
@@ -270,7 +270,7 @@ template <const uint8_t MaxTgts=32>
    { WritePFLAU(Line); Format_String(Output, Line);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;                    // skip empty slots
-       if(WarnLevel>0 && Target[Idx].DistMargin) continue;               // skip slots with distance margin remaining
+       // if(WarnLevel>0 && Target[Idx].DistMargin) continue;               // skip slots with distance margin remaining
        Target[Idx].WritePFLAA(Line);
        Format_String(Output, Line);
      }
@@ -280,7 +280,7 @@ template <const uint8_t MaxTgts=32>
    { uint8_t Len=WritePFLAU(Line); Output(Line, Len, Timestamp, msTimeout, LogOnly);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { if(!Target[Idx].Alloc) continue;                    // skip empty slots
-       if(WarnLevel>0 && Target[Idx].DistMargin) continue;  // skip slots with distance margin remaining
+       // if(WarnLevel>0 && Target[Idx].DistMargin) continue;  // skip slots with distance margin remaining
        Len=Target[Idx].WritePFLAA(Line);
        Output(Line, Len, Timestamp, msTimeout, LogOnly);
      }
