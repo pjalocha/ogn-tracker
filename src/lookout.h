@@ -523,8 +523,10 @@ template <const uint8_t MaxTgts=32>
        if(Old->Pos.hasClimb)
        { dZ = (Old->Pos.Climb*Old->Pred)>>1; }
        if(!New->Pos.hasClimb && dT>1)
-       { New->Pos.Climb = (New->Pos.Z-(Old->Pos.Z-dZ))/dT*2;
-         New->Pos.hasClimb=1; }
+       { int16_t Climb = (New->Pos.Z-(Old->Pos.Z-dZ))/dT*2;             // [0.5m/s] derived from altitude change
+         if(abs(Climb)<=80)                                             // ignore implausible derived climb rates over 40m/s
+         { New->Pos.Climb = Climb;
+           New->Pos.hasClimb=1; } }
        int16_t dH=0;
        if(Old->Pos.hasTurn)
        { dH = (Old->Pos.Turn*Old->Pred)>>1; }
@@ -570,8 +572,9 @@ template <const uint8_t MaxTgts=32>
      Tgt->dZ = Tgt->Pos.Z - Pos.Z;                                     // [0.5m]
      int16_t dT = Pos.T - Tgt->Pos.T;                                  // [0.5s] target time difference against own position
      if(dT)
-     { int16_t Vx,Vy,Vz;                                                // [0.5m/s] target speed vector
-       Tgt->Pos.getSpeedVector(Vx, Vy); Vz=Tgt->Pos.Climb;              // [0.5m/s]
+     { int16_t Vx,Vy,Vz=0;                                              // [0.5m/s] target speed vector
+       Tgt->Pos.getSpeedVector(Vx, Vy);
+       if(Tgt->Pos.hasClimb) Vz=Tgt->Pos.Climb;                         // [0.5m/s]
        Tgt->dX += (dT*Vx)>>1;                                           // extrapolate target to own position time
        Tgt->dY += (dT*Vy)>>1;
        Tgt->dZ += (dT*Vz)>>1; }

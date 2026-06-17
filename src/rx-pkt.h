@@ -61,8 +61,8 @@ class __attribute__((packed, aligned(4))) FSK_RxPacket // Radio packet received 
      if(SysID==Radio_SysID_OGN)      { SYNC=SYNC_OGN1;     PktLen=26;   return 8; }
      if(SysID==Radio_SysID_ADSL)     { SYNC=SYNC_ADSL;     PktLen=24;   return 8; }
      if(SysID==Radio_SysID_LDR)      { SYNC=SYNC_LDR;      PktLen=24;   return 2; }
-     // if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen=24;   return 3; } // 3 for fixed packet size of 24-bytes
-     if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen= 0;   return 2; } // 2 for variable packet size of 24-bytes
+     if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen=24;   return 3; } // 3 for fixed packet size of 24-bytes
+     // if(SysID==Radio_SysID_HDR)      { SYNC=SYNC_HDR;      PktLen= 0;   return 2; } // 2 for variable packet size of 24-bytes
      if(SysID==Radio_SysID_FLR_ADSL) { SYNC=SYNC_FLR_ADSL; PktLen=26+3; return 2; }
      if(SysID==Radio_SysID_OGN_ADSL) { SYNC=SYNC_OGN_ADSL; PktLen=26+3; return 2; }
      return 0; }

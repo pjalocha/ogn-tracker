@@ -873,12 +873,12 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
     { uint32_t Word = calcCRC24((const uint8_t *)&Version, TxBytes-6);
       CRC24[0]=Word>>16; CRC24[1]=Word>>8; CRC24[2]=Word; }
 
-    uint32_t checkCRC24(void) const
-    { return checkCRC24((const uint8_t *)&Version, TxBytes-3); }
+    uint32_t checkCRC24(void) const { return checkCRC24((const uint8_t *)&Version, TxBytes-3); }
+    uint32_t checkCRC8 (void) const { return checkCRC8 ((const uint8_t *)&Version, TxBytes-3+1); }
 
     uint32_t checkCRC32(void) const
-    { uint32_t CRC24=checkCRC24((const uint8_t *)&Version, TxBytes-3);
-      uint8_t  CRC8 =checkCRC8((const uint8_t *)&Version, TxBytes-3+1);
+    { uint32_t CRC24=checkCRC24();
+      uint8_t  CRC8 =checkCRC8();
       return (CRC24<<8) | CRC8; }
 
     static uint8_t checkCRC8(const uint8_t *Packet, int Len, uint8_t CRC=0x71)

@@ -270,7 +270,8 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      Out[Len++]=' ';
      Len+=Format_UnsDec(Out+Len, (uint32_t)DecodeSpeed(), 2, 1); Out[Len++]='m'; Out[Len++]='/'; Out[Len++]='s';
      Out[Len++]=' ';
-     Len+=Format_SignDec(Out+Len, (int32_t)DecodeClimbRate(), 2, 1); Out[Len++]='m'; Out[Len++]='/'; Out[Len++]='s';
+     if(hasClimbRate())
+     { Len+=Format_SignDec(Out+Len, (int32_t)DecodeClimbRate(), 2, 1); Out[Len++]='m'; Out[Len++]='/'; Out[Len++]='s'; }
      Out[Len]=0;
      return Len; }
 

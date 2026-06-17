@@ -18,6 +18,9 @@ ttn-reg:	ttn-reg.cc
 flight_test:	flight_test.cc
 	g++ -Wall -Wno-misleading-indentation -O2 -o flight_test flight_test.cc -I../src/ ../src/format.cpp ../src/ognconv.cpp ../src/intmath.cpp
 
+syslog_read:	syslog_read.cc
+	g++ -Wall -Wno-misleading-indentation -O2 -o syslog_read -I../src/ syslog_read.cc \
+             ../src/format.cpp ../src/ognconv.cpp ../src/intmath.cpp ../src/crc1021.cpp ../src/ldpc.cpp ../src/bitcount.cpp
 
 clean:
 	rm serial_dump read_log aprs2igc

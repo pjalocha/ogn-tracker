@@ -37,7 +37,7 @@ esp_err_t ReadFromNVS(void *Blob, size_t BlobSize, const char *Name, const char 
 #define STR(macro) QUOTE(macro)
 
 #ifndef VERSION
-#define VERSION "0.1.25"
+#define VERSION "0.1.27"
 #endif
 
 // #define SOFT_NAME "dev-14.02" // signal development version
