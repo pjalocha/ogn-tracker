@@ -90,9 +90,9 @@ class LookOut_Target           // describes a flying aircrafts
      Vx -= rVx; Vy -=rVy;                                      // difference
      Vz = Pos.Climb-RefPos.Climb; }                            // vertical different
 
-    int16_t getBearing    (void) const { return IntAtan2(dY, dX); }                            // bearing to the target
-   uint16_t getHorDist    (void) const { return Acft_RelPos::FastDistance(dX, dY); }           // relative horizontal distance to the target
-   uint16_t getRelHorSpeed(void) const { return Acft_RelPos::FastDistance(Vx, Vy); }           // relative horiz. speed of the target
+    int16_t getBearing    (void) const { return IntAtan2(dY, dX); }                            // [16-bit cordic] bearing to the target
+   uint16_t getHorDist    (void) const { return Acft_RelPos::FastDistance(dX, dY)/2; }         // [m] relative horizontal distance to the target
+   uint16_t getRelHorSpeed(void) const { return Acft_RelPos::FastDistance(Vx, Vy)/2; }         // [m/s] relative horiz. speed of the target
 
    void Print(void) const
    { if(Call[0]) printf("%-8s", Call);
@@ -201,6 +201,8 @@ template <const uint8_t MaxTgts=32>
    const static int16_t MinHorizSepar = 100; // [m] minimum horizontal separation
    const static int16_t MinVertSepar  =  50; // [m] minimum vertical separation
    const static int16_t WarnTime      =  20; // [sec] target warning prior to closest miss
+   const static int16_t MaxPastPacketTime   = 20; // [sec] accept/reject threshold for delayed packets
+   const static int16_t MaxFuturePacketTime = 20; // [sec] reject own packets too far ahead of RxTime
 
    Acft_RelPos PredMe, PredTgt;           // for temporary storage of predictions.
 
@@ -247,6 +249,12 @@ template <const uint8_t MaxTgts=32>
 
    int16_t getRelBearing(const LookOut_Target *Tgt) const        // [360/0x10000 deg] relative bearing to the target
    { return Tgt->getBearing()-Pos.Heading; }
+
+   uint32_t getHorDist(const LookOut_Target *Tgt) const          // [m]
+   { return Tgt->getHorDist(); }
+
+   uint32_t getRelHorSpeed(const LookOut_Target *Tgt) const      // [m/s]
+   { return Tgt->getRelHorSpeed(); }
 
    uint8_t WritePOGNA(char *NMEA, const LookOut_Target *Tgt)     // Alert NMEA centence
    { uint8_t Len=0;
@@ -424,9 +432,20 @@ template <const uint8_t MaxTgts=32>
    { // printf("ProcessOwn() ... entry\n");
      GeoidSepar=OwnGeoidSepar;
      if(hasPosition)                                                                      // in my position is valid
-     { Pred=0;
-       if(Pos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0)         // read the new position
+     { Acft_RelPos NewPos;
+       if(NewPos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0)       // read the new position
        { hasPosition = Start(OwnPos, RxTime)>=0; }                                                // if this fails, attempt to start from the new position
+       else
+       { int16_t OldTime = Pos.T-Pred;                                                            // [0.5s] last measured own-position time
+         int16_t Lag = OldTime-NewPos.T;                                                          // [0.5s] positive when the new packet is older
+         if(Lag>0)
+         { if(Lag<=(2*MaxPastPacketTime)) return 0;                                               // delayed duplicate/relay: ignore
+           hasPosition = Start(OwnPos, RxTime)>=0; }                                              // time discontinuity: restart from this packet
+         else
+         { int32_t RxRelTime = ((int32_t)RxTime-(int32_t)RefTime)<<1;                             // [0.5s] RxTime in current reference
+           if((NewPos.T-RxRelTime)>(2*MaxFuturePacketTime)) return 0;                             // implausible future packet
+           Pos=NewPos;
+           Pred=0; } }
        // if(!Pos.hasStdAlt)                                                              // if no StdAlt
        // { }                                                                             // get it from targets
      }
@@ -511,8 +530,11 @@ template <const uint8_t MaxTgts=32>
        if(Target[OldIdx].ID==New->ID) break; }                                         // to find previous position for the target
      if(OldIdx<MaxTargets)                                                             // if found
      { Old = Target+OldIdx;
-       if((Old->Pos.T-Old->Pred)>New->Pos.T)                                           // if position is not really newer
-         return Old; }                                                                 // then stop processing this (not new) position
+       int16_t OldTime = Old->Pos.T-Old->Pred;                                         // [0.5s] last measured target-position time
+       int16_t Lag = OldTime-New->Pos.T;                                               // [0.5s] positive when the new packet is older
+       if(Lag>0)                                                                       // if position is not really newer
+       { if(Lag>(2*MaxPastPacketTime)) return 0;                                       // very delayed packet: ignore completely
+         return Old; } }                                                               // small delay/duplicate: keep previous state
 
      if(Old && Old->Call[0] && New->Call[0]==0) { strncpy(New->Call, Old->Call, 10); New->Call[10]=0; } // copy the call
 
