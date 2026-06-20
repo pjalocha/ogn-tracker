@@ -27,6 +27,8 @@ static LookOut<32> Look;
 
 static int ProcOwnPacket(OGN1_Packet &OwnPkt)
 { const LookOut_Target *Tgt=Look.ProcessOwn(OwnPkt, FileTime, Position.GeoidSeparation/10);
+  if(Tgt && Look.WarnLevel)
+  { Look.Print(); }
   return 0; }
 
 static int ProcRxPacket(OGN1_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
