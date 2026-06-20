@@ -1,4 +1,4 @@
-all:		serial_dump read_log tlg2aprs aprs2igc
+all:		serial_dump read_log tlg2aprs aprs2igc syslog_read
 
 serial_dump:	serial_dump.cc
 	g++ -Wall -Wno-misleading-indentation -I../src -O2 -o serial_dump serial_dump.cc ../src/format.cpp
@@ -23,5 +23,4 @@ syslog_read:	syslog_read.cc
              ../src/format.cpp ../src/ognconv.cpp ../src/intmath.cpp ../src/crc1021.cpp ../src/ldpc.cpp ../src/bitcount.cpp
 
 clean:
-	rm serial_dump read_log aprs2igc
-
+	rm serial_dump read_log aprs2igc syslog_read

@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <algorithm>
+
 #include "intmath.h"
 
 // #define DEBUG_PRINT

@@ -13,6 +13,79 @@
 
 #include "nmea.h"
 
+#include "lookout.h"
+
+static uint32_t FileTime=0;
+static char     FileTimeAsc[16];
+static GPS_Position Position;
+
+static char TmpLine[640];
+
+// =========================================================================================================
+
+static LookOut<32> Look;
+
+static int ProcOwnPacket(OGN1_Packet &OwnPkt)
+{ const LookOut_Target *Tgt=Look.ProcessOwn(OwnPkt, FileTime, Position.GeoidSeparation/10);
+  return 0; }
+
+static int ProcRxPacket(OGN1_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
+{ int Len=RxPkt.Print(TmpLine);
+  const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime);
+  Len+=sprintf(TmpLine+Len, " %+5.1fdBm/%d", RxRSSI, RxChan);
+  printf("%s: %s\n", FileTimeAsc, TmpLine);
+  return 0; }
+
+static int ProcRxPacket(ADSL_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
+{ int Len=RxPkt.Print(TmpLine);
+  const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime);
+  Len+=sprintf(TmpLine+Len, " %+5.1fdBm/%d", RxRSSI, RxChan);
+  printf("%s: %s\n", FileTimeAsc, TmpLine);
+  return 0; }
+
+static int ProcRxPacket(PAW_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
+{ if(!RxPkt.isPos()) return 0;
+  OGN1_Packet Packet;
+  RxPkt.Write(Packet);
+  Packet.Position.Time = FileTime%60;
+  ProcRxPacket(Packet, RxChan, RxRSSI);
+  return 0; }
+
+static int FLR2ADSL(ADSL_Packet &ADSL, Flarm_Packet &FLR, int32_t RefLat, int32_t RefLon)
+{ if(FLR.FAMP.MsgType!=2) return 0;
+  FLR.FAMP.Decrypt(FLR.Nonce, FLR.Time);     // decrypt FAMP packet based on the Time
+  ADSL.Init();
+  ADSL.setAddrTable(FLR.FAMP.AddrType+4);    // address-type
+  ADSL.setAddress(FLR.FAMP.Address);         // address
+  ADSL.setAcftTypeOGN(FLR.FAMP.AcftType);    // [aircraft-type]
+  int8_t qSec=0;
+  uint32_t PosTime=FLR.FAMP.getPosTime(qSec, FLR.Time);  // here we could check if PosTime==FLR.Time
+  if(qSec!=0 || (PosTime!=FLR.Time && PosTime!=FLR.Time+1)) return 0;
+  ADSL.TimeStamp=((PosTime%15)<<2)+qSec;        // [1/4 sec]
+  ADSL.setAlt(FLR.FAMP.getAltitude());          // [m] HAE
+  int32_t Lat = FLR.FAMP.getLatitude(RefLat);
+  int32_t Lon = FLR.FAMP.getLongitude(RefLon, Lat);
+  ADSL.setLatUBX(Lat);                            // [FNT] <= [UBX]
+  ADSL.setLonUBX(Lon);                            // [FNT] <= [UBX]
+  ADSL.setClimb((FLR.FAMP.getClimb()*4+2)/5);     // [0.125 m/s] <= [0.1 m/s]
+  ADSL.setSpeed((FLR.FAMP.getSpeed()*2+2)/5);     // [0.250 m/s] <= [0.1 m/s]
+  ADSL.setTrack((FLR.FAMP.Track*0x20+20)/45);     // [9-bit cordic] <= [0.5 deg]
+  ADSL.SourceIntegrity = FLR.FAMP.SIL;
+  ADSL.DesignAssurance = FLR.FAMP.SDA;
+  ADSL.NavigIntegrity  = FLR.FAMP.NIC+1;
+  // ADSL.HorizAccuracy FLR.FAMP.getHorPrec();  // those are coded
+  // ADSL.VertAccuracy FLR.FAMP.getVerPrec();
+  // ADSL.VelAccuracy FLR.FAMP.getVelPrec();
+  return 1; }
+
+static int ProcRxPacket(Flarm_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
+{ if(RxPkt.FAMP.MsgType!=2) return 0;
+  if(!Position.isValid()) return 0;
+  ADSL_Packet Packet;
+  if(FLR2ADSL(Packet, RxPkt, Position.Latitude/3*50, Position.Longitude/3*50)<=0) return 0;
+  ProcRxPacket(Packet, RxChan, RxRSSI);
+  return 0; }
+
 // =========================================================================================================
 
 static int ReadHex(uint8_t *Data, int MaxBytes, const char *Inp) // read from an ASCII string
@@ -27,13 +100,9 @@ static int ReadHex(uint8_t *Data, int MaxBytes, const char *Inp) // read from an
   // printf("ReadHex( , %d, \"%s\") => %d\n", MaxBytes, Inp, Len);
   return Len; }
 
-static uint32_t FileTime=0;
-static char     FileTimeAsc[16];
-static char Line[640];
 static NMEA_RxMsg NMEA;
-static GPS_Position Position;
 
-static char TmpLine[640];
+static OGN1_Packet OwnPacket;
 
 static void ProcessNMEA(const char *Line)
 { int Ret=NMEA.ProcessLine(Line);
@@ -47,6 +116,9 @@ static void ProcessNMEA(const char *Line)
     { FileTime = PosTime;
       int Len=Format_HHMMSS(FileTimeAsc, FileTime);
       FileTimeAsc[Len]=0; }
+    if(NMEA.isGxGSA() && Position.isValid())
+    { Position.Encode(OwnPacket);
+      ProcOwnPacket(OwnPacket); }
     return; }
   // if(NMEA.isPOGN())
   if(NMEA.isPFLA())
@@ -65,6 +137,9 @@ static void ProcessRxPkt(const char *Line)
    int16_t msTime=atol(Line+12);
   uint8_t SysID = atol(Line+18);
   uint8_t PktLen = atol(Line+20);
+  const char *Hash = strchr(Line+22, '#'); if(Hash==0) return;
+  uint8_t RxChan = atoi(Hash+1);
+  float   RxRSSI = atof(Hash+3);
   const char *Data=strstr(Line, "dBm "); if(Data==0) return;
   Data+=4;
   int Read=0;
@@ -81,15 +156,17 @@ static void ProcessRxPkt(const char *Line)
     { isPAW=ADSL_RxPkt.checkCRC8()==0x00;
       PAW_RxPkt.Read(&(ADSL_RxPkt.Version));
       PAW_RxPkt.Whiten();
-      GoodCRC=PAW_RxPkt.IntCRC()==0x00; }
+      GoodCRC=PAW_RxPkt.IntCRC()==0x00;
+      if(GoodCRC) ProcRxPacket(PAW_RxPkt, RxChan, RxRSSI);
+    }
     if(GoodCRC && !isPAW)
     { if(ADSL_RxPkt.getEncrKey()==0) ADSL_RxPkt.Descramble();
       Address=ADSL_RxPkt.getAddress();
       AddrType=ADSL_RxPkt.getAddrType();
-      Altitude=ADSL_RxPkt.getAlt(); }
-    ///
+      Altitude=ADSL_RxPkt.getAlt();
+      ProcRxPacket(ADSL_RxPkt, RxChan, RxRSSI); }
   }
-  if(SysID==Radio_SysID_OGN)
+  else if(SysID==Radio_SysID_OGN)
   { if(PktLen!=26) return;
     Read=ReadHex(OGN_RxPkt.Byte(), OGN_RxPkt.Bytes, Data);
     GoodCRC = OGN_RxPkt.checkFEC()==0;
@@ -98,23 +175,18 @@ static void ProcessRxPkt(const char *Line)
     if(GoodCRC && !OGN_RxPkt.Packet.Header.Encrypted)
     { OGN_RxPkt.Packet.Dewhiten();
       Altitude=OGN_RxPkt.Packet.DecodeAltitude();
-      int Len=OGN_RxPkt.Packet.Print(TmpLine);
-      printf("%s: %s\n", FileTimeAsc, TmpLine);
-    }
+      ProcRxPacket(OGN_RxPkt.Packet, RxChan, RxRSSI); }
   }
-  if(SysID==Radio_SysID_FLR)
+  else if(SysID==Radio_SysID_FLR)
   { if(PktLen!=26) return;
     Read=ReadHex(FLR_RxPkt.Byte, FLR_RxPkt.Bytes+2, Data);
     GoodCRC = FLR_RxPkt.checkCRC()==0x0000;
-    Address=FLR_RxPkt.FAMP.Address;
-    AddrType=FLR_RxPkt.FAMP.AddrType+4;
     FLR_RxPkt.Time = FileTime;
     if(GoodCRC)
-    { FLR_RxPkt.FAMP.Decrypt(FLR_RxPkt.Nonce, FLR_RxPkt.Time);
-      if(FLR_RxPkt.FAMP.MsgType==2) Altitude=FLR_RxPkt.FAMP.getAltitude(); }
+    { ProcRxPacket(FLR_RxPkt, RxChan, RxRSSI); }
   }
-  printf("%s: RxPkt: %u:%4d %d:%d [%d] CRC:%d %02X:%06X %4dm\n",
-     FileTimeAsc, RxTime, msTime, SysID, PktLen, Read, GoodCRC, AddrType, Address, Altitude);
+  // printf("%s: RxPkt: %u:%4d %d:%d #%d %+6.1fdBm [%d] CRC:%d %02X:%06X %4dm\n",
+  //    FileTimeAsc, RxTime, msTime, SysID, PktLen, RxChan, RxRSSI, Read, GoodCRC, AddrType, Address, Altitude);
 }
 
 static void ProcessTxPkt(const char *Line)
@@ -129,7 +201,7 @@ static void ProcessTxPkt(const char *Line)
 
 // =========================================================================================================
 
-const int MaxLineLen = 256;
+const int MaxLineLen = 1024;
 static char InpLine[MaxLineLen];
 
 static int ProcessFile(FILE *InpFile)
@@ -164,4 +236,3 @@ int main(int argc, char *argv[])
   return 0; }
 
 // =========================================================================================================
-

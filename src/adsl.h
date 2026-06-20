@@ -44,6 +44,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
            uint16_t Climb  : 9;
            uint16_t Track  : 9;
          } __attribute__((packed)) BasicPos;
+/*
          struct
          { union
            { uint8_t Flags;
@@ -64,6 +65,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
            uint16_t Climb     : 9;
            uint16_t Track     : 9;
          } __attribute__((packed)) Air2airPos;
+*/
        } ;
        union
        { uint8_t Integrity[2]; // SourceInteg[2]/DesignAssurance[2]/NavigationIntegrity[4]/NorizAccuracy[3]/VertAccuracy[2]/ValocityAccuracy[2]/Reserved[1]
@@ -291,9 +293,9 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    int Print(char *Out) const
    { Out[0]=0;
      if(isPosition())
-       return sprintf(Out, "%02X:%06X R%d %4.1fs [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s",
+       return sprintf(Out, "%02X:%06X R%d %4.1fs [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s NIC:%d, NICp:%d",
          getAddrTable(), getAddress(), isRelay(), 0.25*TimeStamp, FNTtoFloat(getLat()), FNTtoFloat(getLon()),
-         getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed());
+         getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed(), NavigIntegrity, HorizAccuracy );
      if(isTelemetry())
      { int Len=0;
        if(Telemetry.Header.TelemType==0)

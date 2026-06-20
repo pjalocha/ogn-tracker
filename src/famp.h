@@ -62,6 +62,18 @@ class FAMP_Packet                                                   //
      printf(" %05.1fdeg %5.1fm/s %+5.1fdeg/s", 0.5*Track, 0.1*getSpeed(), 0.05*getTurn());
      printf("\n"); }
 
+   int Print(char *Line, int32_t RefLat, int32_t RefLon) const
+   { int Len=0;
+     int32_t Lat = getLatitude(RefLat);
+     int32_t Lon = getLongitude(RefLon, Lat);
+     Len+=sprintf(Line+Len, "%c%c%X:%X:%06X [%+09.5f, %+010.5f]deg %5dm %+5.1fm/s %02dx%02dm m%d",
+            NoTrack?'T':' ', Stealth?'S':' ', AcftType, AddrType, Address,
+            1e-7*Lat, 1e-7*Lon, getAltitude(),
+            0.1*getClimb(), getHorAcc(), getVerAcc(), Move );
+     Len+=sprintf(Line+Len, " %05.1fdeg %5.1fm/s %+5.1fdeg/s", 0.5*Track, 0.1*getSpeed(), 0.05*getTurn());
+     Len+=sprintf(Line+Len, " NIC:%d SIL:%d SDA:%d", NIC, SIL, SDA);
+     return Len; }
+
    void setPosTime(uint32_t Timestamp)
    { Time = (uint8_t)((Timestamp&0xF)<<2); }
 
