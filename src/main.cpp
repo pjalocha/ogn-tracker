@@ -1088,7 +1088,7 @@ void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
   BTserial.write(Byte);
 #endif
 #ifdef WITH_BLE_SPP
-  BLE_SPP_TxFIFO.Write(Byte);
+  BLE_SPP_Write(Byte);
 #endif
 }
 

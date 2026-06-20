@@ -20,6 +20,8 @@
 #define SERVICE_UUID        "FFE0"  // this service is used by XCSoar and SkyDemon to get NMEA
 #define CHARACTERISTIC_UUID "FFE1"
 #define BLE_SPP_DEFAULT_MTU 20
+#define BLE_SPP_MAX_PAYLOAD 244
+#define BLE_SPP_MAX_LINE    255
 
 #ifdef WITH_NIMBLE
 NimBLEServer* pServer = NULL;
@@ -69,6 +71,10 @@ class MyServerCallbacks: public BLEServerCallbacks
 
 FIFO<char, 2048> BLE_SPP_RxFIFO;
 FIFO<char, 2048> BLE_SPP_TxFIFO;
+
+static char    BLE_SPP_Line[BLE_SPP_MAX_LINE];
+static uint8_t BLE_SPP_LineLen = 0;
+static bool    BLE_SPP_LineOvf = false;
 
 #ifdef WITH_NIMBLE
 class MyCallbacks: public NimBLECharacteristicCallbacks
@@ -148,19 +154,83 @@ void BLE_SPP_Start(const char *DevName)
   pAdvertising->start(); }
 #endif
 
+static bool BLE_SPP_QueueLine(const char *Line, uint8_t Len)
+{ if(Len==0) return true;
+  if(BLE_SPP_TxFIFO.Free()<Len+2) return false;
+  char *LenByte = BLE_SPP_TxFIFO.getWrite();
+  BLE_SPP_TxFIFO.Write((char)0);              // zero means the frame is not complete yet
+  BLE_SPP_TxFIFO.Write(Line, Len);
+  BLE_SPP_TxFIFO.Write((char)0);              // sync/check byte after the line
+  *LenByte = (char)Len;                       // publish the complete frame
+  return true; }
+
+void BLE_SPP_Write(char Byte)
+{ if(!BLE_SPP_isConnected)
+  { BLE_SPP_LineLen=0; BLE_SPP_LineOvf=false; return; }
+
+  if(BLE_SPP_LineOvf)
+  { if(Byte=='\n') { BLE_SPP_LineLen=0; BLE_SPP_LineOvf=false; }
+    return; }
+
+  if(BLE_SPP_LineLen>=BLE_SPP_MAX_LINE)
+  { BLE_SPP_LineLen=0; BLE_SPP_LineOvf=true; return; }
+
+  BLE_SPP_Line[BLE_SPP_LineLen++] = Byte;
+  if(Byte!='\n') return;
+
+  BLE_SPP_QueueLine(BLE_SPP_Line, BLE_SPP_LineLen);
+  BLE_SPP_LineLen=0; }
+
 static bool BLE_SPP_Send(void)
-{ static uint8_t Wait=0;
-  char *Block;
-  int Size=BLE_SPP_TxFIFO.getReadBlock(Block);            // see how big is the next block to be sent on BLE
-  if(Size==0) { Wait=0; return 0; }                                   // no data to send: we are done
-  if(Size<BLE_SPP_MTU-3 && Wait<20) { Wait++; return 0; }
-  Wait=0;
-  if(Size>BLE_SPP_MTU-3) Size=BLE_SPP_MTU-3;              // clip to the MTU-3 on BLE
+{ if(!BLE_SPP_isConnected)
+  { BLE_SPP_TxFIFO.Clear(); return false; }
+
+  unsigned Payload = BLE_SPP_MTU>3 ? BLE_SPP_MTU-3 : BLE_SPP_DEFAULT_MTU-3;
+  if(Payload>BLE_SPP_MAX_PAYLOAD) Payload=BLE_SPP_MAX_PAYLOAD;
+
+  uint8_t Packet[BLE_SPP_MAX_PAYLOAD];
+  unsigned OutLen=0;
+  unsigned FlushLen=0;
+
+  for( ; ; )
+  { unsigned Full = BLE_SPP_TxFIFO.Full();
+    if(Full<FlushLen+2) break;
+
+    char *LenPtr = BLE_SPP_TxFIFO.getRead(FlushLen);
+    if(LenPtr==0) break;
+    uint8_t Len = (uint8_t)(*LenPtr);
+    if(Len==0) break;                                      // frame is still being written
+    if(Full<FlushLen+Len+2) break;
+
+    char *Term = BLE_SPP_TxFIFO.getRead(FlushLen+Len+1);
+    if(Term==0) break;
+    if(*Term!=0)
+    { if(OutLen) break;
+      BLE_SPP_TxFIFO.Read();                               // lost sync: discard one byte and retry
+      return true; }
+
+    if(Len>Payload)
+    { if(BLE_SPP_MTU<64) break;                            // wait for MTU negotiation
+      if(OutLen) break;
+      BLE_SPP_TxFIFO.flushReadBlock(Len+2);                // impossible to send as one BLE packet
+      return true; }
+
+    if(OutLen && OutLen+Len>Payload) break;
+
+    for(uint8_t Idx=0; Idx<Len; Idx++)
+    { char *Byte = BLE_SPP_TxFIFO.getRead(FlushLen+1+Idx);
+      if(Byte==0) break;
+      Packet[OutLen++] = (uint8_t)(*Byte); }
+    FlushLen += Len+2;
+
+    if(OutLen>=Payload) break; }
+
+  if(OutLen==0) return false;
+
   bool OK=1;
-  if(BLE_SPP_isConnected)                                 // in BLE has a connected client
-  { pCharacteristic->setValue((uint8_t *)Block, Size);    // then send the data out
-    pCharacteristic->notify(); }
-  if(OK) BLE_SPP_TxFIFO.flushReadBlock(Size);             // clear away the part which was sent out
+  pCharacteristic->setValue(Packet, OutLen);               // send complete NMEA line(s)
+  pCharacteristic->notify();
+  if(OK) BLE_SPP_TxFIFO.flushReadBlock(FlushLen);
   return OK; }
 
 void BLE_SPP_Check(void)

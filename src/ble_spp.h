@@ -8,4 +8,4 @@ extern bool BLE_SPP_isConnected;
 
 void BLE_SPP_Check(void);
 void BLE_SPP_Start(const char *DevName);
-
+void BLE_SPP_Write(char Byte);
