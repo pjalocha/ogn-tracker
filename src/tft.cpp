@@ -518,10 +518,11 @@ int TFT_DrawRF(void)
   sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
-  uint32_t Sum=0;
-  for(uint8_t Sys=0; Sys<8; Sys++)
-    Sum+=Radio_RxCount[Sys];
-  sprintf(Line, "Rx: %d pkt", Sum);
+  // uint32_t Sum=0;
+  // for(uint8_t Sys=0; Sys<8; Sys++)
+  //   Sum+=Radio_RxCount[Sys];
+  // sprintf(Line, "Rx: %d pkt", Sum);
+  sprintf(Line, "Rx: %3.1f pkt/s", Radio_PktRate);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 

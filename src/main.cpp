@@ -1751,8 +1751,8 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #if defined(WITH_BMP180) || defined(WITH_BMP280) || defined(WITH_BME280) || defined(WITH_QMC63XX) || defined(WITH_QMI8658)
   xTaskCreate(vTaskSENS   ,  "SENS" ,  5000, NULL, 1, NULL);  // read data from I2C sensors
 #endif
-  xTaskCreate(vTaskPROC   ,  "PROC" ,  5000, NULL, 0, NULL);  // process received packets, prepare packets for transmission
-  xTaskCreate(Radio_Task  ,  "RF"   ,  5000, NULL, 1, NULL);  // transmit/receive packets
+  xTaskCreate(vTaskPROC   ,  "PROC" ,  5000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
+  xTaskCreate(Radio_Task  ,  "RF"   ,  5000, NULL, 2, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  5000, NULL, 0, NULL);
