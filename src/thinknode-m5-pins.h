@@ -26,7 +26,8 @@
 #define Radio_PinCS   17 // CS
 #define Radio_PinIRQ1  4 // IRQ
 #define Radio_PinBusy  5 // Busy: only for SX1262
-#define Radio_PinEnable 46 // power-enable for sx1262 ?
+#define Radio_PinEnable 46 // power-enable for sx1262
+#define Radio_TCXO_Voltage 3.3 // SX1262 DIO3 TCXO voltage
 #define Radio_SckFreq 8000000
 
 #define Buzzer_Pin     9 // GPIO  9 = Beeper

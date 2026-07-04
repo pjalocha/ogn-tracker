@@ -17,6 +17,7 @@
 #define Radio_PinCS   10 // CS
 #define Radio_PinIRQ1  1 // IRQ
 #define Radio_PinBusy  4 // Busy: only for SX1262
+#define Radio_TCXO_Voltage 1.8 // SX1262 DIO3 TCXO voltage
 
 // External I2C for BME280, OLED, Magnetic sensor
 #define I2C_PinSCL    18 // SCL

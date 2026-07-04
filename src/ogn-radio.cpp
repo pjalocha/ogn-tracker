@@ -108,6 +108,19 @@ static void Radio_RXEN(bool ON=1) { digitalWrite(Radio_PinRXEN, ON); }
 static void Radio_RXEN(bool ON=1) { }
 #endif
 
+#ifdef WITH_SX1262
+#ifndef Radio_TCXO_Voltage
+#define Radio_TCXO_Voltage 1.6
+#endif
+
+static int Radio_SetRxBoostedGainMode(void)
+{ int State=Radio.setRxBoostedGainMode(true);                          // 2mA more current but boosts sensitivity
+  if(State) return State;
+  // Semtech/Heltec/Meshtastic RX sensitivity patch for SX1262: set bit 0 of register 0x08B5.
+  Radio.mod->SPIsetRegValue(0x08B5, 0x01, 0, 0);
+  return 0; }
+#endif
+
 // =======================================================================================================
 
 #ifdef WITH_SX1262
@@ -459,7 +472,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
-  State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
+  State=Radio_SetRxBoostedGainMode();
   if(State) ErrState=State;
 #endif
   msDead = millis()-msDead; Radio_msDeadTime += msDead;
@@ -576,7 +589,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
-  State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
+  State=Radio_SetRxBoostedGainMode();
   if(State) ErrState=State;
 #endif
   msDead = millis()-msDead; Radio_msDeadTime += msDead;
@@ -666,7 +679,7 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
-  State=Radio.setRxBoostedGainMode(true);                           // 2mA more current but boosts sensitivity
+  State=Radio_SetRxBoostedGainMode();
   if(State) ErrState=State;
 #endif
   msDead = millis()-msDead; Radio_msDeadTime += msDead;
@@ -913,6 +926,7 @@ static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t 
   // Radio.setSyncWord((Sync&0xF0)|0x04, (Sync<<4)|0x04);
   // Radio.setSyncWord(Sync, 0x44);
   Radio_setSyncWord(Sync);
+  Radio_SetRxBoostedGainMode();
 #endif
 #ifdef WITH_SX1276
   Radio_setSyncWord(Sync);
@@ -1198,6 +1212,12 @@ void Radio_Task(void *Parms)
   SPI.setFrequency(Radio_SckFreq);
 #endif
 
+#ifdef Radio_PinEnable
+  pinMode(Radio_PinEnable, OUTPUT);
+  digitalWrite(Radio_PinEnable, HIGH);
+  delay(10);
+#endif
+
 #ifdef WITH_SX1276
   int State = Radio.beginFSK(868.2,          100.0,           50.0,        234.3,           14,              8);
   if(State==0) Radio_Cache_Clear();
@@ -1207,7 +1227,7 @@ void Radio_Task(void *Parms)
   Radio_ChipTemperature = Radio.getTempRaw()+Parameters.RFchipTempCorr;
 #endif
 #ifdef WITH_SX1262
-  int State = Radio.beginFSK(868.2,          100.0,           50.0,        234.3,            0,              8,           1.6,         0);
+  int State = Radio.beginFSK(868.2,          100.0,           50.0,        234.3,            0,              8,           Radio_TCXO_Voltage, 0);
   if(State==0) Radio_Cache_Clear();
   //                     Freq[MHz], Bit-rate[kbps], Freq.dev.[kHz], RxBand.[kHz], TxPower[dBm], preamble[bits], TXCO volt.[V], use LDO[bool]
   // Serial.printf("Radio.begin() => %d\n", State);
@@ -1215,13 +1235,14 @@ void Radio_Task(void *Parms)
                           // else LED_OGN_Red();
   State = Radio.setFrequency(1e-6*Radio_FreqPlan.BaseFreq, 1); // calibrate
   if(State==0) Radio_Cache_Clear();
-  Radio.setTCXO(1.6);
+  Radio.setTCXO(Radio_TCXO_Voltage);
 #ifdef Radio_PinRXEN                  // Wio-Tracker needs to control TX/RX switch explicitely
   pinMode(Radio_PinRXEN, OUTPUT);
   Radio_RXEN(1);
 #else
   Radio.setDio2AsRfSwitch();          // this is for "normal" modules, not sure if this should be set for Wio-Tracker ?
 #endif
+  Radio_SetRxBoostedGainMode();
   // Radio.setDio1Action(IRQcall);
 #endif
 
