@@ -26,6 +26,7 @@
 
 #ifdef WITH_BLE_SPP
 #include "ble_spp.h"
+SemaphoreHandle_t BLE_Mutex;
 #endif
 
 #ifdef WITH_WIFI
@@ -1087,13 +1088,24 @@ void CONS_UART_Write(char Byte) // write byte to the console (USB serial port)
 #ifdef WITH_BT_SPP
   BTserial.write(Byte);
 #endif
-#ifdef WITH_BLE_SPP
-  BLE_SPP_Write(Byte);
-#endif
 }
 
 int  CONS_UART_Free(void)
 { return Serial.availableForWrite(); }
+
+bool CONS_UART_isConnected(void)
+{ return true; }
+
+#ifdef WITH_BLE_SPP
+bool BLE_isConnected(void)
+{ return BLE_SPP_isConnected; }
+
+void BLE_UART_Write(char Byte)
+{ BLE_SPP_Write(Byte); }
+
+int BLE_UART_Free(void)
+{ return BLE_SPP_TxFIFO.Free(); }
+#endif
 
 int  CONS_UART_Read (uint8_t &Byte)
 { char Char;
@@ -1654,6 +1666,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #endif
 
 #ifdef WITH_BLE_SPP
+  BLE_Mutex = xSemaphoreCreateMutex();
   if(!StartAP && Parameters.BTname[0])
   { Serial.printf("Start BLE (Arduino) Serial Port: %s\n", Parameters.BTname);
     BLE_SPP_Start(Parameters.BTname); }

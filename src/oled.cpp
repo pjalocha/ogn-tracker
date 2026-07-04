@@ -223,9 +223,9 @@ void OLED_DrawBaro(u8g2_t *OLED, const GPS_Position *GPS)
   u8g2_DrawStr(OLED, 0, 24, Line);
   Len=0;
   if(GPS && GPS->hasBaro)
-  { Len+=Format_SignDec(Line+Len, GPS->StdAltitude, 5, 1);
+  { Len+=Format_SignDec(Line+Len, (int32_t)GPS->StdAltitude, 5, 1);
     Len+=Format_String(Line+Len, "m ");
-    Len+=Format_SignDec(Line+Len, GPS->ClimbRate, 2, 1);
+    Len+=Format_SignDec(Line+Len, (int32_t)GPS->ClimbRate, 2, 1);
     Len+=Format_String(Line+Len, "m/s "); }
   else
   { Len+=Format_String(Line+Len, "-----.-m");
@@ -234,11 +234,11 @@ void OLED_DrawBaro(u8g2_t *OLED, const GPS_Position *GPS)
   u8g2_DrawStr(OLED, 0, 36, Line);
   Len=0;
   if(GPS && GPS->hasBaro)
-  { Len+=Format_SignDec(Line+Len, GPS->Temperature, 2, 1);
+  { Len+=Format_SignDec(Line+Len, (int32_t)GPS->Temperature, 2, 1);
     Line[Len++]=0xB0;
     Line[Len++]='C';
     Line[Len++]=' ';
-    Len+=Format_SignDec(Line+Len, GPS->Humidity, 2, 1);
+    Len+=Format_SignDec(Line+Len, (int32_t)GPS->Humidity, 2, 1);
     Line[Len++]='%'; }
   else Len+=Format_String(Line+Len, "---.- C --.-% ");
   Line[Len]=0;
@@ -261,7 +261,7 @@ void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
   Len+=Format_String(Line+Len, "SX1276");
 #endif
   Line[Len++]=':';
-  Len+=Format_SignDec(Line+Len, (int16_t)Parameters.TxPower);              // Tx power
+  Len+=Format_SignDec(Line+Len, (int32_t)Parameters.TxPower);              // Tx power
   Len+=Format_String(Line+Len, "dBm");
   Line[Len++]=' ';
   if(Parameters.RFchipFreqCorr!=0)
@@ -271,10 +271,11 @@ void OLED_DrawRF(u8g2_t *OLED, const GPS_Position *GPS) // RF 868MHz
   u8g2_DrawStr(OLED, 0, 24, Line);
   sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
   u8g2_DrawStr(OLED, 0, 36, Line);
-  uint32_t Sum=0;
-  for(int Idx=0; Idx<8; Idx++)
-    Sum+=Radio_RxCount[Idx];
-  sprintf(Line, "Rx: %d pkts", Sum);
+  // uint32_t Sum=0;
+  // for(int Idx=0; Idx<8; Idx++)
+  //   Sum+=Radio_RxCount[Idx];
+  // sprintf(Line, "Rx: %d pkts", Sum);
+  sprintf(Line, "Rx: %3.1f pkt/s", Radio_PktRate);
   u8g2_DrawStr(OLED, 0, 48, Line);
   Len=0;
   Len+=Format_String(Line+Len, Radio_FreqPlan.getPlanName());               // name of the frequency plan
@@ -362,7 +363,7 @@ void OLED_DrawPower(u8g2_t *OLED, const GPS_Position *GPS)
   Line[Len]=0;
   u8g2_DrawStr(OLED, 0, 24, Line);
   int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
-  Len=Format_SignDec(Line, BattVolt, 4, 3); Line[Len++]='V'; Line[Len]=0;
+  Len=Format_SignDec(Line, (int32_t)BattVolt, 4, 3); Line[Len++]='V'; Line[Len]=0;
   u8g2_DrawStr(OLED, 64, 36, Line);
 #ifdef WITH_AXP
   if(HardwareStatus.AXP192 || HardwareStatus.AXP202)

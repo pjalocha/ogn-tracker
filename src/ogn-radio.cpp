@@ -100,6 +100,15 @@ static bool Radio_IRQ(void) { return digitalRead(Radio_PinIRQ1); }
  int8_t  Radio_ChipTemperature = -128;
 
 // =======================================================================================================
+// this switch in present in Wio-Tracker, not sure about other devices
+
+#ifdef Radio_PinRXEN
+static void Radio_RXEN(bool ON=1) { digitalWrite(Radio_PinRXEN, ON); }
+#else
+static void Radio_RXEN(bool ON=1) { }
+#endif
+
+// =======================================================================================================
 
 #ifdef WITH_SX1262
 #define WITH_RADIO_CACHE
@@ -467,7 +476,8 @@ static int ManchEncode(uint8_t *Out, const uint8_t *Inp, uint8_t InpLen) // Enco
 
 #ifdef WITH_SX1262
 static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
-{ uint32_t msDead=millis();
+{ Radio_RXEN(0);
+  uint32_t msDead=millis();
   uint32_t usTxTime=Radio.getTimeOnAir(Len);                             // [usec]
   Radio_TxCredit-=usTxTime/1000;
   int State=Radio.transmit((const uint8_t *)Packet, Len);                                 // transmit
@@ -489,7 +499,7 @@ static int Radio_TxFSK(const uint8_t *Packet, uint8_t Len)
     usLeft = usTxTime-usTime;                                          // [usec] time left till the end of packet
     if(Radio_IRQ()) break;                                 // raised IRQ => end-of-data
     // uint16_t Flags=Radio.getIRQFlags(); if(Flags & RADIOLIB_SX127X_CLEAR_IRQ_FLAG_TX_DONE) break;
-    if(usLeft>1500) { delay(1); continue; }
+    if(usLeft>1500) { vTaskDelay(1); continue; }
     if(usLeft<(-40)) break;
     taskYIELD(); }
   // State=Radio.finishTransmit();                         // adds a long delay and leaves a significant tail
@@ -803,7 +813,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   bool SameChan = TxChannel==RxChannel;                             // same frequency channel
   float TxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(TxChannel);   // Frequency for transmission
   float RxFreq = 1e-6*Radio_FreqPlan.getChanFrequency(RxChannel);   // Frequency for reception
-#ifdef DEBUG_SLOT
+#ifdef DEBUG_SLOT                                                   // print every slot for scheduling checks
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.printf("Radio_Slot: %dms, %s, Tx:%s:%d:%5.1fMHz:%1.0fdBm, Rx:%s:%d:%5.1fMHz\n",
               msTimeLen, TxPacket?"RX/TX":"RX/--",
@@ -816,6 +826,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
   Radio.standby();
   Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);       // configure for reception
   Radio_setFrequency(RxFreq);                                       // set frequency
+  Radio_RXEN(1);
   Radio.startReceive();                                             // start receiving
   XorShift64(Random.Word);                                          // randomize
   if(TxPacket)                                                      // if there is packet to be sent out
@@ -825,7 +836,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     //         else { TxTime = 25+Random.RX%(msTimeLen-50); }          // random time to wait before transmission
     if(TxTime>5)
       PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // keep receiving packets till transmission time
-// #ifdef WITH_LBT
+#ifdef WITH_LBT
     for(int TxThres=10 ; ; )                                        // listen-before-talk
     { if(!SameChan) break;                                          // not if channels are different
       uint32_t Now=millis();
@@ -837,7 +848,7 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
       TxTime = 10+Random.RX%19;                                     // wait for a random time
       PktCount+=Radio_Receive(TxTime, RxPktLen, RxSysID, RxChannel, TimeRef); // and keep listen a bit more
       TxThres+=3; }
-// #endif
+#endif
     Radio.standby();
     Radio_ConfigSysID(TxSysID, TxPktLen, 0, TxSYNC, TxSyncLen);        // configure for transmission
     Radio_setOutputPower(TxPower);                                     // set Tx power
@@ -847,8 +858,9 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     Radio.standby();
     Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);        // configure for reception
     Radio_setFrequency(RxFreq);                                        //
+    Radio_RXEN(1);
     Radio.startReceive();
-    // if(Parameters.Verbose>=2)
+    if(Parameters.Verbose>=2)
     { uint32_t msTime = millis()-GPS_TimeSync.sysTime;
       uint8_t PktLen=24; if(TxPktLen) PktLen=TxPktLen;
       int Len=sprintf(Line, "<%10u:%4d [%d:%d] #%d %3.1fdBm ",
@@ -912,7 +924,8 @@ static void Radio_ConfigLoRa(float BW, uint8_t SF, uint8_t PreambleLen, uint8_t 
 static void Radio_ConfigMESHT(uint8_t CRa=1) { Radio_ConfigLoRa(250.0f, 7, 16, 0x2B, CRa); } // 8 preamble symbols, SYNC=0x2B
 
 static void Radio_TxMESHT(MESHT_Packet &Packet)           // transmit a MESHT packet
-{ uint32_t msDead=millis();
+{ Radio_RXEN(0);
+  uint32_t msDead=millis();
   Radio.transmit(Packet.Byte, Packet.Len);                // not clear, if we should wait here for the transmission to complete ?
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);       // [usec]
   Radio_TxCredit-=usTxTime/1000;
@@ -969,6 +982,7 @@ static int Radio_RxFANET(uint32_t msTimeLen, TimeSync &TimeRef)    // FANET rece
 static void Radio_TxFANET(FANET_Packet &Packet)                    // transmit a FANET packet
 { // Serial.printf("FNT Tx[%d] %06X\n", Packet.Len, Packet.getAddr());
   uint32_t msDead = millis();
+  Radio_RXEN(0);
   Radio.transmit(Packet.Byte, Packet.Len); Packet.Done=1;          // not clear, if we should wait here for the transmission to complete ?
   uint32_t usTxTime=Radio.getTimeOnAir(Packet.Len);                // [usec]
   Radio_TxCredit-=usTxTime/1000;
@@ -1017,7 +1031,8 @@ static int Radio_FANETslot(float BW, float Freq, float TxPower, uint32_t msTimeL
   Radio.standby();
   Radio_ConfigFANET(BW);                               // setup for FANET, includes switching from FSK to LoRa
   Radio_setFrequency(Freq);                          // set frequency
-  Radio.startReceive();                              // start receiving
+  Radio_RXEN(1);
+  Radio.startReceive();                                   // start receiving
   XorShift64(Random.Word);                           // randomize
   int PktCount=0;
   if(TxPacket)
@@ -1052,12 +1067,14 @@ LoRaWANnode WANdev;
 
 static void Radio_TxLoRaWAN(uint8_t *Packet, uint8_t PktLen)
 { // Serial.printf("WAN Tx[%d]\n", PktLen);
+  Radio_RXEN(0);
   Radio.transmit(Packet, PktLen); }
 
 static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLen, float *RSSI=0, float *SNR=0, float *FreqOfs=0)
 { uint32_t msStart=millis();
   // Serial.printf("RxLoRaWAN(%dms)\n", msTimeLen);
-  Radio.startReceive();                             // start receiving
+  Radio_RXEN(1);
+  Radio.startReceive();
   for( ; ; )
   { vTaskDelay(1);
     uint32_t Now = millis();
@@ -1199,20 +1216,27 @@ void Radio_Task(void *Parms)
   State = Radio.setFrequency(1e-6*Radio_FreqPlan.BaseFreq, 1); // calibrate
   if(State==0) Radio_Cache_Clear();
   Radio.setTCXO(1.6);
-  Radio.setDio2AsRfSwitch();
+#ifdef Radio_PinRXEN                  // Wio-Tracker needs to control TX/RX switch explicitely
+  pinMode(Radio_PinRXEN, OUTPUT);
+  Radio_RXEN(1);
+#else
+  Radio.setDio2AsRfSwitch();          // this is for "normal" modules, not sure if this should be set for Wio-Tracker ?
+#endif
   // Radio.setDio1Action(IRQcall);
 #endif
 
   TimeSync &TimeRef = GPS_TimeSync;
 
   int Len=sprintf(Line, "RF chip %s%s detected", Radio_ChipType, HardwareStatus.Radio?"":" NOT");
+#ifdef CONS_OUTPUT
   if(xSemaphoreTake(CONS_Mutex, 20))
   { Serial.println(Line);
     xSemaphoreGive(CONS_Mutex); }
+#endif
 
   for( ; ; )
-  { if(!HardwareStatus.Radio) { delay(1000); continue; }
-    if(PowerMode==0) { Radio.standby(); Radio.sleep(); Radio_Cache_Clear(); delay(5000); continue; }
+  { if(!HardwareStatus.Radio) { vTaskDelay(1000); continue; }
+    if(PowerMode==0) { Radio.standby(); Radio.sleep(); Radio_Cache_Clear(); vTaskDelay(5000); continue; }
 
     int PktCount=0;
 
@@ -1253,7 +1277,8 @@ void Radio_Task(void *Parms)
     { float BW=250.0f; if(Radio_FreqPlan.Plan>1) BW=500.0f;      // for plans 2,3 and 4 bandwidth 500kHz
       Radio_ConfigFANET(BW);
       Radio_setFrequency(1e-6*FreqFNT);
-      Radio.startReceive();                                      // start receiving FANET
+      Radio_RXEN(1);
+      Radio.startReceive();
       for( ; ; )
       { PktCount+=Radio_FANETrxPacket(TimeRef);                  // any packet received ?
         if(FNT_TxFIFO.Full()) break;                             // when FANET packet to transmit, then stop this loop
@@ -1288,12 +1313,13 @@ void Radio_Task(void *Parms)
       Radio.standby();
       Radio_ConfigSysID(RxSysID, RxPktLen, 1, RxSYNC, RxSyncLen);
       Radio_setFrequency(RxFreq);
+      Radio_RXEN(1);
       Radio.startReceive();
       uint32_t msLive = millis();
       for( ; ; )
       { vTaskDelay(1);
         PktCount+=Radio_Receive(RxPktLen, RxSysID, RxChannel, TimeRef);
-        if(ADSL_TxFIFO.Full()) break;                                  // break when an ADS-L packet appears
+        if(ADSL_TxFIFO.Full()) break;                                  // break when an ADS-L packet for transmisson appears
         uint32_t Now = millis();
         uint32_t msTime = Now-msStart;                                 // [ms] time since start
         if(msTime>=msTimeLeft) break; }
@@ -1313,6 +1339,7 @@ void Radio_Task(void *Parms)
     { if(msTimeLeft>0) vTaskDelay(msTimeLeft); }
 #endif // WITH_FANET_SLOT
 
+    /// debug print
     // if(xSemaphoreTake(CONS_Mutex, 20))
     // { Serial.printf("Radio: %10d:%8d %4dms\n", TimeRef.UTC, TimeRef.sysTime, msTime);
     //   xSemaphoreGive(CONS_Mutex); }
@@ -1540,9 +1567,11 @@ void Radio_Task(void *Parms)
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',
              // FSK_RxFIFO.isCorrupt()?'!':'_', PAW_TxFIFO.isCorrupt()?'!':'_');
     PktCountSum=0; Radio_msLiveTime=0; Radio_msDeadTime=0;
-    if((Parameters.Verbose&0b01) && xSemaphoreTake(CONS_Mutex, 30))
-    { Serial.println(Line);
+#ifdef CONS_OUTPUT
+    if(Parameters.Verbose>0 && CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 30))
+    { if(CONS_UART_Free()>LineLen) Serial.println(Line);
       xSemaphoreGive(CONS_Mutex); }
+#endif
     Line[LineLen++]='\n'; Line[LineLen]=0;
     SysLog_Line(Line, LineLen, 0, 25, 1);
   }

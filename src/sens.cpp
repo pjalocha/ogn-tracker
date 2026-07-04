@@ -111,6 +111,20 @@ static Delay<int32_t, 8>        PressDelay; // 4-second delay for long-term clim
 
 static char Line[128];                      // line to prepare the barometer NMEA sentence
 
+static void SendNMEA(const char *Line, uint8_t Len, TickType_t Timeout)
+{
+#ifdef WITH_BLE_SPP
+  if(Len>0 && xSemaphoreTake(BLE_Mutex, Timeout))
+  { if(BLE_UART_Free()>Len) Format_String(BLE_UART_Write, Line, 0, Len);
+    xSemaphoreGive(BLE_Mutex); }
+#endif
+#ifdef CONS_OUTPUT
+  if(Parameters.Verbose>0 && CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, Timeout))
+  { if(CONS_UART_Free()>Len) Format_String(CONS_UART_Write, Line, 0, Len);
+    xSemaphoreGive(CONS_Mutex); }
+#endif
+}
+
 static uint8_t InitBaro(void)
 { Baro.Bus=BARO_I2C;
   uint8_t Err=Baro.CheckID();
@@ -272,11 +286,7 @@ static void ProcBaro(void)
       Line[Len++]=','; }
 #endif
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose & 0b01)
-    { if(xSemaphoreTake(CONS_Mutex, 20))
-      { Format_String(CONS_UART_Write, Line, 0, Len);                       // send NMEA sentence to the console (UART1)
-        xSemaphoreGive(CONS_Mutex); }
-    }
+    SendNMEA(Line, Len, 20);
     SysLog_Line(Line, Len, 0, 10, 1);
 
     Len=0;                                                           // start preparing the PGRMZ NMEA sentence
@@ -287,11 +297,7 @@ static void ProcBaro(void)
     Len+=Format_String(Line+Len, "f,");                              // normally f for feet, but metres and m works with XcSoar
     Len+=Format_String(Line+Len, "3");                               // 1 no fix, 2 - 2D, 3 - 3D; assume 3D for now
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose & 0b01)
-    { if(xSemaphoreTake(CONS_Mutex, 10))
-      { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
-        xSemaphoreGive(CONS_Mutex); }
-    }
+    SendNMEA(Line, Len, 10);
     SysLog_Line(Line, Len, 0, 10, 1);
 
     Len=0;
@@ -307,11 +313,7 @@ static void ProcBaro(void)
     Len+=Format_UnsDec(Line+Len, (BatteryVoltage+128)>>8, 4, 3);     // [mV] Battery voltage
     // Len+=Format_String(Line+Len, "999");                          // [%] battery level
     Len+=NMEA_AppendCheckCRNL(Line, Len);
-    if(Parameters.Verbose & 0b01)
-    { if(xSemaphoreTake(CONS_Mutex, 20))
-      { Format_String(CONS_UART_Write, Line, 0, Len);                           // send NMEA sentence to the console (UART1)
-        xSemaphoreGive(CONS_Mutex); }
-    }
+    SendNMEA(Line, Len, 20);
     SysLog_Line(Line, Len, 0, 10, 1);
 
 }
@@ -451,56 +453,58 @@ void vTaskSENS(void* pvParameters)
   uint8_t IMUDetected = InitIMUSensor();
 #endif
 
-  xSemaphoreTake(CONS_Mutex, 25);
-  Format_String(CONS_UART_Write, "TaskSENS:");
+#ifdef CONS_OUTPUT
+  if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+  { Format_String(CONS_UART_Write, "TaskSENS:");
 
 #ifdef WITH_BMP180
-  Format_String(CONS_UART_Write, " BMP180: ");
-  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, "not detected");
+    Format_String(CONS_UART_Write, " BMP180: ");
+    if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+           else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_BMP280
-  Format_String(CONS_UART_Write, " BMP280: ");
-  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, "not detected");
+    Format_String(CONS_UART_Write, " BMP280: ");
+    if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+           else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_BME280
-  Format_String(CONS_UART_Write, " BME280: ");
-  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, "not detected");
+    Format_String(CONS_UART_Write, " BME280: ");
+    if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+           else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_MS5607
-  Format_String(CONS_UART_Write, " MS5607: ");
-  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, "not detected");
+    Format_String(CONS_UART_Write, " MS5607: ");
+    if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+           else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_MS5611
-  Format_String(CONS_UART_Write, " MS5611: ");
-  if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
-         else  Format_String(CONS_UART_Write, "not detected");
+    Format_String(CONS_UART_Write, " MS5611: ");
+    if(Detected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, Detected); }
+           else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_QMC63XX
-  Format_String(CONS_UART_Write, " ");
-  Format_String(CONS_UART_Write, MagSensor.Name());
-  Format_String(CONS_UART_Write, ": ");
-  if(MagDetected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, MagDetected); }
-            else  Format_String(CONS_UART_Write, "not detected");
+    Format_String(CONS_UART_Write, " ");
+    Format_String(CONS_UART_Write, MagSensor.Name());
+    Format_String(CONS_UART_Write, ": ");
+    if(MagDetected) { Format_String(CONS_UART_Write, "@"); Format_Hex(CONS_UART_Write, MagDetected); }
+              else  Format_String(CONS_UART_Write, "not detected");
 #endif
 
 #ifdef WITH_QMI8658
-  Format_String(CONS_UART_Write, " QMI8658: ");
-  if(IMUDetected) { Format_String(CONS_UART_Write, "ID:"); Format_Hex(CONS_UART_Write, IMUDetected); }
-            else  { Format_String(CONS_UART_Write, "not detected ID:");
-                    Format_Hex(CONS_UART_Write, IMUSensor.ID); }
+    Format_String(CONS_UART_Write, " QMI8658: ");
+    if(IMUDetected) { Format_String(CONS_UART_Write, "ID:"); Format_Hex(CONS_UART_Write, IMUDetected); }
+              else  { Format_String(CONS_UART_Write, "not detected ID:");
+                      Format_Hex(CONS_UART_Write, IMUSensor.ID); }
 #endif
 
-  Format_String(CONS_UART_Write, "\n");
-  xSemaphoreGive(CONS_Mutex);
+    Format_String(CONS_UART_Write, "\n");
+    xSemaphoreGive(CONS_Mutex); }
+#endif
 
   while(1)
   {

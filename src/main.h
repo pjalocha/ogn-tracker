@@ -154,6 +154,14 @@ extern AXP20X_Class AXP;
 int  CONS_UART_Read       (uint8_t &Byte); // non-blocking
 void CONS_UART_Write      (char     Byte); // blocking
 int  CONS_UART_Free       (void);          // how many bytes can be written to the transmit buffer
+bool CONS_UART_isConnected(void);
+
+#ifdef WITH_BLE_SPP
+extern SemaphoreHandle_t BLE_Mutex;
+bool BLE_isConnected(void);
+void BLE_UART_Write(char Byte);
+int  BLE_UART_Free(void);
+#endif
 
 int   GPS_UART_Full         (void);
 int   GPS_UART_Read         (uint8_t &Byte);

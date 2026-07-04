@@ -34,8 +34,10 @@ static GDL90_REPORT    GDL_REPORT;
 #include "mesht-proto.h"
 #endif
 
-#ifdef WITH_THINKNODE_M5
+#if defined(WITH_THINKNODE_M5) || defined(WITH_EPAPER)
 uint8_t AlarmThresh = 4;              // 0: all alarms, 1: only 1 or higher, 2: only 2 or higher, 3: only three or higher, 4: all blocked
+#elif defined(WITH_WIO_TRACKER)
+uint8_t AlarmThresh = 0;
 #else
 const uint8_t AlarmThresh = 0;
 #endif
@@ -57,7 +59,8 @@ void Sound_TrafficWarn(const LookOut_Target *Tgt)
   uint16_t HorDist = Tgt->HorDist;       // [0.5]
   uint16_t Bearing = Tgt->getBearing();  //
   int16_t RelBearing = Look.getRelBearing(Tgt);
-  if(xSemaphoreTake(CONS_Mutex, 25))
+#ifdef CONS_OUTPUT
+  if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
   { Format_String(CONS_UART_Write, "Traffic: ");
     CONS_UART_Write('#');
     CONS_UART_Write('0'+WarnLevel);
@@ -75,6 +78,7 @@ void Sound_TrafficWarn(const LookOut_Target *Tgt)
     Format_UnsDec(CONS_UART_Write, (uint16_t)(TimeMargin/2));
     Format_String(CONS_UART_Write, "s\n");
     xSemaphoreGive(CONS_Mutex); }
+#endif
   // SoundMsg("Traffic");
 }
 #endif
@@ -140,7 +144,7 @@ Relay_PrioQueue<ADSL_RxPacket, RelayQueueSize>           ADSL_RelayQueue;       
 static void PrintRelayQueue(uint8_t Idx)                    // for debug
 { uint8_t Len=0;
   // Len+=Format_String(Line+Len, "");
-  xSemaphoreTake(CONS_Mutex, 25);
+  if(!xSemaphoreTake(CONS_Mutex, 25) return;
   // Format_String(CONS_UART_Write, Line, Len);
   Line[Len++]='['; Len+=Format_Hex(Line+Len, Idx); Line[Len++]=']'; Line[Len++]=' ';
   Len+=OGN_RelayQueue.Print(Line+Len);
@@ -286,6 +290,9 @@ static bool getTelemStatus(ADSL_Packet &Packet, const GPS_Position *GPS)
   Packet.setRelay(0);
   Packet.Telemetry.Header.TelemType=0x0;                            // 0 => device status
   if(GPS) GPS->EncodeTelemetry(Packet);
+#ifdef WITH_NRF52
+  if(Packet.Telemetry.Baro.Temperature==(-128)) Packet.Telemetry.Baro.Temperature = (readMCUtemperature()+2)/5;
+#endif
 #ifdef WITH_SX1276
   if(Packet.Telemetry.Baro.Temperature==(-128)) Packet.Telemetry.Baro.Temperature=Radio_ChipTemperature*2;
 #endif
@@ -335,21 +342,21 @@ static uint16_t ReadBattery(void)
   // PrevBattVolt = BattVolt;
 
 #ifdef DEBUG_PRINT
-  xSemaphoreTake(CONS_Mutex, 25);
-  Format_String(CONS_UART_Write, "Battery: ");
-  // Format_UnsDec(CONS_UART_Write, BattVolt);
-  // CONS_UART_Write(' ');
-  // Format_UnsDec(CONS_UART_Write, PrevBattVolt);
-  // CONS_UART_Write(' ');
-  // Format_UnsDec(CONS_UART_Write, BatteryVoltage, 2);
-  // CONS_UART_Write(' ');
-  // Format_SignDec(CONS_UART_Write, BatteryVoltageRate, 2);
-  // CONS_UART_Write(' ');
-  Format_UnsDec(CONS_UART_Write, (10*BatteryVoltage+128)>>8, 5, 4);
-  Format_String(CONS_UART_Write, "V ");
-  Format_SignDec(CONS_UART_Write, (600*BatteryVoltageRate+128)>>8, 3, 1);
-  Format_String(CONS_UART_Write, "mV/min\n");
-  xSemaphoreGive(CONS_Mutex);
+  if(xSemaphoreTake(CONS_Mutex, 25))
+  { Format_String(CONS_UART_Write, "Battery: ");
+    // Format_UnsDec(CONS_UART_Write, BattVolt);
+    // CONS_UART_Write(' ');
+    // Format_UnsDec(CONS_UART_Write, PrevBattVolt);
+    // CONS_UART_Write(' ');
+    // Format_UnsDec(CONS_UART_Write, BatteryVoltage, 2);
+    // CONS_UART_Write(' ');
+    // Format_SignDec(CONS_UART_Write, BatteryVoltageRate, 2);
+    // CONS_UART_Write(' ');
+    Format_UnsDec(CONS_UART_Write, (10*BatteryVoltage+128)>>8, 5, 4);
+    Format_String(CONS_UART_Write, "V ");
+    Format_SignDec(CONS_UART_Write, (600*BatteryVoltageRate+128)>>8, 3, 1);
+    Format_String(CONS_UART_Write, "mV/min\n");
+    xSemaphoreGive(CONS_Mutex); }
 #endif
 // #endif
   return BattVolt; }
@@ -391,7 +398,7 @@ static void ReadStatus(OGN_Packet &Packet)
   uint8_t RxRateLog2=0; RxRate>>=1; while(RxRate) { RxRate>>=1; RxRateLog2++; }
   Packet.Status.RxRate = RxRateLog2;
 
-  if(Parameters.Verbose & 0b01)
+  if(Parameters.Verbose>0)
   { uint8_t Len=0;
     Len+=Format_String(Line+Len, "$POGNR,");                                  // NMEA report: radio status
     Len+=Format_UnsDec(Line+Len, (uint32_t)Radio_FreqPlan.Plan);              // which frequency plan
@@ -423,9 +430,11 @@ static void ReadStatus(OGN_Packet &Packet)
     Len+=NMEA_AppendCheckCRNL(Line, Len);                                    // append NMEA check-sum and CR+NL
     // LogLine(Line);
     // if(CONS_UART_Free()>=128)
-    if(xSemaphoreTake(CONS_Mutex, 25))
-    { Format_String(CONS_UART_Write, Line, 0, Len);                          // send the NMEA out to the console
+#ifdef CONS_OUTPUT
+    if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+    { if(CONS_UART_Free()>Len) Format_String(CONS_UART_Write, Line, 0, Len);                          // send the NMEA out to the console
       xSemaphoreGive(CONS_Mutex); }
+#endif
     SysLog_Line(Line, Len, 0, 25, 1);
   }
 }
@@ -565,10 +574,12 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
     //          RxPacket->Packet.Header.AddrType, RxPacket->Packet.Header.Address, LatDist, LonDist);
 #ifdef WITH_POGNT
     { uint8_t Len=RxPacket->WritePOGNT(Line);                                         // print on the console as $POGNT
-      if(Parameters.Verbose & 0b01)
-      if(xSemaphoreTake(CONS_Mutex, 25))
+#ifdef CONS_OUTPUT
+      if(Parameters.Verbose>0)
+      if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
       { Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
+#endif
       SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif
@@ -609,23 +620,28 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
      if(Signif || Warn) IGClog_OGN_FIFO.Write(*RxPacket);
 #endif
 #ifdef WITH_PFLAA
-    if(Parameters.Verbose & 0b01)
     { uint8_t Len=0;
 #ifdef WITH_LOOKOUT
       if(Tgt) { Len=Tgt->WritePFLAA(Line); }
       else
 #endif
       { Len=RxPacket->WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.DecodeAltitude()-GPS_Altitude/10); }
-      if(Len>0)
-      if(xSemaphoreTake(CONS_Mutex, 25))
-      { Format_String(CONS_UART_Write, Line, 0, Len);
+#ifdef WITH_BLE_SPP
+      if(Len>0 && xSemaphoreTake(BLE_Mutex, 25))
+      { if(BLE_UART_Free()>Len) Format_String(BLE_UART_Write, Line, 0, Len);
+        xSemaphoreGive(BLE_Mutex); }
+#endif
+#ifdef CONS_OUTPUT
+      if(Parameters.Verbose>0 && Len>0 && CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+      { if(CONS_UART_Free()>Len) Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
+#endif
       if(Len>0) SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif // WITH_PFLAA
 /*
 #ifdef WITH_PFLAA
-    if( (Parameters.Verbose & 0b01)   // print PFLAA on the console for the received packet
+    if( (Parameters.Verbose>0)   // print PFLAA on the console for the received packet
 #ifdef WITH_LOOKOUT
     && (!Tgt)
 #endif
@@ -738,23 +754,28 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     if(Signif || Warn) IGClog_ADSL_FIFO.Write(*RxPacket);
 #endif
 #ifdef WITH_PFLAA
-    if(Parameters.Verbose & 0b01)
     { uint8_t Len=0;
 #ifdef WITH_LOOKOUT
       if(Tgt) { Len=Tgt->WritePFLAA(Line); }
       else
 #endif
       { Len=RxPacket->Packet.WritePFLAA(Line, Warn, LatDist, LonDist, RxPacket->Packet.getAlt()-(GPS_Altitude+GPS_GeoidSepar)/10); }
-      if(Len>0)
-      if(xSemaphoreTake(CONS_Mutex, 25))
-      { Format_String(CONS_UART_Write, Line, 0, Len);
+#ifdef WITH_BLE_SPP
+      if(Len>0 && xSemaphoreTake(BLE_Mutex, 25))
+      { if(BLE_UART_Free()>Len) Format_String(BLE_UART_Write, Line, 0, Len);
+        xSemaphoreGive(BLE_Mutex); }
+#endif
+#ifdef CONS_OUTPUT
+      if(Parameters.Verbose>0 && Len>0 && CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+      { if(CONS_UART_Free()>Len) Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
+#endif
       if(Len>0) SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif // WITH_PFLAA
 /*
 #ifdef WITH_PFLAA
-    if( Parameters.Verbose & 0b01   // print PFLAA on the console for received packets
+    if( Parameters.Verbose>0   // print PFLAA on the console for received packets
 #ifdef WITH_LOOKOUT
     && (!Tgt)
 #endif
@@ -906,7 +927,6 @@ static void DecodeRxFLR(FSK_RxPacket *RxPkt)
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 {
 #ifdef WITH_SDLOG
-  // if(Parameters.Verbose&0b10)
   { int Len=sprintf(Line, ">%u:%4d [%d:%d] #%d %+4.1fdBm ",                // dump received packet to the SD log
           RxPkt->Time, RxPkt->msTime, RxPkt->SysID, RxPkt->Bytes, RxPkt->Channel, -0.5*RxPkt->RSSI);
     for(uint8_t Idx=0; Idx<RxPkt->Bytes; Idx++)
@@ -1005,14 +1025,14 @@ void vTaskPROC(void* pvParameters)
     { FSK_RxPacket *RxPkt = FSK_RxFIFO.getRead();                        // check for new received packets
       if(RxPkt==0) break;                                                // if there is a new received packet
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, 25);
-      Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
-      CONS_UART_Write('.');
-      Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
-      Format_String(CONS_UART_Write, " FSK_RxFIFO -> ");
-      RxPkt->Print(CONS_UART_Write);
-      // CONS_UART_Write('\r'); CONS_UART_Write('\n');
-      xSemaphoreGive(CONS_Mutex);
+      if(xSemaphoreTake(CONS_Mutex, 25))
+      { Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
+        CONS_UART_Write('.');
+        Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
+        Format_String(CONS_UART_Write, " FSK_RxFIFO -> ");
+        RxPkt->Print(CONS_UART_Write);
+        // CONS_UART_Write('\r'); CONS_UART_Write('\n');
+        xSemaphoreGive(CONS_Mutex); }
 #endif
       DecodeRxPacket(RxPkt);                                            // decode and process the received packet
       FSK_RxFIFO.Read(); }                                              // remove this packet from the queue
@@ -1028,16 +1048,18 @@ void vTaskPROC(void* pvParameters)
     TickType_t msTime;                                                  // [msec]
     TimeSync_Time(Time, msTime);
     uint32_t SlotTime=Time;
+    if(msTime<200) SlotTime--;                                          // lasts up to 0.200sec after the PPS
+/*
 #ifdef WITH_GPS_UBX
-    if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+    if(msTime<250) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
 #ifdef WITH_GPS_PCAS
-    if(msTime<200) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+    if(msTime<250) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
 #ifdef WITH_GPS_MTK
-    if(msTime<300) SlotTime--;                                          // lasts up to 0.300sec after the PPS
+    if(msTime<250) SlotTime--;                                          // lasts up to 0.300sec after the PPS
 #endif
-
+*/
     if(SlotTime==PrevSlotTime) continue;                                // stil same time slot, go back to RX processing
     // Serial.printf("PROC: %u(%u)\n", SlotTime, PrevSlotTime);
 
@@ -1047,29 +1069,17 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_MAVLINK
     GPS_Position *Position = GPS_getPosition(BestIdx, BestResid, (SlotTime-1)%60, 0);
 #else
-    GPS_Position *Position = GPS_getPosition(BestIdx, BestResid, SlotTime%60, 0); // get GPS position which isReady
+    GPS_Position *Position = 0;
+    for(uint8_t Try=0; Try<5; Try++)
+    { Position = GPS_getPosition(BestIdx, BestResid, SlotTime%60, 0); // get GPS position which isReady
+      if(Position && BestResid==0) break;
+      vTaskDelay(20); }
 #endif
-    // GPS_Position *Position = GPS_getPosition();
 #ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, 25);
-    // Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
-    // Format_UnsDec(CONS_UART_Write, Time%60, 2);
-    Format_UnsDec(CONS_UART_Write, Time, 10);
-    CONS_UART_Write('.');
-    // Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
-    Format_UnsDec(CONS_UART_Write, msTime, 3);
-    Format_String(CONS_UART_Write, " -> getPos(");
-    Format_UnsDec(CONS_UART_Write, SlotTime%60, 2);
-    Format_String(CONS_UART_Write, ") => ");
-    if(Position)
-    { Format_UnsDec(CONS_UART_Write, (uint16_t)BestIdx);
-      CONS_UART_Write(':');
-      Format_SignDec(CONS_UART_Write, BestResid, 4, 3);
-      Format_String(CONS_UART_Write, "s"); }
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
+    if(xSemaphoreTake(CONS_Mutex, 25))
+    { Serial.printf("%10u:%4d GPS_getPosition([%u], %+d, %u, 0)\n", Time, msTime, BestIdx, BestResid, SlotTime%60);
+      xSemaphoreGive(CONS_Mutex); }
 #endif
-
 #ifdef WITH_GDL90
     GDL_HEARTBEAT.Clear();
     GDL_HEARTBEAT.Initialized=1;
@@ -1097,6 +1107,9 @@ void vTaskPROC(void* pvParameters)
 #endif
     if(Position)
     { Position->EncodeStatus(StatPacket.Packet);             // encode GPS altitude and pressure/temperature/humidity
+#ifdef WITH_NRF52
+      if(!StatPacket.Packet.hasTemperature()) StatPacket.Packet.EncodeTemperature(readMCUtemperature());
+#endif
 #ifdef WITH_SX1276
       if(!StatPacket.Packet.hasTemperature()) StatPacket.Packet.EncodeTemperature((int16_t)Radio_ChipTemperature*10);
 #endif
@@ -1124,15 +1137,6 @@ void vTaskPROC(void* pvParameters)
           if(Parameters.AddrType==0) Parameters.Address = Parameters.Address^Random.RX; // random-ID if enabled
           GhostSilent=NewGhostSilent; }
       }
-
-#ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, 25);
-      Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60);
-      CONS_UART_Write('.');
-      Format_UnsDec(CONS_UART_Write, TimeSync_msTime(), 3);
-      Format_String(CONS_UART_Write, " -> Sent\n");
-      xSemaphoreGive(CONS_Mutex);
-#endif // DEBUG_PRINT
       PosTime=Position->getUnixTime();
       PosPacket.Packet.HeaderWord=0;
       PosPacket.Packet.Header.Address    = Parameters.Address;         // set address
@@ -1149,9 +1153,9 @@ void vTaskPROC(void* pvParameters)
       PosPacket.Packet.Position.AcftType = Parameters.AcftType;        // aircraft-type
       PosPacket.Packet.Position.Stealth = Parameters.Stealth;
 #ifdef DEBUG_PRINT
+      if(xSemaphoreTake(CONS_Mutex, 25))
       { uint8_t Len=PosPacket.Packet.WriteAPRS(Line, PosTime);         // print on the console as APRS message
         Line[Len++]='\n'; Line[Len]=0;
-        xSemaphoreTake(CONS_Mutex, 25);
         Format_String(CONS_UART_Write, Line, 0, Len);
         xSemaphoreGive(CONS_Mutex); }
 #endif // DEBUG_PRINT
@@ -1236,18 +1240,31 @@ void vTaskPROC(void* pvParameters)
       // process own position, get the most dangerous target
       const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime, Position->GeoidSeparation/10);
 #ifdef WITH_PFLAA
-      if(Parameters.Verbose & 0b01)
-      { if(xSemaphoreTake(CONS_Mutex, 25))
-        { Look.WritePFLA(CONS_UART_Write);                                // produce PFLAU and PFLAA for all tracked targets
+#ifdef WITH_BLE_SPP
+      if(xSemaphoreTake(BLE_Mutex, 25))
+      { if(BLE_UART_Free()>80) Look.WritePFLA(BLE_UART_Write);
+        xSemaphoreGive(BLE_Mutex); }
+#endif
+#ifdef CONS_OUTPUT
+      if(Parameters.Verbose>0)
+      { if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+        { if(CONS_UART_Free()>80) Look.WritePFLA(CONS_UART_Write);        // produce PFLAU and PFLAA for all tracked targets
           xSemaphoreGive(CONS_Mutex); }
         Look.WritePFLA(SysLog_Line, 0, 25, 1);                            // write all PFLA'a to the console/sys-log
       }
+#endif
 #else // WITH_PFLAA
-      if(Parameters.Verbose & 0b01)
       { uint8_t Len=Look.WritePFLAU(Line);                                // $PFLAU, overall status
-        if(xSemaphoreTake(CONS_Mutex, 25))
-        { Format_String(CONS_UART_Write, Line, 0, Len);
+#ifdef WITH_BLE_SPP
+        if(Len>0 && xSemaphoreTake(BLE_Mutex, 25))
+        { if(BLE_UART_Free()>Len) Format_String(BLE_UART_Write, Line, 0, Len);
+          xSemaphoreGive(BLE_Mutex); }
+#endif
+#ifdef CONS_OUTPUT
+        if(Parameters.Verbose>0 && CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+        { if(CONS_UART_Free()>Len) Format_String(CONS_UART_Write, Line, 0, Len);
           xSemaphoreGive(CONS_Mutex); }
+#endif
         SysLog_Line(Line, Len, 0, 25, 1);
       }
 #endif // WITH_PFLAA
@@ -1297,11 +1314,17 @@ void vTaskPROC(void* pvParameters)
       }
 #else  // WITH_LOOKOUT
 #ifdef WITH_PFLAA
-      if(Parameters.Verbose & 0b01)
       { uint8_t Len=Look.WritePFLAU(Line);                                // $PFLAU, overall status
-        if(xSemaphoreTake(CONS_Mutex, 25))
-        { Format_String(CONS_UART_Write, Line, 0, Len);
+#ifdef WITH_BLE_SPP
+        if(Len>0 && xSemaphoreTake(BLE_Mutex, 25))
+        { if(BLE_UART_Free()>Len) Format_String(BLE_UART_Write, Line, 0, Len);
+          xSemaphoreGive(BLE_Mutex); }
+#endif
+#ifdef CONS_OUTPUT
+        if(Parameters.Verbose>0 && CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
+        { if(CONS_UART_Free()>Len) Format_String(CONS_UART_Write, Line, 0, Len);
           xSemaphoreGive(CONS_Mutex); }
+#endif
         SysLog_Line(Line, Len, 0, 25, 1);
       }
 #endif // WITH_PFLAA
@@ -1323,12 +1346,12 @@ void vTaskPROC(void* pvParameters)
       TxPacket->Packet = PosPacket.Packet;                            // copy the position packet
       TxPacket->Packet.Whiten(); TxPacket->calcFEC();                 // whiten and calculate FEC code
 #ifdef DEBUG_PRINT
-      xSemaphoreTake(CONS_Mutex, 25);
-      Format_UnsDec(CONS_UART_Write, PosTime);
-      Format_String(CONS_UART_Write, " (_) TxFIFO <- ");
-      Format_Hex(CONS_UART_Write, TxPacket->Packet.HeaderWord);
-      CONS_UART_Write('\r'); CONS_UART_Write('\n');
-      xSemaphoreGive(CONS_Mutex);
+      if(xSemaphoreTake(CONS_Mutex, 25))
+      { Format_UnsDec(CONS_UART_Write, PosTime);
+        Format_String(CONS_UART_Write, " (_) TxFIFO <- ");
+        Format_Hex(CONS_UART_Write, TxPacket->Packet.HeaderWord);
+        CONS_UART_Write('\r'); CONS_UART_Write('\n');
+        xSemaphoreGive(CONS_Mutex); }
 #endif // DEBUG_PRINT
       XorShift32(Random.RX);
       if(PosTime && ((Random.RX&0x7)==0) )                              // send if some position in the packet and at 1/8 normal rate
@@ -1339,9 +1362,9 @@ void vTaskPROC(void* pvParameters)
     // char Line[128];
     Line[0]='0'+OGN_TxFIFO.Full(); Line[1]=' ';                  // print number of packets in the TxFIFO
     OGN_RelayQueue.Print(Line+2);                                   // dump the relay queue
-    xSemaphoreTake(CONS_Mutex, 25);
-    Format_String(CONS_UART_Write, Line);
-    xSemaphoreGive(CONS_Mutex);
+    if(xSemaphoreTake(CONS_Mutex, 25))
+    { Format_String(CONS_UART_Write, Line);
+      xSemaphoreGive(CONS_Mutex); }
 #endif // DEBUG_PRINT
 
 #ifdef WITH_FANET
