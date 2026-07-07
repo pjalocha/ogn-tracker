@@ -1037,16 +1037,17 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      return (Info.Data[Idx]>>Ofs) | ((Info.Data[Idx+1]<<Len)&0x7F); }
 
    void clrInfo(void)                                    // clear the info packet
-   { Info.DataChars=0;                                   // clear number of characters
+   { Data[0]=0; Data[1]=0; Data[2]=0; Data[3]=0;
+     // Info.DataChars=0;                                   // clear number of characters
      Info.ReportType=1; }                                // just in case: set the report-type
 
    uint8_t addInfo(const char *Value, uint8_t InfoType)  // add an info field
    { uint8_t Idx=Info.DataChars;                         // number of characters already in the info packet
      if(Idx) Idx++;                                      // if at least one already, then skip over the terminator
-     if(Idx>=15) return 0;                               // return zero when no more speca
+     if(Idx>=15) return 0;                               // return zero when no more space
      uint8_t Len=0;
-     for( ; ; )
-     { uint8_t Char = Value[Len]; if(Char==0) break;
+     for( ; ; )                                          // loop over characters in Value
+     { uint8_t Char = Value[Len]; if(Char==0) break;     // next character, NL means end-of-string
        if(Idx>=15) return 0;                             // return zero when no more space
        setInfoChar(Char, Idx++);
        Len++; }

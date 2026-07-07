@@ -187,24 +187,25 @@ static void CleanRelayQueue(uint32_t Time, uint32_t Delay=12) // remove "old" pa
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
-static uint16_t InfoParmIdx = 0;            // the round-robin index to info records in info packets
+static uint16_t InfoParmIdx = 0;                // the round-robin index to info records in info packets
 
-static int ReadInfo(OGN1_Packet &Packet)
+static int ReadInfo(OGN1_Packet &Packet)        // encode info elements in the OGN packet
 { Packet.clrInfo();
   uint8_t ParmIdx;
-  for( ParmIdx=InfoParmIdx; ; )
+  for( ParmIdx=InfoParmIdx; ; )                 // loop over info elements
   { const char *Parm = Parameters.InfoParmValue(ParmIdx);
-    if(Parm)
+    if(Parm)                                    //
     { // printf("Parm[%d]=%s\n", ParmIdx, Parm);
-      if(Parm[0])
-      { int Add=Packet.addInfo(Parm, ParmIdx); if(Add==0) break; }
+      if(Parm[0])                               // if parameter is not empty
+      { int Add=Packet.addInfo(Parm, ParmIdx);  // add this info element to the packet
+        if(Add==0) break; }                     // if not enough space to add then end the loop
     }
-    ParmIdx++; if(ParmIdx>=Parameters.InfoParmNum) ParmIdx=0;
-    if(ParmIdx==InfoParmIdx) break;
+    ParmIdx++; if(ParmIdx>=Parameters.InfoParmNum) ParmIdx=0; // wrap around the info list
+    if(ParmIdx==InfoParmIdx) break;             // break when you get to where you started from
   }
-  InfoParmIdx = ParmIdx;
-  Packet.setInfoCheck();
-  return Packet.Info.DataChars; }                                      // zero => no info parameters were stored
+  InfoParmIdx = ParmIdx;                        // remember where you stopped
+  Packet.setInfoCheck();                        // 
+  return Packet.Info.DataChars; }               // zero => no info parameters were stored
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
