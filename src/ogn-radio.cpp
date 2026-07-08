@@ -431,7 +431,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
   State=Radio_setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
   if(State) ErrState=State;
 #ifdef WITH_SX1262
-  State=Radio_setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
+  State=Radio_setRxBandwidth(234.3); // 156.2, 187.2, *234.3, 312.0  // [kHz]  bandwidth - single side
   if(State) ErrState=State;
 #endif
 #if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
@@ -556,9 +556,9 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   if(State) ErrState=State;
   State=Radio_setBitRate(38.4);                                     // [kpbs] 38.4kbps bit rate
   if(State) ErrState=State;
-  State=Radio_setFrequencyDeviation(12.5);                           // [kHz]  +/-12.5kHz deviation
+  State=Radio_setFrequencyDeviation(12.5);                          // [kHz]  +/-12.5kHz deviation
   if(State) ErrState=State;
-  State=Radio_setRxBandwidth(58.6);                                 // [kHz]  50kHz bandwidth
+  State=Radio_setRxBandwidth(58.6); ///  46.9, 58.6, 78.2, 93.8     // [kHz]  50kHz bandwidth
   if(State) ErrState=State;
 #if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
   if(RxMode)
@@ -638,7 +638,7 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   State=Radio_setFrequencyDeviation(50.0);                          // [kHz]  +/-50kHz deviation
   if(State) ErrState=State;
 #ifdef WITH_SX1262
-  State=Radio_setRxBandwidth(234.3);                                // [kHz]  bandwidth - single side
+  State=Radio_setRxBandwidth(312.0); // 156.2, 187.2, *234.3, 312.0  // [kHz]  bandwidth - single side
   if(State) ErrState=State;
 #endif
 #if defined(WITH_SX1276) && defined(WITH_SX1276_AFC)
@@ -649,11 +649,11 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
     if(State) ErrState=State; }
 #elif defined(WITH_SX1276)
   if(RxMode)
-  { State=Radio_setRxBandwidth(250.0);                                // [kHz]  bandwidth - single side
+  { State=Radio_setRxBandwidth(250.0);                               // [kHz]  bandwidth - single side
     if(State) ErrState=State; }
 #endif
 #ifdef WITH_SX1262
-  State=Radio_setPreambleLength(RxMode?0:16);                       // [bits] minimal preamble
+  State=Radio_setPreambleLength(RxMode?8:16);      ///              // [bits] minimal preamble
 #endif
 #ifdef WITH_SX1276
   State=Radio_setPreambleLength(RxMode?8:16);                       // [bits] minimal preamble
@@ -715,7 +715,7 @@ static int Radio_Receive(uint8_t PktLen, uint8_t SysID, uint8_t Channel, TimeSyn
   // RxPkt->PosTime = TimeRef.sysTime;                                      // [ms]
   RxPkt->msTime = (int32_t)(msTime-TimeRef.sysTime);                     // [ms] time since the reference PPS
   RxPkt->Time = TimeRef.UTC;                                             // [sec] UTC PPS
-  if(RxPkt->msTime<0) { RxPkt->msTime+1000; RxPkt->Time--; }
+  if(RxPkt->msTime<0) { RxPkt->msTime+=1000; RxPkt->Time--; }
   RxPkt->SNR  = 0; // PktStat>>8;                                        // this should be SYNC RSSI but it does not fit this way
   uint8_t RxPktLen=PktLen; if(!Manch && PktLen==0) RxPktLen=RxLen;
   if(Manch)                                                              // if Manchester encoding expected
@@ -1255,7 +1255,7 @@ void Radio_Task(void *Parms)
     xSemaphoreGive(CONS_Mutex); }
 #endif
 
-  for( ; ; )
+  for( ; ; )                                                      // main task loop: infinite
   { if(!HardwareStatus.Radio) { vTaskDelay(1000); continue; }
     if(PowerMode==0) { Radio.standby(); Radio.sleep(); Radio_Cache_Clear(); vTaskDelay(5000); continue; }
 
@@ -1269,7 +1269,7 @@ void Radio_Task(void *Parms)
     uint32_t msTime = TimeRef.getFracTime(millis());
     uint32_t msTimeLeft = 0;
     if(Slot1_Start>msTime) msTimeLeft=Slot1_Start-msTime;                      // [ms] time left for the uplink slot
-    // Serial.printf("Uplink-slot: %d [sec] %3d Left:%3d [ms]\n", TimeRef.UTC, msTime, msTimeLeft);
+    // Serial.printf("HDR slot: %u:%4d => %3dms before direct\n", TimeRef.UTC, msTime, msTimeLeft); ///
 
     // msTime = millis()-TimeRef.sysTime;
     // msTime = TimeRef.getFracTime(millis());
@@ -1349,15 +1349,14 @@ void Radio_Task(void *Parms)
       const ADSL_Packet *AdslPacket = ADSL_TxFIFO.getRead();
       if(AdslPacket)
       { const uint8_t *TxPkt = &(AdslPacket->Version);
-        uint32_t Now = millis();
-        uint32_t msTime = Now-TimeRef.sysTime;
-        // Serial.printf("Slot:uplitx: %10u:%8u %4ums (%d)\n", TimeRef.UTC, TimeRef.sysTime, msTime, PktCount);
+        uint32_t msTime = TimeRef.getFracTime(millis());
+        // Serial.printf("HDR pkt: %u:%4ums Rx:%d\n", TimeRef.UTC, msTime, PktCount); ///
         if(msTime<Slot1_Start)
           PktCount+=Radio_Slot(RxChannel, Parameters.TxPower+13, Slot1_Start-msTime, TxPkt, RxSysID, RxChannel, RxSysID, TimeRef);
       }
     }
     else
-    { if(msTimeLeft>0) vTaskDelay(msTimeLeft); }
+    { if(msTimeLeft>0) vTaskDelay(msTimeLeft); }  // we could do something more useful here ?
 #endif // WITH_FANET_SLOT
 
     /// debug print
@@ -1447,10 +1446,10 @@ void Radio_Task(void *Parms)
     uint32_t SlotLen = Slot2_Start-msTime;            // [ms] make the first slot longer, closer to ADS-L primary slot
          if(SlotLen>800) SlotLen=800;
     else if(SlotLen<200) SlotLen=200;
-    // Serial.printf("Slot #0: %3d:%3d\n", msTime, SlotLen);
+    // Serial.printf("Slot #0: %u:%4d => %3dms\n", TimeRef.UTC, msTime, SlotLen); ///
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
-    msTime = millis()-TimeRef.sysTime;                // [ms] time since PPS
+    msTime = TimeRef.getFracTime(millis());           // [ms] time since PPS
     SlotLen = Slot2_End-msTime;
 #ifdef WITH_LORAWAN
     static uint8_t WAN_RxPacket[64];                  //
@@ -1489,7 +1488,7 @@ void Radio_Task(void *Parms)
 
          if(SlotLen<100) SlotLen=100;
     else if(SlotLen>400) SlotLen=400;
-    // Serial.printf("Slot #1: %3d:%3d\n", msTime, SlotLen);
+    // Serial.printf("Slot #1: %u:%4d => %3dms\n", TimeRef.UTC, msTime, SlotLen); ///
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
 
 #ifdef WITH_SX1276
