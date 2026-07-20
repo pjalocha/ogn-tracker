@@ -610,6 +610,14 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      return AcftType<16 ? AprsIcon[AcftType]:0;
    }
 
+   static uint8_t ReadAddrType(const char *Msg)
+   { if(memcmp(Msg, "RND", 3)==0) return 0;
+     if(memcmp(Msg, "ICA", 3)==0) return 1;
+     if(memcmp(Msg, "FLR", 3)==0) return 2;
+     if(memcmp(Msg, "FNT", 3)==0) return 2;
+     if(memcmp(Msg, "OGN", 3)==0) return 3;
+     return 0; }
+
    int ReadAPRS(const char *Msg)                                                 // read an APRS position message
    { Clear();
 
@@ -966,7 +974,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      return (Heading*3600+512)>>10; }
 
    void EncodeHeading(int16_t Heading)
-   { Position.Heading = (((int32_t)Heading<<10)+180)/3600; }
+   { Position.Heading = (((int32_t)Heading<<10)+1800)/3600; }
 
    void setHeadingAngle(uint16_t HeadingAngle)
    { Position.Heading = (((HeadingAngle+32)>>6)); }
@@ -1137,3 +1145,4 @@ class OGN1_DiffPacket
 */
 
 #endif // of __OGN1_H__
+

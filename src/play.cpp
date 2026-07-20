@@ -8,8 +8,6 @@
 
 #ifdef WITH_BEEPER
 
-// #define WITH_BEEPER_GEN
-
 #ifdef WITH_BEEPER_GEN   // if buzzer with internal single-tone generator is used
 
 void Beep_Init(void)
