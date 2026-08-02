@@ -42,6 +42,8 @@ class LookOut_Target           // describes a flying aircrafts
      { // bool   isMoving   :1;   // is a moving target
        bool   isTracked  :1;   // is being tracked or only stored
        // bool   isHidden   :1;   // hidden track, should normally not be revealed
+       bool   OtherMe    :1;   // this is a dupplicated-me target
+       bool   Omni       :1;   // this is an omni-directional target
        bool   Reported   :1;   // this target has already been reported with $PFLAA or GDL90
        bool   Alloc      :1;   // is allocated or not (a free slot, where a new target can go into)
      }  __attribute__((packed));
@@ -74,6 +76,11 @@ class LookOut_Target           // describes a flying aircrafts
 
   public:
    void Clear(void) { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF; }
+
+   void setCall(const char *NewCall)
+   { if(NewCall==0) return;
+     strncpy(Call, NewCall, 10);
+     Call[10]=0; }
 
    uint32_t calcSafeDist(void)
    { if(WarnLevel) return 0xFF-WarnLevel;
@@ -174,7 +181,7 @@ template <const uint8_t MaxTgts=32>
    int32_t     RefLon;                    // [1/60000deg]
    int32_t     RefAlt;                    // [m]
    int16_t     LatCos;                    // [2^-12]
-   int16_t     GeoidSepar;                // [m]
+   int16_t     GeoidSepar;                // [m] Own Geoid Separation
 
    int8_t      Pred;                      // [0.5sec] amount of time by which position has been predicted/extrapolated
 
@@ -217,7 +224,7 @@ template <const uint8_t MaxTgts=32>
 
    void Clear(void)
    { Flags=0; ID=0; Pos.Clear(); Pred=0;
-     GeoidSepar=0;
+     GeoidSepar=40;
      Targets=0; SafestIdx=0;
      WorstTgtIdx=0; WorstTgtTime=0xFF;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
@@ -430,9 +437,8 @@ template <const uint8_t MaxTgts=32>
      return Pos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange); }
 
    template <class OGNx_Packet> // after starting the algorithm, process own position packets
-    const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime, int OwnGeoidSepar) // process own position
+    const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime) // process own position
    { // printf("ProcessOwn() ... entry\n");
-     GeoidSepar=OwnGeoidSepar;
      if(hasPosition)                                                                      // in my position is valid
      { Acft_RelPos NewPos;
        if(NewPos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0)       // read the new position
@@ -483,7 +489,7 @@ template <const uint8_t MaxTgts=32>
      if( (!Tgt->Alloc) || (Tgt->DistMargin>0) ) return 0;                              // return NULL if target is not a thread
      return Tgt; }                                                                     // return the pointer to the most dangerous target
 
-   const LookOut_Target *ProcessTarget(ADSL_Packet &Packet, uint32_t RxTime)           // process a position of another aircraft in ADS-L format
+   LookOut_Target *ProcessTarget(ADSL_Packet &Packet, uint32_t RxTime)           // process a position of another aircraft in ADS-L format
    { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
      if(!hasPosition) return 0;
      LookOut_Target New;                                                               // parse into a scratch slot first
@@ -497,7 +503,7 @@ template <const uint8_t MaxTgts=32>
      return ProcessTarget(&New); }
 
    template <class OGNx_Packet>
-    const LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
+    LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
    { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
      if(!hasPosition) return 0;
      LookOut_Target New;                                                               // parse into a scratch slot first
@@ -520,10 +526,9 @@ template <const uint8_t MaxTgts=32>
      { if(Target[Idx].Alloc==0) continue;
        if(Target[Idx].ID==ID) break; }
      if(Idx>=MaxTargets) return;
-     strncpy(Target[Idx].Call, Call, 10);
-     Target[Idx].Call[10]=0; }
+     Target[Idx].setCall(Call); }
 
-   const LookOut_Target *ProcessTarget(LookOut_Target *New)
+   LookOut_Target *ProcessTarget(LookOut_Target *New)
    {  // printf("ProcessTarget() ... %08X\n", ID);
      uint8_t OldIdx;
      LookOut_Target *Old = 0;                                                          // possible previous index to the same ID

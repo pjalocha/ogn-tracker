@@ -1238,8 +1238,9 @@ void vTaskPROC(void* pvParameters)
 #endif
 
 #ifdef WITH_LOOKOUT
+      Look.GeoidSepar = Position->GeoidSeparation/10;                 // [m]
       // process own position, get the most dangerous target
-      const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime, Position->GeoidSeparation/10);
+      const LookOut_Target *Tgt=Look.ProcessOwn(PosPacket.Packet, PosTime);
 #ifdef WITH_PFLAA
 #ifdef WITH_BLE_SPP
       if(xSemaphoreTake(BLE_Mutex, 25))

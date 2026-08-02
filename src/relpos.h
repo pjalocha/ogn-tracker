@@ -306,7 +306,8 @@ class Acft_RelPos                // 3-D relative position with speed and turn ra
      Error=Packet.getHorAcc();
      return 0; }
 
-   void Write(ADSL_Packet &Packet, uint8_t RefTime, int32_t RefLat, int32_t RefLon, int32_t RefAlt, uint16_t LatCos=3000, int16_t GeoidSepar=40)
+   void Write(ADSL_Packet &Packet, uint8_t RefTime, int32_t RefLat, int32_t RefLon, int32_t RefAlt,
+              uint16_t LatCos=3000, int16_t GeoidSepar=40)
    { int16_t Time=RefTime+(T>>1);
      Packet.TimeStamp = ((Time%15)<<2) | ((T&1)<<1);
      Packet.setDistanceVectorOGN(X>>1, Y>>1, RefLat, RefLon, LatCos);
