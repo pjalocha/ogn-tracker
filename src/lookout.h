@@ -66,16 +66,20 @@ class LookOut_Target           // describes a flying aircrafts
    int16_t        Vy;        // [0.5m/s]
    int16_t        Vz;        // [0.5m/s]
 
-   // int16_t        dStdAlt;   // [0.5m]
-   // int16_t        Ax;        // [1/16m/s^2] relative acceleration of target
-   // int16_t        Ay;        // [1/16m/s^2]
-
   uint16_t   HorDist;        // [0.5m]   relative horizontal distance to target
    int16_t  MissTime;        // [0.5s]   estimated closest approach time
   uint16_t  MissDist;        // [0.5m]   estimated closest approach distance
 
+  uint16_t  RxProtPipe[8];
+  // uint16_t  RxProtPipeMask;
+
   public:
-   void Clear(void) { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF; }
+   void Clear(void)
+   { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF;
+     for(uint8_t Prot=0; Prot<8; Prot++)
+       RxProtPipe[Prot]=0;
+     // RxProtPipeMask=1;
+   }
 
    void setCall(const char *NewCall)
    { if(NewCall==0) return;
@@ -218,6 +222,8 @@ template <const uint8_t MaxTgts=32>
    LookOut_Target *Sort[MaxTargets];      // for sorting, vector of pointers
    uint8_t SortSize;
 
+   uint16_t  RxProtPipeMask;
+
    char Line[120];                        // for printing
 
   public:
@@ -229,6 +235,7 @@ template <const uint8_t MaxTgts=32>
      WorstTgtIdx=0; WorstTgtTime=0xFF;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { Target[Idx].Clear(); }
+     RxProtPipeMask=1;
      SortSize=0; }
 
    static bool Lower_Dist(LookOut_Target *A, LookOut_Target *B) // sorting function: lower distance first
@@ -439,7 +446,9 @@ template <const uint8_t MaxTgts=32>
    template <class OGNx_Packet> // after starting the algorithm, process own position packets
     const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime) // process own position
    { // printf("ProcessOwn() ... entry\n");
-     if(hasPosition)                                                                      // in my position is valid
+    RxProtPipeMask<<=1; if(RxProtPipeMask==0) RxProtPipeMask=1;
+
+    if(hasPosition)                                                                      // in my position is valid
      { Acft_RelPos NewPos;
        if(NewPos.Read(OwnPos, RxTime, RefTime, RefLat, RefLon, RefAlt, LatCos, DistRange)<0)       // read the new position
        { hasPosition = Start(OwnPos, RxTime)>=0; }                                                // if this fails, attempt to start from the new position
