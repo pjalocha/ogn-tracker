@@ -30,6 +30,10 @@ static GDL90_GEOMALT   GDL_GEOMALT;
 static GDL90_REPORT    GDL_REPORT;
 #endif
 
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+#include "mobile.h"
+#endif
+
 #ifdef WITH_MESHT
 #include "mesht-proto.h"
 #endif
@@ -603,6 +607,9 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+      MOBILE_SendOGN(RxPacket->Packet);                      // send received OGN packet to the mobile network
+#endif
 //     Len=RxPacket->Packet.WriteAPRS(Line, RxTime);                                     // print on the console as APRS message
 //     xSemaphoreTake(CONS_Mutex, 25);
 //     Format_String(CONS_UART_Write, Line, 0, Len);
@@ -748,6 +755,9 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);   // add to the relay queue and get the previ>
     // Serial.printf("ProcessRxADSL: %02X:%06X [%+5d,%+5d]m\n",
     //          RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), LatDist, LonDist);
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+    MOBILE_SendADSL(RxPacket->Packet);                      // send received ADS-L packet to the mobile network
+#endif
 #ifdef WITH_LOOKOUT
     const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime);           // process the received target postion
     if(Tgt) Warn=Tgt->WarnLevel;                                                      // remember warning level of this target
@@ -844,6 +854,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   RxPacket->RxRSSI  = RxPkt->RSSI;
   RxPacket->Correct = 1;
   RxPacket->Packet.Descramble();
+  RxPacket->Packet.setEncrKey(3);
   // Serial.printf("DecodeRxADSL : #%d %02X:%06X Err:%d Corr:%d\n",
   //          RxPkt->Channel, RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), RxPkt->ErrCount(), CorrErr);
   ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time, 1); }
@@ -1028,6 +1039,9 @@ static void DecodeRxPacket(FANET_RxPacket *RxPkt)
 #endif
 void vTaskPROC(void* pvParameters)
 {
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+  MOBILE_Init();
+#endif
   OGN_RelayQueue.Clear();
   ADSL_RelayQueue.Clear();
 
@@ -1219,6 +1233,9 @@ void vTaskPROC(void* pvParameters)
           Position->Encode(*AdslPacket);                                       // encode position packet from the GPS
           AdslPacket->Scramble();
           AdslPacket->setCRC24();
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+          MOBILE_SendADSL(*AdslPacket);                                        // send own position packet to the mobile network
+#endif
           ADSL_TxFIFO.Write();
           if(AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);       // if stationary then don't transmit position every second
           if(Radio_TxCredit<=0) TxBackOff+=1; }
@@ -1437,6 +1454,9 @@ void vTaskPROC(void* pvParameters)
     while(OGN_TxFIFO.Full()<2 && AlarmLevel==0)                  // any received OGN positions to be relayed ?
     { OGN_TxPacket<OGN_Packet> *RelayPacket = OGN_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
+// #if defined(WITH_MOBILE) && defined(WITH_WIFI)
+//       MOBILE_SendOGN(RelayPacket->Packet);                       // note: the packet is scrambled here
+// #endif
       OGN_TxFIFO.Write(); }
 
 #ifdef WITH_ADSL
@@ -1450,13 +1470,23 @@ void vTaskPROC(void* pvParameters)
         if(getTelemetry(*Packet, Position, StatTxPkt))
         { Packet->Scramble();
           Packet->setCRC24();
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+          MOBILE_SendADSL(*Packet);                      // send own status/info packet to the mobile network
+#endif
           ADSL_TxFIFO.Write(); }
         StatTxBackOff = GhostSilent ? 2+Random.RX%3:10+Random.RX%5; }
     }
     while(ADSL_TxFIFO.Full()<2 && AlarmLevel==0)         // any received ADS-L pasition to be relayed ?
     { ADSL_Packet *RelayPacket = ADSL_TxFIFO.getWrite();
       if(!GetRelayPacket(RelayPacket)) break;
+// #if defined(WITH_MOBILE) && defined(WITH_WIFI)
+//       MOBILE_SendADSL(*RelayPacket);
+// #endif
       ADSL_TxFIFO.Write(); }
+#endif
+
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+    MOBILE_Flush();
 #endif
 
     CleanRelayQueue(SlotTime);

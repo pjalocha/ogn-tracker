@@ -332,6 +332,7 @@ class GDL90_RxMsg // receiver for the MAV messages
    bool isGeomAlt(void)      const { return getID()==11   && Len== 7; }  // own height-above-Ellipsoid
    bool isOwnReport(void)    const { return getID()==10   && Len==30; }  // own position
    bool isTrafReport(void)   const { return getID()==20   && Len==30; }  // other aircraft position
+   bool isADSL      (void)   const { return getID()==0x60 && Len>=24; }  // ADS-L
    bool isForeFlight(void)   const { return getID()==0x65; }             // ForeFlight: can be software ID or AHRS
    bool isSkyLink(void)      const { return getID()==0x31; }             // SkyLink:
    bool isStxHeartBeat(void) const { return getID()==0xCC && Len== 4; }  // Stratux heart-beat
