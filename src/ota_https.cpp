@@ -19,27 +19,12 @@
 
 #ifdef WITH_OTA_HTTPS
 
-static wifi_ap_record_t AP[8]; // lists of Access Points from the WiFi scan
-static uint16_t APs = 0;
-
 static const int MaxLineLen = 1024;
 static char Line[MaxLineLen]; // for printing and buffering
 
 extern "C" bool verifyRollbackLater()
 {
   return true;
-}
-
-static void AP_Print(void (*Output)(char)) // print lists of AP's
-{
-  for (uint16_t Idx = 0; Idx < APs; Idx++)
-  {
-    Line[0] = '0' + Idx;
-    Line[1] = ':';
-    Line[2] = ' ';
-    uint8_t Len = 3 + AP_Print(Line + 3, AP + Idx);
-    Format_String(Output, Line);
-  }
 }
 
 void url_strip_to_path(char *url)
@@ -352,7 +337,6 @@ static void DownloadInstallFirmware(void)
     xSemaphoreGive(CONS_Mutex);
 #endif
     esp_https_ota_abort(https_ota_handle);
-    xSemaphoreGive(WIFI_Mutex);
     return;
   }
 
@@ -476,99 +460,14 @@ extern "C" void vTaskOTA(void *pvParameters)
       continue;
     }
 
+    if(!WIFI_WaitForConnection(60000))
+    { vTaskDelay(pdMS_TO_TICKS(60000));
+      continue; }
+
     xSemaphoreTake(WIFI_Mutex, portMAX_DELAY);
-    vTaskDelay(3000);
-
-    esp_err_t Err = WIFI_Start(); // start WiFi in station-mode
-#ifdef DEBUG_PRINT
-    if (Err >= ESP_ERR_WIFI_BASE)
-    {
-      Err -= ESP_ERR_WIFI_BASE;
-      xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-      Format_String(CONS_UART_Write, "OTA WIFI_Start() error => ");
-      Format_SignDec(CONS_UART_Write, Err);
-      Format_String(CONS_UART_Write, "\n");
-      xSemaphoreGive(CONS_Mutex);
-    }
-#endif
-
-    vTaskDelay(1000);
-    APs = 8;
-    Err = WIFI_PassiveScan(AP, APs); // perform a passive scan: find Access Points around
-#ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "OTA WIFI_PassiveScan() => ");
-    if (Err >= ESP_ERR_WIFI_BASE)
-      Err -= ESP_ERR_WIFI_BASE;
-    Format_SignDec(CONS_UART_Write, Err);
-    CONS_UART_Write('/');
-    Format_UnsDec(CONS_UART_Write, APs);
-    Format_String(CONS_UART_Write, "\n");
-    if (Err == ESP_OK)
-      AP_Print(CONS_UART_Write);
-    xSemaphoreGive(CONS_Mutex);
-#endif
-
-    if (Err == ESP_OK) // if WiFi scan went well
-    {
-      for (uint16_t Idx = 0; Idx < APs; Idx++) // loop over Access Points
-      {
-        const char *NetName = (const char *)(AP[Idx].ssid);
-        const char *NetPass = 0;
-        if (AP[Idx].authmode != WIFI_AUTH_OPEN) // if not an open network
-        {
-          NetPass = Parameters.getWIFIpass(NetName); // then search the password
-          if (NetPass == 0)
-            continue;
-        } // give up if no password for this network
-        Err = WIFI_Connect(AP + Idx, NetPass);
-#ifdef DEBUG_PRINT
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-        Format_String(CONS_UART_Write, NetName);
-        if (NetPass)
-        {
-          CONS_UART_Write('/');
-          Format_String(CONS_UART_Write, NetPass);
-        }
-        CONS_UART_Write(':');
-        CONS_UART_Write(' ');
-        Format_String(CONS_UART_Write, "OTA WIFI_Connect() => ");
-        if (Err >= ESP_ERR_WIFI_BASE)
-          Err -= ESP_ERR_WIFI_BASE;
-        Format_SignDec(CONS_UART_Write, Err);
-        Format_String(CONS_UART_Write, "\n");
-        xSemaphoreGive(CONS_Mutex);
-#endif
-        if (Err)
-          continue; // if connection failed then give up ad move on to the next AP
-
-        WIFI_IP.ip.addr = 0;
-        WIFI_IP.gw.addr = 0;
-        for (uint8_t Idx = 0; Idx < 20; Idx++)
-        { // wait to obtain local IP from DHCP
-          vTaskDelay(1000);
-          // if(WIFI_State.isConnected==1) break;
-          if (WIFI_getLocalIP())
-          {
-            if (WIFI_IP.ip.addr && WIFI_IP.gw.addr)
-              break;
-          }
-        }
-
-#ifdef DEBUG_PRINT
-        xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-        Format_String(CONS_UART_Write, "Local IP: ");
-        IP_Print(CONS_UART_Write, WIFI_IP.ip.addr);
-        Format_String(CONS_UART_Write, " GW: ");
-        IP_Print(CONS_UART_Write, WIFI_IP.gw.addr);
-        Format_String(CONS_UART_Write, "\n");
-        xSemaphoreGive(CONS_Mutex);
-#endif
-        if (WIFI_IP.ip.addr == 0) // if getting local IP failed then give up and try another AP
-        {
-          WIFI_Disconnect();
-          continue;
-        }
+    if(!WIFI_isConnected())
+    { xSemaphoreGive(WIFI_Mutex);
+      continue; }
 
         // here we decide that previous OTA-received firmware works and can be retained
         // our test condition is successful WIFI connection
@@ -617,25 +516,6 @@ extern "C" void vTaskOTA(void *pvParameters)
             WIFI_setPowerSave(1);
           }
         }
-        vTaskDelay(1000);
-        WIFI_Disconnect();
-        WIFI_IP.ip.addr = 0;
-        vTaskDelay(1000);
-      }
-    }
-
-    vTaskDelay(1000);
-    Err = WIFI_Stop();
-#ifdef DEBUG_PRINT
-    xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-    Format_String(CONS_UART_Write, "OTA WIFI_Stop() => ");
-    if (Err >= ESP_ERR_WIFI_BASE)
-      Err -= ESP_ERR_WIFI_BASE;
-    Format_SignDec(CONS_UART_Write, Err);
-    Format_String(CONS_UART_Write, "\n");
-    xSemaphoreGive(CONS_Mutex);
-#endif
-
     xSemaphoreGive(WIFI_Mutex);
     vTaskDelay(60000); // wait 1 min
   }

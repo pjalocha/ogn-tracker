@@ -6,6 +6,14 @@
 #include "gps.h"
 #include "log.h"
 
+#ifdef WITH_WIFI
+#include "wifi.h"
+#endif
+
+#ifdef WITH_BLE_SPP
+#include "ble_spp.h"
+#endif
+
 #if defined(WITH_ST7789) && CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/tjpgd.h"
 #endif
@@ -458,6 +466,93 @@ int TFT_DrawLookout(void)
   if(Vert-TFT_LineVertTight<TFT.height())
     TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT.height()+TFT_LineVertTight-Vert, ST77XX_DARKBLUE);
   return 1; }
+
+static void TFT_DrawNetworkLine(int &Vert, const char *Line)
+{ TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line);
+  Vert+=TFT_LineVertTight; }
+
+int TFT_DrawNetwork(void)
+{
+#if defined(WITH_WIFI) || defined(WITH_BLE_SPP)
+  char Line[40];
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT_SetMainFont();
+  int Vert=TFT_TopVert;
+
+#ifdef WITH_WIFI
+  wifi_mode_t Mode=WIFI_MODE_NULL;
+  esp_err_t Err=esp_wifi_get_mode(&Mode);
+  const char *ModeName="unknown";
+  if(Err!=ESP_OK) ModeName="OFF";
+  else if(Mode==WIFI_MODE_NULL) ModeName="OFF";
+  else if(Mode==WIFI_MODE_STA) ModeName="STA";
+  else if(Mode==WIFI_MODE_AP) ModeName="AP";
+  else if(Mode==WIFI_MODE_APSTA) ModeName="AP+STA";
+
+  sprintf(Line, "WiFi: %s", ModeName);
+  TFT_DrawNetworkLine(Vert, Line);
+
+  const bool HasSTA=(Mode==WIFI_MODE_STA || Mode==WIFI_MODE_APSTA);
+  const bool HasAP =(Mode==WIFI_MODE_AP  || Mode==WIFI_MODE_APSTA);
+  tcpip_adapter_ip_info_t IPInfo={0, 0, 0};
+  bool HasIP=false;
+  if(HasSTA)
+  { if(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &IPInfo)==ESP_OK)
+      HasIP=IPInfo.ip.addr!=0; }
+  else if(HasAP)
+  { if(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &IPInfo)==ESP_OK)
+      HasIP=IPInfo.ip.addr!=0; }
+
+  if(Err!=ESP_OK) strcpy(Line, "Not initialized");
+  else if(Mode==WIFI_MODE_AP) strcpy(Line, "Active");
+  else if(HasIP || WIFI_State.hasIP==3) strcpy(Line, "Connected");
+  else if(WIFI_State.isConnected==3) strcpy(Line, "Associated");
+  else strcpy(Line, "Not connected");
+  TFT_DrawNetworkLine(Vert, Line);
+
+  if(HasIP)
+  { // strcpy(Line, "IP:");
+    IP_Print(Line, IPInfo.ip.addr);
+    TFT_DrawNetworkLine(Vert, Line); }
+  else
+    TFT_DrawNetworkLine(Vert, "No IP (yet)");
+
+  int RSSI=0;
+  bool HasRSSI=false;
+  if(HasSTA && (HasIP || WIFI_State.isConnected==3))
+    HasRSSI=esp_wifi_sta_get_rssi(&RSSI)==ESP_OK;
+  if(HasRSSI) sprintf(Line, "RSSI: %ddBm", RSSI);
+       else  strcpy(Line, "RSSI: n/a");
+  TFT_DrawNetworkLine(Vert, Line);
+
+  if(HasSTA && WIFI_Config.sta.ssid[0])
+  { sprintf(Line, "%.31s", (const char *)WIFI_Config.sta.ssid);
+    TFT_DrawNetworkLine(Vert, Line); }
+  else if(HasAP && WIFI_Config.ap.ssid[0])
+  { sprintf(Line, "%.31s", (const char *)WIFI_Config.ap.ssid);
+    TFT_DrawNetworkLine(Vert, Line); }
+#elif defined(WITH_BLE_SPP)
+  TFT_DrawNetworkLine(Vert, "BLE");
+  if(BLE_isConnected())
+    TFT_DrawNetworkLine(Vert, "Connected");
+  else
+    TFT_DrawNetworkLine(Vert, "Advertising");
+  TFT_DrawNetworkLine(Vert, "IP: n/a");
+  TFT_DrawNetworkLine(Vert, "RSSI: n/a");
+  if(Parameters.BTname[0])
+  { sprintf(Line, "%.31s", Parameters.BTname);
+    TFT_DrawNetworkLine(Vert, Line); }
+#endif
+
+  if(Vert<TFT.height())
+    TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT.height()-Vert+TFT_LineFillHeight, ST77XX_DARKBLUE);
+  // TFT_DrawBatt(TFT_BattX(), TFT_BattY);
+  return 1;
+#else
+  return 0;
+#endif
+}
 
 int TFT_DrawRFcounts(void)
 { char Line[32];

@@ -859,7 +859,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
    { LatDist = DecodeLatitude()-RefLat; if(abs(LatDist)>1080000) return -1; // to prevent overflow, corresponds to about 200km
      LatDist = (LatDist*1517+0x1000)>>13;      // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
      if(abs(LatDist)>MaxDist) return -1;
-     LonDist = DecodeLongitude()-RefLon; if(abs(LatDist)>1080000) return -1;
+     LonDist = DecodeLongitude()-RefLon; if(abs(LonDist)>1080000) return -1;
      LonDist = (LonDist*1517+0x1000)>>13;
      if(abs(LonDist)>(4*MaxDist)) return -1;
              LonDist = (LonDist*LatCos+0x800)>>12;

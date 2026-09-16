@@ -38,6 +38,13 @@ esp_err_t WIFI_Connect(wifi_ap_record_t *AP, const char *Pass, int8_t MinSig=(-9
 esp_err_t WIFI_Connect(const char *SSID, const char *Pass, int8_t MinSig=(-90));
 esp_err_t WIFI_Disconnect(void);
 
+bool WIFI_WaitForConnection(uint32_t TimeoutMs);
+
+#ifdef __cplusplus
+  extern "C"
+#endif
+void vTaskWIFI(void *pvParameters);
+
 uint32_t WIFI_getLocalIP(void);
 uint32_t WIFI_getBroadcastIP(void);
 uint32_t WIFI_getBroadcastIP(tcpip_adapter_if_t Iface);

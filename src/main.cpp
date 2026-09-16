@@ -535,7 +535,7 @@ void OGN_LED_Flash(void)
 
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 
-const  uint8_t  TFT_Pages      = 9;       // number of LCD pages
+const  uint8_t  TFT_Pages      = 10;      // number of LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
@@ -561,6 +561,7 @@ static int TFT_DrawPage(const GPS_Position *GPS)
   if(TFT_Page==4) return TFT_DrawRFcounts();
 #endif
   if(TFT_Page==5) return TFT_DrawLookout();
+  if(TFT_Page==9) return TFT_DrawNetwork();
   if(!GPS) return TFT_DrawID();
   if(TFT_Page==6) return TFT_DrawBaro(GPS);
   if(TFT_Page==7) return TFT_DrawLoRaWAN(GPS);
@@ -1150,7 +1151,7 @@ static void IRAM_ATTR PPS_Intr(void *Context)
   if(Cycles>0 && Cycles<=10 && abs(usResid)<Cycles*500)           // condition to accept the PPS edge
   { int32_t ResidErr = (usResid<<4)-PPS_usPeriodErr;              // [1/16us]
     if(Cycles>1) ResidErr/=Cycles;
-    PPS_usPeriodErr += (ResidErr+2)>>2;                         // [1/16us] average the PPS period error
+    PPS_usPeriodErr += (ResidErr+2)>>2;                           // [1/16us] average the PPS period error
     uint32_t ErrSqr = ResidErr*ResidErr;
     if(PPS_Intr_Count)                                            // if not the first edge in the series
     { PPS_usPrecTime += ((PPS_usPeriod<<4)+PPS_usPeriodErr)*Cycles;  // [1/16us] forcast the PPS time to the current PPS
@@ -1757,6 +1758,9 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  5000, NULL, 0, NULL);
 #endif
+#if defined(WITH_WIFI) && !defined(WITH_AP)
+  xTaskCreate(vTaskWIFI, "WIFI", 5000, NULL, 0, NULL);
+#endif
 #ifdef WITH_UPLOAD
   xTaskCreate(vTaskUPLOAD, "UPLOAD",  5000, NULL, 0, NULL);
 #endif
@@ -2003,6 +2007,66 @@ static void ProcessCtrlX(void)
     ESP.restart(); }
   LastTime=Time; }
 
+#ifdef WITH_WIFI
+static void PrintWiFi(void)
+{
+  if(!xSemaphoreTake(CONS_Mutex, 100)) return;
+
+  wifi_mode_t Mode=WIFI_MODE_NULL;
+  esp_err_t Err=esp_wifi_get_mode(&Mode);
+  Format_String(CONS_UART_Write, "WiFi: ");
+  if(Err!=ESP_OK)
+  { Format_String(CONS_UART_Write, "unknown, status: not initialized\n");
+    xSemaphoreGive(CONS_Mutex);
+    return; }
+
+  if(Mode==WIFI_MODE_NULL)       Format_String(CONS_UART_Write, "OFF");
+  else if(Mode==WIFI_MODE_STA)   Format_String(CONS_UART_Write, "STA");
+  else if(Mode==WIFI_MODE_AP)    Format_String(CONS_UART_Write, "AP");
+  else if(Mode==WIFI_MODE_APSTA) Format_String(CONS_UART_Write, "AP+STA");
+  else                           Format_String(CONS_UART_Write, "unknown");
+
+  tcpip_adapter_ip_info_t IPInfo={0, 0, 0};
+  bool HasIP=false;
+  if(Mode==WIFI_MODE_STA || Mode==WIFI_MODE_APSTA)
+  { if(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &IPInfo)==ESP_OK)
+      HasIP=IPInfo.ip.addr!=0; }
+  else if(Mode==WIFI_MODE_AP)
+  { if(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &IPInfo)==ESP_OK)
+      HasIP=IPInfo.ip.addr!=0; }
+
+  int RSSI=0;
+  bool HasRSSI=false;
+  if((Mode==WIFI_MODE_STA || Mode==WIFI_MODE_APSTA) &&
+     (HasIP || WIFI_State.isConnected==3))
+    HasRSSI=esp_wifi_sta_get_rssi(&RSSI)==ESP_OK;
+
+  // Format_String(CONS_UART_Write, ", status: ");
+  Format_String(CONS_UART_Write, ", ");
+  if(Mode==WIFI_MODE_NULL)
+    Format_String(CONS_UART_Write, "off");
+  else if(Mode==WIFI_MODE_AP)
+    Format_String(CONS_UART_Write, "active");
+  else if(HasIP || WIFI_State.hasIP==3)
+    Format_String(CONS_UART_Write, "connected");
+  else if(WIFI_State.isConnected==3)
+    Format_String(CONS_UART_Write, "associated");
+  else
+    Format_String(CONS_UART_Write, "not connected");
+  if(IPInfo.ip.addr!=0)
+  { // Format_String(CONS_UART_Write, ", IP: ");
+    Format_String(CONS_UART_Write, ", ");
+    IP_Print(CONS_UART_Write, IPInfo.ip.addr); }
+  if(HasRSSI)
+  { // Format_String(CONS_UART_Write, ", RSSI: ");
+    Format_String(CONS_UART_Write, ", ");
+    Format_SignDec(CONS_UART_Write, RSSI);
+    Format_String(CONS_UART_Write, " dBm"); }
+  Format_String(CONS_UART_Write, "\n");
+  xSemaphoreGive(CONS_Mutex);
+}
+#endif // WITH_WIFI
+
 static int ProcessInput(void)
 {
   const uint8_t CtrlB = 'B'-'@';
@@ -2012,6 +2076,7 @@ static int ProcessInput(void)
   const uint8_t CtrlO = 'O'-'@';
   const uint8_t CtrlP = 'P'-'@';
   const uint8_t CtrlT = 'T'-'@';
+  const uint8_t CtrlW = 'W'-'@';
   const uint8_t CtrlX = 'X'-'@';
 
   int Count=0;
@@ -2032,7 +2097,9 @@ static int ProcessInput(void)
 #endif
     if(Byte==CtrlX) ProcessCtrlX();                                // double Ctrl-X restarts the system
 #endif // of WITH_GPS_UBX_PASS
-
+#ifdef WITH_WIFI
+    if(Byte==CtrlW) PrintWiFi();
+#endif
 #ifdef WITH_OTA_HTTPS
     if(Byte==CtrlP) print_ota_status();                            // print OTA partitions
 #endif

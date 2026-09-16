@@ -39,6 +39,14 @@ static esp_err_t WIFI_event_handler(void *ctx, system_event_t *event)
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED: // #5 after WIFI_Connect();
       WIFI_State.isConnected=1;
+      WIFI_State.hasIP=1;
+      WIFI_IP.ip.addr=0;
+      WIFI_IP.gw.addr=0;
+      if(xSemaphoreTake(CONS_Mutex, 100))
+      { Format_String(CONS_UART_Write, "WIFI: station disconnected, reason: ");
+        Format_UnsDec(CONS_UART_Write, (uint16_t)event->event_info.disconnected.reason);
+        Format_String(CONS_UART_Write, "\n");
+        xSemaphoreGive(CONS_Mutex); }
       break;
     case SYSTEM_EVENT_STA_GOT_IP:       // #7
       // ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip)
@@ -46,6 +54,8 @@ static esp_err_t WIFI_event_handler(void *ctx, system_event_t *event)
       break;
     case SYSTEM_EVENT_STA_LOST_IP:      // #8
       WIFI_State.hasIP=1;
+      WIFI_IP.ip.addr=0;
+      WIFI_IP.gw.addr=0;
       break;
     default:
       break;

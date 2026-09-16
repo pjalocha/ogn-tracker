@@ -210,12 +210,12 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
 
    void Print(void) const
    { if(isPosition())
-       printf(" v%02X %4.1fs: %02X:%06X [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s\n",
-         Version, 0.25*TimeStamp, getAddrTable(), getAddress(), FNTtoFloat(getLat()), FNTtoFloat(getLon()),
+       printf(" %d:v%d %4.1fs: %02X:%06X [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s\n",
+         getEncrKey(), getVersion(), 0.25*TimeStamp, getAddrTable(), getAddress(), FNTtoFloat(getLat()), FNTtoFloat(getLon()),
          getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed());
      else
-       printf(" v%02X %4.1fs: %02X:%06X\n",
-         Version, 0.25*TimeStamp, getAddrTable(), getAddress() );
+       printf(" %d:v%d %4.1fs: %02X:%06X\n",
+         getEncrKey(), getVersion(), 0.25*TimeStamp, getAddrTable(), getAddress() );
    }
 
    int PrintGNSS(char *Out) const
@@ -489,6 +489,8 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    void  setVersion(uint8_t Ver)  { Version = (Version&0xF0) | Ver; } // set ADS-L version
    bool  hasSignature(void) const { return Version&0x10; }     // signature follows the radio packet
    uint8_t getEncrKey(void) const { return (Version>>5)&3; }   // 0 = XXTEA scrambling, 3 = no scrambling
+   void setEncrKey(uint8_t Key)   { Version = (Version&0x9F) | ((Key&3)<<5); }
+   bool isScrambled(void)   const { return getEncrKey()==0; }
 
    bool isRelay(void)     const { return Address[3]&0x80; }
    void setRelay(uint8_t Relay=1)  { Address[3] = (Address[3]&0x7F) | (Relay<<7); }
@@ -579,6 +581,155 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
      if(DiffSec>FwdMargin) DiffSec-=15;
      else if(DiffSec<=(-15+FwdMargin)) DiffSec+=15;
      return RefTime+DiffSec; }           // get out the correct position timestamp
+
+   static uint8_t ReadAPRSAddrType(const char *Msg)
+   { if(memcmp(Msg, "RND", 3)==0) return 0;
+     if(memcmp(Msg, "ICA", 3)==0) return 1;
+     if(memcmp(Msg, "FLR", 3)==0) return 2;
+     if(memcmp(Msg, "FNT", 3)==0) return 2;
+     if(memcmp(Msg, "OGN", 3)==0) return 3;
+     return 0; }
+
+   int ReadAPRS(const char *Msg, int32_t GeoidSepar)                  // read APRS; GeoidSepar [m], AMSL => HAE
+   { Init();
+     setEncrKey(3);
+     Emergency=1;
+     FlightState=2;
+     setAddrTypeOGN(0);
+     setAcftTypeOGN(0);
+     setSpeed(0);
+     setTrack(0);
+     clrAlt();
+     clrClimb();
+
+     const char *Data = strchr(Msg, ':'); if(Data==0) return -1; // where the time/position data starts
+     Data++;
+     const char *Dest = strchr(Msg, '>'); if(Dest==0) return -1; // where the destination call is
+     Dest++;
+     const char *Comma = strchr(Dest, ',');                       // the first comma after the destination call
+
+     uint32_t Address=0;
+     if(Read_Hex(Address, Msg+3)==6) setAddress(Address);
+     setAddrTypeOGN(ReadAPRSAddrType(Msg));
+
+     if(Comma)
+     { if(memcmp(Comma+1, "RELAY*", 6)==0) setRelay();
+       else if(strchr(Comma+1, '*')) setRelay(); }
+
+     if(Data[0]!='/') return -1;
+     int Sec, Min, Hour;
+     if(Data[7]=='h')                                            // HHMMSS UTC time
+     { Sec =Read_Dec2(Data+5); if(Sec<0)  return -1;
+       Min =Read_Dec2(Data+3); if(Min<0)  return -1;
+       Hour=Read_Dec2(Data+1); if(Hour<0) return -1; }
+     else if(Data[7]=='z')                                       // DDHHMM UTC time
+     { Sec =0;
+       Min =Read_Dec2(Data+5); if(Min<0) return -1;
+       Hour=Read_Dec2(Data+3); if(Hour<0) return -1; }
+     else return -1;
+
+     int Time = Sec + Min*60 + Hour*3600;
+     TimeStamp=(Time%15)<<2;
+     Data+=8;
+
+     int8_t LatDeg  = Read_Dec2(Data);   if(LatDeg<0) return -1;
+     int8_t LatMin  = Read_Dec2(Data+2); if(LatMin<0) return -1;
+     if(Data[4]!='.') return -1;
+     int8_t LatFrac = Read_Dec2(Data+5); if(LatFrac<0) return -1;
+     int32_t Latitude = (int32_t)LatDeg*600000 + (int32_t)LatMin*10000 + (int32_t)LatFrac*100;
+     char LatSign = Data[7];
+     Data+=9;
+
+     int16_t LonDeg  = Read_Dec3(Data);   if(LonDeg<0) return -1;
+     int8_t  LonMin  = Read_Dec2(Data+3); if(LonMin<0) return -1;
+     if(Data[5]!='.') return -1;
+     int8_t LonFrac = Read_Dec2(Data+6); if(LonFrac<0) return -1;
+     int32_t Longitude = (int32_t)LonDeg*600000 + (int32_t)LonMin*10000 + (int32_t)LonFrac*100;
+     char LonSign = Data[8];
+     Data+=10;
+
+     int16_t Speed=0;
+     int16_t Heading=0;
+     if(Data[3]=='/')
+     { Heading=Read_Dec3(Data);
+       Speed=Read_Dec3(Data+4);
+       if(Heading<0 || Speed<0) return -1;
+       Data+=7; }
+     setTrack(((int32_t)Heading*0x200+180)/360);
+     int32_t OGNspeed=((int32_t)Speed*337146+0x8000)>>16;       // [0.1m/s]
+     setSpeed((OGNspeed*4+5)/10);                               // [0.25m/s]
+
+     int32_t Altitude=0;
+     if((Data[0]=='/') && (Data[1]=='A') && (Data[2]=='='))
+     { int8_t AltLen;
+       if(Data[3]=='-')
+       { AltLen=Read_SignDec(Altitude, Data+3);
+         if(AltLen<2) return -1; }
+       else
+       { AltLen=Read_UnsDec(Altitude, Data+3);
+         if(AltLen!=6) return -1; }
+       setAlt(FeetToMeters(Altitude)+GeoidSepar);
+       Data+=3+AltLen; }
+
+     for( ; ; )
+     { if(Data[0]!=' ') break;
+       Data++;
+
+       if((Data[0]=='!') && (Data[1]=='W') && (Data[4]=='!'))
+       { Latitude  += (Data[2]-'0')*10;
+         Longitude += (Data[3]-'0')*10;
+         Data+=5; continue; }
+
+       if((Data[0]=='i') && (Data[1]=='d'))
+       { uint32_t ID;
+         if(Read_Hex(ID, Data+2)==8)
+         { setAddress(ID&0x00FFFFFF);
+           setAddrTypeOGN((ID>>24)&0x03);
+           setAcftTypeOGN((ID>>26)&0x0F);
+           Data+=10; continue; }
+       }
+
+       if((Data[0]=='F') && (Data[1]=='L') && (Data[5]=='.'))
+       { int16_t FLdec=Read_Dec3(Data+2);
+         int16_t FLfrac=Read_Dec2(Data+6);
+         if((FLdec<0) || (FLfrac<0)) return -1;
+         Data+=8; continue; }                                  // BasicPos has no standard-altitude field
+
+       if((Data[0]=='+') || (Data[0]=='-'))
+       { int32_t Value; int8_t Len=Read_Float1(Value, Data);
+         if(Len>0)
+         { Data+=Len;
+           if(memcmp(Data, "fpm", 3)==0)
+           { int32_t OGNclimb=(333*Value+0x8000)>>16;           // [0.1m/s]
+             setClimb((OGNclimb*8+5)/10); Data+=3; continue; }
+           if(memcmp(Data, "rot", 3)==0)
+           { Data+=3; continue; }                              // BasicPos has no turn-rate field
+         }
+       }
+
+       if((Data[0]=='g') && (Data[1]=='p') && (Data[2]=='s'))
+       { int16_t HorPrec=Read_Dec2(Data+3);
+         int8_t HorLen=2;
+         if(HorPrec<0) { HorPrec=Read_Dec1(Data+3); HorLen=1; }
+         if(HorPrec>=0 && Data[3+HorLen]=='x')
+         { int16_t VerPrec=Read_Dec2(Data+4+HorLen);
+           int8_t VerLen=2;
+           if(VerPrec<0) { VerPrec=Read_Dec1(Data+4+HorLen); VerLen=1; }
+           if(VerPrec>=0)
+           { if(HorPrec<63) setHorAcc(HorPrec);
+             if(VerPrec<63) setVerAcc(VerPrec);
+             Data+=4+HorLen+VerLen; continue; }
+         }
+       }
+       while(Data[0]>' ') Data++;
+     }
+
+     if(LatSign=='S') Latitude=(-Latitude); else if(LatSign!='N') return -1;
+     setLatOGN(Latitude);
+     if(LonSign=='W') Longitude=(-Longitude); else if(LonSign!='E') return -1;
+     setLonOGN(Longitude);
+
+     return Time; }                                             // [sec] return Time-of-Day
 
    uint8_t getHorAcc(void) const
    { const uint8_t Map[8] = { 63, 63, 63, 63, 63, 30, 10, 3 } ;
@@ -687,9 +838,11 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    // calculate distance vector [LatDist, LonDist] from a given reference [RefLat, Reflon]
    int calcDistanceVectorOGN(int32_t &LatDist, int32_t &LonDist, int32_t RefLat, int32_t RefLon,
                             uint16_t LatCos=3000, int32_t MaxDist=0x7FFF)
-   { LatDist = ((getLatOGN()-RefLat)*1517+0x1000)>>13;           // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
+   { LatDist = getLatOGN()-RefLat; if(abs(LatDist)>1080000) return -1;
+     LatDist = (LatDist*1517+0x1000)>>13;
      if(abs(LatDist)>MaxDist) return -1;
-     LonDist = ((getLonOGN()-RefLon)*1517+0x1000)>>13;
+     LonDist = getLonOGN()-RefLon; if(abs(LonDist)>1080000) return -1;
+     LonDist = (LonDist*1517+0x1000)>>13;
      if(abs(LonDist)>(4*MaxDist)) return -1;
              LonDist = (LonDist*LatCos+0x800)>>12;
      if(abs(LonDist)>MaxDist) return -1;

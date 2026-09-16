@@ -1,8 +1,8 @@
 # Espressif ESP32 Partition Table
 # Name, Type, SubType, Offset, Size, Flags
 # start at offset: 36 KB
-# for parameter storage: 64 KB
-nvs,data,nvs,0x9000,64K,
+# for parameter storage: 20 KB; 0xE000-0xFFFF is reserved for boot_app0.bin
+nvs,data,nvs,0x9000,20K,
 # 4 KB
 phy_init,data,phy,0x19000,4K,
 # application (code): 1800 KB

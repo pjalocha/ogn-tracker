@@ -1,7 +1,7 @@
 #pragma once
 
-const uint32_t Flasher_PattDouble = 0b0000011111000001111100000000000000000; // two flashes of 50 ms and 50ms space
-const uint32_t Flasher_PattTriple = 0b0000011111000001111100000111110000000; // three flashes like above
+const uint32_t Flasher_PattDouble = 0b00011111000001111100000000000000; // two flashes of 50 ms and 50ms space
+const uint32_t Flasher_PattTriple = 0b00011111000001111100000111110000; // three flashes like above
 
 void Flasher_Init(void);
 void Flasher_ON(bool ON=1);

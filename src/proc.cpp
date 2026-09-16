@@ -44,6 +44,20 @@ const uint8_t AlarmThresh = 0;
 uint8_t AlarmLevel = 0;               // current alarm level, from Lookout, 0=no alarm
 uint8_t GhostSilent = 0;              // if the Ghost-mode is silent
 
+static const int32_t  GhostAltitudeMargin = 350; // [m]
+static const uint32_t GhostAltitudeHold   = 30;  // [s] keep Ghost mode active after nearby traffic
+static uint32_t GhostAltitudeAlertUntil = 0;
+
+static void GhostAltitudeObserve(int32_t OtherAltitude, bool Valid, uint32_t RxTime, int32_t OwnAltitude)
+{ if(!Valid) return;
+  int32_t AltitudeDifference=OtherAltitude-OwnAltitude;
+  if(AltitudeDifference<0) AltitudeDifference=-AltitudeDifference;
+  if(AltitudeDifference<=GhostAltitudeMargin)
+    GhostAltitudeAlertUntil=RxTime+GhostAltitudeHold; }
+
+static bool GhostAltitudeActive(uint32_t Time)
+{ return (int32_t)(GhostAltitudeAlertUntil-Time)>0; }
+
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
 LookOut<32> Look;
@@ -543,7 +557,10 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
   RxPacket->LatDist=0;
   RxPacket->LonDist=0;
   if(RxPacket->Packet.Header.NonPos)                                                 // status or info packet
-  { if(RxPacket->Packet.isInfo())                                                    // info packet
+  { if(!OwnPacket && RxPacket->Packet.isStatus())
+      GhostAltitudeObserve(RxPacket->Packet.DecodeAltitude(), RxPacket->Packet.Status.FixQuality>0,
+                           RxTime, GPS_Altitude/10);
+    if(RxPacket->Packet.isInfo())                                                    // info packet
     { char Call[16]= { 0 };
       if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
       { // Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
@@ -557,6 +574,8 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
 #endif
     return ; }
   if(OwnPacket) return;                                                             // don't process my own (relayed) packets
+  if(!RxPacket->Packet.Header.Encrypted)
+    GhostAltitudeObserve(RxPacket->Packet.DecodeAltitude(), true, RxTime, GPS_Altitude/10);
   if(RxPacket->Packet.Header.Encrypted && RxPacket->RxErr<10)                         // here we attempt to relay encrypted packets
   { RxPacket->calcRelayRank(GPS_Altitude/10);
     OGN_RxPacket<OGN_Packet> *PrevRxPacket = OGN_RelayQueue.addNew(RxPacketIdx);      // add to the relay queue and get the previous packet of same ID
@@ -716,6 +735,9 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     return ; }
   if(!RxPacket->Packet.isPosition()) return;
   if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
+  if(RxPacket->Packet.hasAlt())
+    GhostAltitudeObserve(RxPacket->Packet.getAlt(), true, RxTime,
+                         (GPS_Altitude+GPS_GeoidSepar)/10);
   int32_t LatDist=0, LonDist=0; uint8_t Warn=0;
   bool DistOK = RxPacket->calcDistanceVector(LatDist, LonDist, GPS_Latitude, GPS_Longitude, GPS_LatCosine, MaxRxDist)>=0;
   if(DistOK)                                                                          // reasonable reception distance
@@ -1132,7 +1154,9 @@ void vTaskPROC(void* pvParameters)
         Radio_FreqPlan.setPlan(Position->Latitude, Position->Longitude); // set the frequency plan according to the GPS position
       else Radio_FreqPlan.setPlan(Parameters.FreqPlan);
 
-      { uint8_t NewGhostSilent = Parameters.GhostMode && Radio_PktRate==0;  // if ghost mode then inhibit position transmission unless traffic 
+      { uint8_t NewGhostSilent = 0;
+        if(Parameters.GhostMode==1) NewGhostSilent = Radio_PktRate==0;       // traffic-triggered Ghost mode
+        else if(Parameters.GhostMode>=2) NewGhostSilent = !GhostAltitudeActive(SlotTime); // altitude-triggered Ghost mode
         if(NewGhostSilent!=GhostSilent)                                 // if change of state then
         { XorShift32(Random.RX);
           if(Parameters.AddrType==0) Parameters.Address = Parameters.Address^Random.RX; // random-ID if enabled
@@ -1228,7 +1252,7 @@ void vTaskPROC(void* pvParameters)
       XorShift32(Random.RX);
       static uint8_t PAW_BackOff=0;
       if(PAW_BackOff) PAW_BackOff--;
-      else if(Parameters.TxFNT && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
+      else if(Parameters.TxFNT && !GhostSilent && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
       { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
         int Good=TxPacket->Read(PosPacket.Packet);                       // convert OGN position packet to PilotAware
         if(Good)
@@ -1356,7 +1380,7 @@ void vTaskPROC(void* pvParameters)
         xSemaphoreGive(CONS_Mutex); }
 #endif // DEBUG_PRINT
       XorShift32(Random.RX);
-      if(PosTime && ((Random.RX&0x7)==0) )                              // send if some position in the packet and at 1/8 normal rate
+      if(!GhostSilent && PosTime && ((Random.RX&0x7)==0) )               // send if some position in the packet and at 1/8 normal rate
         OGN_TxFIFO.Write();                                              // complete the write into the TxFIFO
       if(Position) Position->Sent=1;
     }

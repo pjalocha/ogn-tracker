@@ -1,7 +1,7 @@
 # Espressif ESP32 Partition Table
 # Name,     Type,   SubType,    Offset,     Size,       Flags
-# for parameter storage: 64 KB
-nvs,        data,   nvs,        0x9000,     0x10000,
+# for parameter storage: 20 KB; 0xE000-0xFFFF is reserved for boot_app0.bin
+nvs,        data,   nvs,        0x9000,     20K,
 phy_init,   data,   phy,        0x19000,    0x1000,
 # OTA
 # PlatformIO wants firmware upload target on a 0x10000 boundary
@@ -9,6 +9,6 @@ ota_0,      app,    ota_0,      0x20000,    1536K,
 ota_1,      app,    ota_1,      ,           1536K,
 otadata,    data,   ota,        ,           0x2000,
 # SPIFFS in Flash
-intlog,     data,   fat,        ,           0x4de000,
+intlog,     data,   fat,        ,           0x4ce000,
 # for core dumps: 64 KB
 coredump,   data,   coredump,   ,           0x10000,
