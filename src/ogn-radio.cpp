@@ -1105,7 +1105,7 @@ static int Radio_RxLoRaWAN(uint8_t *Packet, uint8_t MaxPktLen, uint32_t msTimeLe
   Radio.readData(Packet, PktLen);
   return PktLen; }
 
-static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CRa=1)
+static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CRa=1, uint8_t SF=7, float BW=125.0f, float Freq=0.0f)
 { uint32_t msDead = millis();
 #ifdef WITH_SX1262
   if(Radio.getPacketType()!=RADIOLIB_SX126X_PACKET_TYPE_LORA)
@@ -1123,8 +1123,8 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
     if(State==0) Radio_Cache_Clear(); }
 #endif
   Radio.explicitHeader();
-  Radio.setBandwidth(125.0);
-  Radio.setSpreadingFactor(7);
+  Radio.setBandwidth(BW);
+  Radio.setSpreadingFactor(SF);
   Radio.setCodingRate(4+CRa);
   Radio.invertIQ(!TX);                         // uplink without I/Q inversion, downlink with inversion
 #ifdef WITH_SX1262
@@ -1141,7 +1141,7 @@ static void Radio_ConfigLoRaWAN(uint8_t Chan, bool TX, float TxPower, uint8_t CR
 
   const float BaseFreq = 867.1;                //
   const float ChanStep =   0.2;
-  Radio_setFrequency(BaseFreq+ChanStep*Chan);  // set frequency
+  Radio_setFrequency(Freq>0.0f ? Freq : BaseFreq+ChanStep*Chan); // set channel or fixed RX2 frequency
   if(TX) Radio_setOutputPower(TxPower); }
 
 #endif
@@ -1163,9 +1163,12 @@ void Radio_Task(void *Parms)
 #ifdef WITH_LORAWAN
   WANdev.Reset(getUniqueID());                        // set default LoRaWAN config.
   if(WANdev.ReadFromNVS()!=ESP_OK)                    // try to read setup from NVS and if fails:
-  { if(xSemaphoreTake(CONS_Mutex, 100))
+  {
+#ifdef WITH_LORAWAN_DEBUG
+    if(xSemaphoreTake(CONS_Mutex, 100))
     { Serial.printf("LoRaWAN: no config in flash\n");
       xSemaphoreGive(CONS_Mutex); }
+#endif
     WANdev.WriteToNVS(); }                            // then store the default in NVS
   if(Parameters.hasAppKey())                          // if there is an AppKey in the Parameters
   { if(!Parameters.sameAppKey(WANdev.AppKey))         // if LoRaWAN key is different from the one in Parameters
@@ -1173,6 +1176,7 @@ void Radio_Task(void *Parms)
       WANdev.Enable=1;
       WANdev.ABP=0;
       WANdev.WriteToNVS();                            // and save LoRaWAN config. to NVS
+#ifdef WITH_LORAWAN_DEBUG
       if(xSemaphoreTake(CONS_Mutex, 100))
       { Serial.printf("LoRaWAN: OTAA reset & enable\n");
         // Format_String(CONS_UART_Write, "LoRaWAN: AppKey <- ");
@@ -1181,6 +1185,7 @@ void Radio_Task(void *Parms)
         // Format_SignDec(CONS_UART_Write, Err);
         // Format_String(CONS_UART_Write, "\n");
         xSemaphoreGive(CONS_Mutex); }
+#endif
     }
     Parameters.clrAppKey();                           // clear the AppKey in the Parameters and save it to Flash
     Parameters.WriteToNVS(); }
@@ -1192,7 +1197,7 @@ void Radio_Task(void *Parms)
       WANdev.DevAddr=Parameters.DevAddr;
       memcpy(WANdev.AppSesKey, Parameters.AppSesKey, 16);
       memcpy(WANdev.NetSesKey, Parameters.NetSesKey, 16);
-      WANdev.RxDelay = 5;
+      WANdev.RxDelay = 1;                             // LoRaWAN default RECEIVE_DELAY1
       WANdev.State   = 2;
       WANdev.UpCount = 0;
       WANdev.DnCount = 0xFFFFFFFF;
@@ -1200,7 +1205,9 @@ void Radio_Task(void *Parms)
       WANdev.ABP=1;
       WANdev.WriteToNVS();                            // and save LoRaWAN config. to NVS
       xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+#ifdef WITH_LORAWAN_DEBUG
       Serial.printf("LoRaWAN ABP (re)set\n");
+#endif
       xSemaphoreGive(CONS_Mutex); }
     Parameters.clrAppSesKey(); Parameters.clrNetSesKey();
     Parameters.WriteToNVS(); }
@@ -1451,18 +1458,22 @@ void Radio_Task(void *Parms)
 
     msTime = TimeRef.getFracTime(millis());           // [ms] time since PPS
     SlotLen = Slot2_End-msTime;
+    bool WANnearRx = 0;
 #ifdef WITH_LORAWAN
     static uint8_t WAN_RxPacket[64];                  //
     static uint32_t WAN_RespTick=0;                   // [msec]
+    static uint8_t WAN_RxWindow=0;                    // 0:none, 1:RX1, 2:RX2
     static uint8_t  WAN_BackOff=60;                   // [sec]
     bool WANtx = 0;
     if(WAN_BackOff) WAN_BackOff--;
     else if(WANdev.Enable && Parameters.TxWAN && Radio_FreqPlan.Plan<=1) // decide to transmit in this slot
     { if(WANdev.State==0 || WANdev.State==2) WANtx=1; } //
     if(WANtx) SlotLen = 1150-msTime;                    // if decision to transmit then stop the time slot a bit earlier
-    else if(WANdev.State==1 || WANdev.State==3)         // if waiting for a reply
-    { int32_t RespLeft = WAN_RespTick-(uint32_t)millis();    // and the reply time getting close
-      if(RespLeft>0 && RespLeft<1000) SlotLen=RespLeft-40; } // then adjust the time slot to be there in time
+    else if((WANdev.State==1 || WANdev.State==3) && WAN_RxWindow) // if waiting for a reply
+    { int32_t RespLeft = (int32_t)(WAN_RespTick-(uint32_t)millis());
+      if(RespLeft>0 && RespLeft<1000)
+      { SlotLen=RespLeft-40;                                // leave time to switch modes and start RX
+        if(SlotLen<100) WANnearRx=1; } }
 #endif
 
     OGN_Pkt  = OgnPacket2  ? OgnPacket2->Byte()      : 0;
@@ -1486,7 +1497,7 @@ void Radio_Task(void *Parms)
          else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
     }
 
-         if(SlotLen<100) SlotLen=100;
+         if(SlotLen<(WANnearRx ? 20 : 100)) SlotLen=WANnearRx ? 20 : 100;
     else if(SlotLen>400) SlotLen=400;
     // Serial.printf("Slot #1: %u:%4d => %3dms\n", TimeRef.UTC, msTime, SlotLen); ///
     PktCount+=Radio_Slot(TxChan, TxPwr, SlotLen, TxPkt, TxProt, TxChan, RxProt, TimeRef);
@@ -1521,8 +1532,7 @@ void Radio_Task(void *Parms)
           else
           { TxPktLen=WANdev.getDataPacket(&TxPacket, PktData, 20, 1, ((Random.RX>>16)&0xF)==0x8 ); }
           Radio_TxLoRaWAN(TxPacket, TxPktLen);
-          RespDelay = WANdev.RxDelay&0x0F;
-          if(RespDelay<1) RespDelay=1; RespDelay*=1000;
+          RespDelay = WANdev.getRxDelaySeconds()*1000;
           WAN_BackOff=50+(Random.Word%19);
           XorShift64(Random.Word);
         }
@@ -1530,40 +1540,63 @@ void Radio_Task(void *Parms)
       if(RespDelay)
       { uint32_t Time=millis();
         WAN_RespTick=Time+RespDelay;
+        WAN_RxWindow=1;
         // Serial.printf("%5.3fs WAN Tx[%d] => %5.3fs\n", 1e-3*Time, TxPktLen, 1e-3*(Time+RespDelay));
       }
     }
 
     bool WANrx=0;
+    bool WANmissed=0;
     uint32_t Time=millis();
-     int32_t RespLeft = WAN_RespTick-Time;
-    if(WANdev.State==1 || WANdev.State==3)                      // if State indicates we are waiting for the response
-    { if(RespLeft<=5) WANdev.State--;                           // if time below 5 ticks we have not enough time
-      else if(RespLeft<200) { WANrx=1; }                        // if more than 200ms then we can't wait this long now
-      // if(WANrx==0 && RespLeft<=10) Serial.printf("%5.3fs WAN Rx missed %dms\n", 1e-3*Time, RespLeft);
-    }
-    if(WANrx)                                              // if reception expected from WAN
-    { int RxLen=0;
-      Radio_ConfigLoRaWAN(WANdev.Chan, 0, Parameters.TxPower);  // configure for reception
-      uint32_t Time=millis();
-      // Serial.printf("%5.3fs WAN Rx wait %dms\n", 1e-3*Time, WAN_RespTick-Time);
-      // int msMaxTime=(WAN_RespTick-Time) + (Radio.getTimeOnAir(64)/1000) + 50;              // [ms] max-time to wait for the response
-      int msMaxTime=(WAN_RespTick-Time) + 120;
+    int32_t RespLeft = (int32_t)(WAN_RespTick-Time);
+    if((WANdev.State==1 || WANdev.State==3) && WAN_RxWindow)
+    { if(RespLeft<=80 && RespLeft>=-40) WANrx=1;
+      else if(RespLeft < -100) WANmissed=1; }
+    if(WANrx)
+    { uint8_t SF=7;
+      float BW=125.0f;
+      float Freq=0.0f;
+      if(WAN_RxWindow==1)
+      { if(WANdev.State==1) SF=7;                             // join-accept RX1 uses join-request DR
+        else
+        { uint8_t Offset=(WANdev.DLsetting>>4)&0x07;
+          if(Offset>5) Offset=5;
+          SF=12-(5-Offset); } }
+      else
+      { SF=9; Freq=869.525f; }                               // TTN EU_863_870_TTN RX2: DR3/SF9
+      Radio_ConfigLoRaWAN(WANdev.Chan, 0, Parameters.TxPower, 1, SF, BW, Freq);
+      Time=millis();
+      RespLeft=(int32_t)(WAN_RespTick-Time);
+      int32_t msMaxTime=RespLeft+260;
+      if(msMaxTime<220) msMaxTime=220;
       float RSSI=0; float SNR=0; float FreqOfs=0;
-      RxLen=Radio_RxLoRaWAN(WAN_RxPacket, 64, msMaxTime, &RSSI, &SNR, &FreqOfs);
-      // assume nothing received for now
+      int RxLen=Radio_RxLoRaWAN(WAN_RxPacket, 64, msMaxTime, &RSSI, &SNR, &FreqOfs);
+      bool WANaccepted=0;
       if(RxLen>0)
-      { WANdev.RxCount++;
-        WANdev.RxRSSI=RSSI; WANdev.RxSNR=SNR*4;
-        uint32_t Time=millis();
-        // Serial.printf("%5.3fs WAN Rx[%d]\n", 1e-3*Time, RxLen);
-             if(WANdev.State==1) WANdev.procJoinAccept(WAN_RxPacket, RxLen);    // if join-request state then expect a join-accept packet
-        else if(WANdev.State==3) RxLen=WANdev.procRxData(WAN_RxPacket, RxLen);  // if data send then respect ACK and/or downlink data packet
+      { if(WANdev.State==1) WANaccepted=(WANdev.procJoinAccept(WAN_RxPacket, RxLen)==0);
+        else if(WANdev.State==3) { WANdev.procRxData(WAN_RxPacket, RxLen); WANaccepted=(WANdev.State==2); }
+        if(WANaccepted)
+        { WANdev.RxCount++;
+          WANdev.RxRSSI=(int8_t)RSSI;
+          WANdev.RxSNR=(int8_t)(SNR*4);
+          WANdev.LastRx=TimeSync_Time(); } }
+      if(WANaccepted)
+      { WAN_RxWindow=0;
         WANdev.RxSilent=0; }
-      else                                                 // if no packet received then retreat the State
-      { WANdev.State--;
-        WANdev.RxSilent++; if(WANdev.RxSilent>=60) WANdev.Disconnect(); }
-    }
+      else if(WAN_RxWindow==1)
+      { WAN_RxWindow=2;
+        WAN_RespTick+=1000; }
+      else WANmissed=1; }
+    if(WANmissed && WAN_RxWindow==1)
+    { WANmissed=0;
+      WAN_RxWindow=2;
+      WAN_RespTick+=1000; }
+    if(WANmissed)
+    { WAN_RxWindow=0;
+      WANdev.State--;
+      if(WANdev.State==2 && WANdev.TxConfirm)                  // only count missed confirmed data probes
+      { WANdev.RxSilent++;
+        if(WANdev.RxSilent>=60) WANdev.Disconnect(); } }
     WANdev.WriteToNVS();                                 // store new WAN state in flash
 #endif
 

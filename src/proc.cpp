@@ -607,8 +607,9 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif
+    RxPacket->Packet.Header.Relay=1;
 #if defined(WITH_MOBILE) && defined(WITH_WIFI)
-      MOBILE_SendOGN(RxPacket->Packet);                      // send received OGN packet to the mobile network
+    MOBILE_SendOGN(RxPacket->Packet);                      // send received OGN packet to the mobile network
 #endif
 //     Len=RxPacket->Packet.WriteAPRS(Line, RxTime);                                     // print on the console as APRS message
 //     xSemaphoreTake(CONS_Mutex, 25);
@@ -755,6 +756,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);   // add to the relay queue and get the previ>
     // Serial.printf("ProcessRxADSL: %02X:%06X [%+5d,%+5d]m\n",
     //          RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), LatDist, LonDist);
+    RxPacket->Packet.setRelay(1);
 #if defined(WITH_MOBILE) && defined(WITH_WIFI)
     MOBILE_SendADSL(RxPacket->Packet);                      // send received ADS-L packet to the mobile network
 #endif

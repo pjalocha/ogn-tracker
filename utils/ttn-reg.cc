@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <math.h>
 #include <sys/random.h>
+#include <sys/wait.h>
 
 #include "serial.h"
 #include "nmea.h"
@@ -83,9 +85,10 @@ static char CmdLine[512];
 
 static const char *PortName = "/dev/ttyACM0";                              // default serial port name
 static       int   BaudRate = 115200;                                      // default baud rate on the serial port
+static const char *TTNCLI   = "ttn-lw-cli";                                // installed CLI command
 
-const   int64_t JoinEUI    = 0x70B3D57ED0035895;  // 64-bit OGN application EUI
-static  int64_t DevEUI     = 0;                   // 64-bit device EUI = tracker MAC
+const  uint64_t JoinEUI    = UINT64_C(0x70B3D57ED0035895); // 64-bit OGN application EUI
+static uint64_t DevEUI     = 0;                             // 64-bit device EUI = tracker MAC
 static  char    DevID[40];                        // (ascii) device-ID created from DevEUI
 static  uint8_t AppKey[16];                       // 128-bit application key
 
@@ -100,46 +103,58 @@ int main(int argc, char *argv[])
                                             // Read the MAC from the tracker
   for( int Try=0; Try<3; Try++)             // retry three times
   { strcpy(CmdLine, "$POGNS\r\n");          // prompt the tracker to send its MAC and other parameters
-    Port.Write(CmdLine);
+    SerialWrite((const uint8_t *)CmdLine, strlen(CmdLine));
     printf("Serial <= %s", CmdLine);
     for( ; ; )
     { char *RxLine = WaitResp("$POGNS", 1.0); if(RxLine==0) break;
       char *CPU=strstr(RxLine, "CPU=");
-      if(CPU) { sscanf(CPU+4, "%lX", &DevEUI); }
+      if(CPU) { uint64_t Value=0;
+        if(sscanf(CPU+4, "%" SCNx64, &Value)==1) DevEUI=Value; }
       printf("Serial => %s\n", RxLine); }
-    if(DevEUI>0xFFFFFFFF) break; }
-  if(DevEUI<=0xFFFFFFFF) return 0;
+    if(DevEUI>UINT64_C(0xFFFFFFFF)) break; }
+  if(DevEUI<=UINT64_C(0xFFFFFFFF)) { Port.Close(); return -1; }
 
                                                       // generate a random AppKey
   if(getrandom(&AppKey, 16, 0)!=16) { printf("Could not produce AppKey\n"); return 0; }
 
-  sprintf(DevID, "ogntrk-%012lx", DevEUI);            // assign some device-id based on EUI (but could be any string)
+  sprintf(DevID, "ogntrk-%012" PRIx64, DevEUI);       // assign some device-id based on EUI (but could be any string)
   PrintHex(CmdLine, AppKey, 16);                      // print application key in the hex form
-  printf("JoinEUI=%016lX, DevEUI=%012lX, DevID=%s, AppKey=%s\n", JoinEUI, DevEUI, DevID, CmdLine);
+  printf("JoinEUI=%016" PRIX64 ", DevEUI=%012" PRIX64 ", DevID=%s, AppKey=%s\n", JoinEUI, DevEUI, DevID, CmdLine);
 
-  int CmdLen=sprintf(CmdLine, "ttn-lw-stack.ttn-lw-cli devices delete --application-id=ogn --device-id=%s\n", DevID);
+  int CmdLen=sprintf(CmdLine, "%s end-devices delete ogn %s\n", TTNCLI, DevID);
   int CmdRet=system(CmdLine);
   printf("%s => %d\n", CmdLine, CmdRet);
 
-  CmdLen=sprintf(CmdLine, "ttn-lw-stack.ttn-lw-cli devices create --application-id=ogn --device-id=%s", DevID);
-  CmdLen+=sprintf(CmdLine+CmdLen, " --dev-eui %016lX --join-eui %016lX --root-keys.app-key.key ", DevEUI, JoinEUI);
+  CmdLen=sprintf(CmdLine, "%s end-devices create ogn %s", TTNCLI, DevID);
+  CmdLen+=sprintf(CmdLine+CmdLen, " --dev-eui %016" PRIX64 " --join-eui %016" PRIX64 " --root-keys.app-key.key ", DevEUI, JoinEUI);
   CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
-  CmdLen+=sprintf(CmdLine+CmdLen, " --frequency-plan-id EU_863_870 --lorawan-version 1.0.3 --lorawan-phy-version 1.0.3-a");
+  CmdLen+=sprintf(CmdLine+CmdLen, " --frequency-plan-id EU_863_870_TTN --lorawan-version 1.0.3 --lorawan-phy-version 1.0.3-a");
+  CmdLen+=sprintf(CmdLine+CmdLen, " --supports-join");
   // CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.supports-32-bit-f-cnt true");
   CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.status-time-periodicity 0 --mac-settings.status-count-periodicity 0");
   CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.adr.mode.disabled");
   CmdLen+=sprintf(CmdLine+CmdLen, "\n");
 
-  CmdRet=system(CmdLine);                             // print the commmand sent and the responnse code
+  CmdRet=system(CmdLine);                             // print the command sent and the response code
   printf("%s => %d\n", CmdLine, CmdRet);
+  if(CmdRet<0 || !WIFEXITED(CmdRet) || WEXITSTATUS(CmdRet)!=0)
+  { printf("TTN registration failed; the AppKey was not sent to the tracker\n");
+    Port.Close(); return -1; }
                                                       // send the AppKey to the tracker
   CmdLen=sprintf(CmdLine, "$POGNS,AppKey=");          // construct NMEA to config the new AppKey
   CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
   CmdLen+=sprintf(CmdLine+CmdLen, "\r\n");
-  Port.Write(CmdLine);
+  int Written=SerialWrite((const uint8_t *)CmdLine, CmdLen);
+  if(Written!=CmdLen)
+  { printf("Serial write failed: %d of %d bytes sent\n", Written, CmdLen);
+    Port.Close(); return -1; }
+  if(tcdrain(Port.DeviceHandle)<0)
+  { perror("tcdrain"); Port.Close(); return -1; }
   printf("Serial <= %s", CmdLine);                    // print command sent to the serial port of the tracker
+
+  // Give the firmware time to parse the command and commit the parameters to flash.
+  usleep(500000);
 
   Port.Close();
 
   return 0; }
-

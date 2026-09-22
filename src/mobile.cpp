@@ -10,8 +10,8 @@
 static const uint16_t MOBILE_ServerPort = 14590;
 static const char    *MOBILE_ServerAddr = "51.178.37.174";  // ogn3.glidernet.org
 static const uint8_t  MOBILE_ADSL_ID    = 0x60;             // GDL90 ID for ADS-L packets
-static const uint8_t  MOBILE_OGN_ID     = 0x59;             // GDL90 ID for OGN1 packets
-// static const uint8_t  MOBILE_FLR_ID     = 0x58;             // GDL90 ID for FLARM packets - but we could send ADS-L packets instead
+static const uint8_t  MOBILE_OGN_ID     = 0x5F;             // GDL90 ID for OGN1 packets
+// static const uint8_t  MOBILE_FLR_ID     = 0x5E;             // GDL90 ID for FLARM packets - but we could send ADS-L packets instead
 
 static const uint16_t MOBILE_TxUDPsizeMax = 1024;
 

@@ -36,7 +36,7 @@ class LoRaWANnode
       uint32_t HomeNetID;     // from Join-Accept: Home Network ID
       uint32_t DevAddr;       // from Join-Accept or ABP: Device Address
       uint8_t  DLsetting;     // from Join-Accept: DownLink configuration: OptNeg:1 | RX1 data rate offset:3 | RX2 data rate:4
-      uint8_t  RxDelay;       // from Join-Accept: RFU:4 | Del:4  Del=1..15s for the RX1, RX2 delay is Del+1
+      uint8_t  RxDelay;       // from Join-Accept: RFU:4 | Del:4; 0 means default 1s, RX2 is RX1+1s
       uint8_t  State;         // 0:not-joined, 1:join-request-sent, 2:joined, 3:uplink-packet-sent, wait for a possible reply
       uint8_t  Chan;          // [0..7] Current channel being used
       uint32_t UpCount;       // [seq] Uplink frame counter: reset when joining the network
@@ -55,12 +55,12 @@ class LoRaWANnode
           bool RxPend :1;     // more frames pending for reception
           bool Enable :1;     // Enable/disable operation
           bool SaveReq:1;     // Request to save the node state
-          bool Spare1 :1;
+          bool TxConfirm:1;   // most recent uplink requests confirmation
           bool Spare2 :1;
           bool ABP    :1;     // Activation-By-Personalization, not Over-The-Air-Activation and there is "join" phase
         } __attribute__((packed)) ;
       } ;
-      uint8_t  RxSilent;      // count non-receptions <- 112 bytes up to (and including) this point
+      uint8_t  RxSilent;      // consecutive missed confirmed-data responses <- 112 bytes up to here
       uint32_t LastSaved;     // [sec] when saved to EEPROM or other permament storage
       uint8_t  Dummy[8];      // just to fill up the space, could be used later
       uint32_t CRC32;         // 128 bytes up to here: fits into 1kbit EEPROM
@@ -92,6 +92,10 @@ class LoRaWANnode
 
    void Disconnect(void)
    { State=0; RxSilent=0; }
+
+   uint8_t getRxDelaySeconds(void) const
+   { uint8_t Delay=RxDelay&0x0F;
+     return Delay ? Delay : 1; }                         // RxDelay=0 means the default 1s delay
 
    uint32_t calcCRC(void) const
    { uint32_t Sum=0x87654321;                      // start the sum with some magic
@@ -186,7 +190,7 @@ class LoRaWANnode
      UpCount = 0;
      DnCount = 0xFFFFFFFF;
      TxOptLen  = 0;
-#ifdef WITH_PRINTF
+#ifdef WITH_LORAWAN_DEBUG
      printf("Accept[%d] ", PktLen-4);
      for(int Idx=0; Idx<PktLen-4; Idx++)
        printf("%02X", Packet[Idx]);
@@ -198,6 +202,8 @@ class LoRaWANnode
 
    int getDataPacket(uint8_t *Packet, const uint8_t *Data, int DataLen, uint8_t Port=1, bool Confirm=0)
    { if(State<2) return 0;                                   // not joined to the network yet
+     TxConfirm=Confirm;                                      // remember whether a missing response is a failed probe
+     if(Confirm) RxACK=0;                                    // clear the result before requesting a new ACK
      uint8_t Type = Confirm?0x04:0x02;                       // request confirmation or not ?
      int PktLen=0;
      Packet[PktLen++] = Type<<5;                             // packet-type
@@ -249,14 +255,14 @@ class LoRaWANnode
      if(DataLen)                                                     // if non-zero
      { Packet[0] = PktData[DataOfs];                                 // copy port number
        LoRaMacPayloadDecrypt(PktData+DataOfs+1, DataLen-1, AppSesKey, Addr, 0x01, Count, Packet+1); } // decrypt and copy the user data
-#ifdef WITH_PRINTF
+#ifdef WITH_LORAWAN_DEBUG
      printf("RxData: [%d] ", DataLen);
      for(int Idx=0; Idx<DataLen; Idx++)
        printf("%02X", Packet[Idx]);
      printf("\n");
 #endif
      DnCount += CountDiff;                                           // update the download sequence counter
-     if(Ctrl&0x40) RxACK=1;                                          // we got ACK to our ACK request
+     if(Ctrl&0x20) RxACK=1;                                          // FCtrl bit 5: ACK for our confirmed uplink
      if(Type==5) TxACK=1;                                            // if ACK requested
      RxPend = Ctrl&0x10;                                             // is there more data pending to be received on next round ?
      State=2;
@@ -281,7 +287,7 @@ class LoRaWANnode
          TxOpt[TxOptLen++]=(RxSNR>>2)&0x3F;                          // Rx SNR
          continue; }
        break; }
-#ifdef WITH_PRINTF
+#ifdef WITH_LORAWAN_DEBUG
      printf("RxOpt: [%d] ", OptLen);
      for(int Idx=0; Idx<OptLen; Idx++)
        printf("%02X", Opt[Idx]);
