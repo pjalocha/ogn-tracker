@@ -195,8 +195,7 @@ class LoRaWANnode
      for(int Idx=0; Idx<PktLen-4; Idx++)
        printf("%02X", Packet[Idx]);
      printf(" HomeNetID:%06X, DevAddr:%08X, DL:%02X, RxDelay:%02X\n", HomeNetID, DevAddr, DLsetting, RxDelay);
-     printf("NetSesKey: "); PrintHex(NetSesKey, 16); printf("\n");
-     printf("AppSesKey: "); PrintHex(AppSesKey, 16); printf("\n");
+     printf("Session keys derived\n");
 #endif
      return 0; }
 
