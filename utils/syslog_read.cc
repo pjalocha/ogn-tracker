@@ -15,34 +15,89 @@
 
 #include "lookout.h"
 
-static uint32_t FileTime=0;
-static char     FileTimeAsc[16];
-static GPS_Position Position;
+#include <map>
+
+// =========================================================================================================
+
+class RxAcft
+{ public:
+   uint32_t ID;          // [addt-type:address]
+   uint32_t UpdTime;     // [sec]
+   float    RSSI;        // [dBm]
+   uint32_t Dist;        // [m]
+   // uint32_t Prot[];
+
+  public:
+   RxAcft() { ID=0; UpdTime=0; RSSI=0; Dist=0; }
+
+   int Process(OGN1_Packet &RxPkt)
+   {
+     return 0; }
+
+   int Process(ADSL_Packet &RxPkt)
+   {
+     return 0; }
+
+} ;
+
+class RxAcftList
+{ public:
+   std::map<uint32_t, RxAcft> Map;
+
+  public:
+
+} ;
+
+// =========================================================================================================
+
+static uint32_t FileTime=0;            // [sec] most recent timestamp in the input filr
+static char     FileTimeAsc[16];       //
+static GPS_Position Position;          // most recent own position
 
 static char TmpLine[640];
+
+static FILE *DataFile = 0;
 
 // =========================================================================================================
 
 static LookOut<32> Look;
 
 static int ProcOwnPacket(OGN1_Packet &OwnPkt)
-{ const LookOut_Target *Tgt=Look.ProcessOwn(OwnPkt, FileTime, Position.GeoidSeparation/10);
+{ const LookOut_Target *Tgt=Look.ProcessOwn(OwnPkt, FileTime);
   if(Tgt && Look.WarnLevel)
   { Look.Print(); }
   return 0; }
 
-static int ProcRxPacket(OGN1_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
+static int ProcRxPacket(OGN1_Packet &RxPkt, uint8_t RxChan, float RxRSSI, const char *RxMod="OGN")
 { int Len=RxPkt.Print(TmpLine);
   const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime);
-  Len+=sprintf(TmpLine+Len, " %+5.1fdBm/%d", RxRSSI, RxChan);
+  Len+=sprintf(TmpLine+Len, " %+6.1fdBm/%d", RxRSSI, RxChan);
+  int32_t LatDist=0; int32_t LonDist=0; int32_t AltDist=0;
+  int DistOK=0;
+  if(!RxPkt.Header.NonPos && !RxPkt.Header.Encrypted)
+  { DistOK=RxPkt.calcDistanceVector(LatDist, LonDist, Position.Latitude, Position.Longitude);
+    AltDist = RxPkt.DecodeAltitude() - (Position.Altitude+5)/10; }
+  if(DistOK>0) Len+=sprintf(TmpLine+Len, " [%+5d,%+5d,%+5d]m", LatDist, LonDist, AltDist);
   printf("%s: %s\n", FileTimeAsc, TmpLine);
+  if(DistOK>0 && DataFile)
+    fprintf(DataFile, "%s %10d %s %d %06X %+6.1fdBm %d %+6d %+6d %+6d\n",
+      FileTimeAsc, FileTime, RxMod, RxPkt.Header.AddrType+4, RxPkt.Header.Address, RxRSSI, RxChan, LatDist, LonDist, AltDist);
   return 0; }
 
-static int ProcRxPacket(ADSL_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
+static int ProcRxPacket(ADSL_Packet &RxPkt, uint8_t RxChan, float RxRSSI, const char *RxMod="MDR")
 { int Len=RxPkt.Print(TmpLine);
   const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime);
-  Len+=sprintf(TmpLine+Len, " %+5.1fdBm/%d", RxRSSI, RxChan);
+  Len+=sprintf(TmpLine+Len, " %+6.1fdBm/%d", RxRSSI, RxChan);
+  int32_t LatDist=0; int32_t LonDist=0; int32_t AltDist=0;
+  int DistOK=0;
+  if(RxPkt.isPosition())
+  { DistOK=RxPkt.calcDistanceVectorOGN(LatDist, LonDist, Position.Latitude, Position.Longitude);
+    AltDist = RxPkt.getAlt() - (Position.Altitude+Position.GeoidSeparation+5)/10; }
+  if(DistOK>0) Len+=sprintf(TmpLine+Len, " [%+5d,%+5d,%+5d]m", LatDist, LonDist, AltDist);
   printf("%s: %s\n", FileTimeAsc, TmpLine);
+  if(DistOK>0 && DataFile)
+    fprintf(DataFile, "%s %10d %s %d %06X %+6.1fdBm %d %+6d %+6d %+6d\n",
+      FileTimeAsc, FileTime, RxMod, RxPkt.getAddrTable(), RxPkt.getAddress(), RxRSSI, RxChan, LatDist, LonDist, AltDist);
   return 0; }
 
 static int ProcRxPacket(PAW_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
@@ -50,7 +105,7 @@ static int ProcRxPacket(PAW_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
   OGN1_Packet Packet;
   RxPkt.Write(Packet);
   Packet.Position.Time = FileTime%60;
-  ProcRxPacket(Packet, RxChan, RxRSSI);
+  ProcRxPacket(Packet, RxChan, RxRSSI, "PAW");
   return 0; }
 
 static int FLR2ADSL(ADSL_Packet &ADSL, Flarm_Packet &FLR, int32_t RefLat, int32_t RefLon)
@@ -85,7 +140,7 @@ static int ProcRxPacket(Flarm_Packet &RxPkt, uint8_t RxChan, float RxRSSI)
   if(!Position.isValid()) return 0;
   ADSL_Packet Packet;
   if(FLR2ADSL(Packet, RxPkt, Position.Latitude/3*50, Position.Longitude/3*50)<=0) return 0;
-  ProcRxPacket(Packet, RxChan, RxRSSI);
+  ProcRxPacket(Packet, RxChan, RxRSSI, "FLR");
   return 0; }
 
 // =========================================================================================================
@@ -108,7 +163,7 @@ static OGN1_Packet OwnPacket;
 
 static void ProcessNMEA(const char *Line)
 { int Ret=NMEA.ProcessLine(Line);
-  // printf("(%3d:%c:%2d) %s\n", Ret, NMEA.isComplete()?'+':'-', NMEA.Parms, Line);
+  printf("(%3d:%c:%2d) %s\n", Ret, NMEA.isComplete()?'+':'-', NMEA.Parms, Line);
   if(!NMEA.isComplete()) return;
   Ret=Position.ReadNMEA(NMEA);
   if(Ret>0)
@@ -166,7 +221,7 @@ static void ProcessRxPkt(const char *Line)
       Address=ADSL_RxPkt.getAddress();
       AddrType=ADSL_RxPkt.getAddrType();
       Altitude=ADSL_RxPkt.getAlt();
-      ProcRxPacket(ADSL_RxPkt, RxChan, RxRSSI); }
+      ProcRxPacket(ADSL_RxPkt, RxChan, RxRSSI, "LDR"); }
   }
   else if(SysID==Radio_SysID_OGN)
   { if(PktLen!=26) return;
@@ -215,9 +270,12 @@ static int ProcessFile(FILE *InpFile)
     *EOL=0; if(TooLong) { TooLong=0; continue; }
     Lines+=1;
     char Head = InpLine[0];
-    if(Head=='$') { ProcessNMEA(InpLine);  continue; }
-    if(Head=='>') { ProcessRxPkt(InpLine); continue; }
-    if(Head=='<') { ProcessTxPkt(InpLine); continue; }
+    char Head2 = InpLine[11];
+    if(Head =='$') { ProcessNMEA(InpLine);  continue; }
+    if(Head =='>') { ProcessRxPkt(InpLine); continue; }
+    if(Head2=='>') { ProcessRxPkt(InpLine+11); continue; }
+    if(Head =='<') { ProcessTxPkt(InpLine); continue; }
+    if(Head2=='<') { ProcessTxPkt(InpLine+11); continue; }
   }
   return Lines; }
 
@@ -232,8 +290,12 @@ int main(int argc, char *argv[])
     if(InpFile==0) { printf("Cannot open %s for read\n", argv[1]); return -1; }
   }
 
-  ProcessFile(InpFile);
+  DataFile = fopen("syslog.dat", "wt");
 
+  int Ret=ProcessFile(InpFile);
+  printf("%s => %d lines\n", argv[1], Ret);
+
+  if(DataFile) fclose(DataFile);
   if(InpFile!=stdin) fclose(InpFile);
   return 0; }
 
