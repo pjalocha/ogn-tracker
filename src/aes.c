@@ -314,12 +314,6 @@ uint8_t inv_affine(const uint8_t x)
 
 static void copy_block( void *d, const void *s )
 {
-#if defined( HAVE_UINT_32T )
-    ((uint32_t*)d)[ 0] = ((uint32_t*)s)[ 0];
-    ((uint32_t*)d)[ 1] = ((uint32_t*)s)[ 1];
-    ((uint32_t*)d)[ 2] = ((uint32_t*)s)[ 2];
-    ((uint32_t*)d)[ 3] = ((uint32_t*)s)[ 3];
-#else
     ((uint8_t*)d)[ 0] = ((uint8_t*)s)[ 0];
     ((uint8_t*)d)[ 1] = ((uint8_t*)s)[ 1];
     ((uint8_t*)d)[ 2] = ((uint8_t*)s)[ 2];
@@ -336,7 +330,6 @@ static void copy_block( void *d, const void *s )
     ((uint8_t*)d)[13] = ((uint8_t*)s)[13];
     ((uint8_t*)d)[14] = ((uint8_t*)s)[14];
     ((uint8_t*)d)[15] = ((uint8_t*)s)[15];
-#endif
 }
 
 static void copy_block_nn( uint8_t * d, const uint8_t *s, uint8_t nn )
@@ -348,12 +341,6 @@ static void copy_block_nn( uint8_t * d, const uint8_t *s, uint8_t nn )
 
 static void xor_block( void *d, const void *s )
 {
-#if defined( HAVE_UINT_32T )
-    ((uint32_t*)d)[ 0] ^= ((uint32_t*)s)[ 0];
-    ((uint32_t*)d)[ 1] ^= ((uint32_t*)s)[ 1];
-    ((uint32_t*)d)[ 2] ^= ((uint32_t*)s)[ 2];
-    ((uint32_t*)d)[ 3] ^= ((uint32_t*)s)[ 3];
-#else
     ((uint8_t*)d)[ 0] ^= ((uint8_t*)s)[ 0];
     ((uint8_t*)d)[ 1] ^= ((uint8_t*)s)[ 1];
     ((uint8_t*)d)[ 2] ^= ((uint8_t*)s)[ 2];
@@ -370,17 +357,10 @@ static void xor_block( void *d, const void *s )
     ((uint8_t*)d)[13] ^= ((uint8_t*)s)[13];
     ((uint8_t*)d)[14] ^= ((uint8_t*)s)[14];
     ((uint8_t*)d)[15] ^= ((uint8_t*)s)[15];
-#endif
 }
 
 static void copy_and_key( void *d, const void *s, const void *k )
 {
-#if defined( HAVE_UINT_32T )
-    ((uint32_t*)d)[ 0] = ((uint32_t*)s)[ 0] ^ ((uint32_t*)k)[ 0];
-    ((uint32_t*)d)[ 1] = ((uint32_t*)s)[ 1] ^ ((uint32_t*)k)[ 1];
-    ((uint32_t*)d)[ 2] = ((uint32_t*)s)[ 2] ^ ((uint32_t*)k)[ 2];
-    ((uint32_t*)d)[ 3] = ((uint32_t*)s)[ 3] ^ ((uint32_t*)k)[ 3];
-#elif 1
     ((uint8_t*)d)[ 0] = ((uint8_t*)s)[ 0] ^ ((uint8_t*)k)[ 0];
     ((uint8_t*)d)[ 1] = ((uint8_t*)s)[ 1] ^ ((uint8_t*)k)[ 1];
     ((uint8_t*)d)[ 2] = ((uint8_t*)s)[ 2] ^ ((uint8_t*)k)[ 2];
@@ -397,10 +377,6 @@ static void copy_and_key( void *d, const void *s, const void *k )
     ((uint8_t*)d)[13] = ((uint8_t*)s)[13] ^ ((uint8_t*)k)[13];
     ((uint8_t*)d)[14] = ((uint8_t*)s)[14] ^ ((uint8_t*)k)[14];
     ((uint8_t*)d)[15] = ((uint8_t*)s)[15] ^ ((uint8_t*)k)[15];
-#else
-    block_copy(d, s);
-    xor_block(d, k);
-#endif
 }
 
 static void add_round_key( uint8_t d[N_BLOCK], const uint8_t k[N_BLOCK] )

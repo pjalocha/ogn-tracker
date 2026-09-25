@@ -182,13 +182,22 @@ void LoRaMacJoinComputeMic( const uint8_t *buffer, uint16_t size, const uint8_t 
 
 void LoRaMacJoinDecrypt( const uint8_t *buffer, uint16_t size, const uint8_t *key, uint8_t *decBuffer )
 {
+    // Join-Accept data starts at byte offset one in the radio packet and is
+    // therefore not necessarily 32-bit aligned.  Keep AES block accesses
+    // aligned even on targets which fault on unaligned word loads/stores.
+    uint8_t inBlock[16] __attribute__((aligned(4)));
+    uint8_t outBlock[16] __attribute__((aligned(4)));
     memset1( AesContext.ksch, '\0', 240 );
     lorawan_aes_set_key( key, 16, &AesContext );
-    lora_aes_encrypt( buffer, decBuffer, &AesContext );
-    // Check if optional CFList is included
-    if( size >= 16 )
+    memcpy1( inBlock, buffer, 16 );
+    lora_aes_encrypt( inBlock, outBlock, &AesContext );
+    memcpy1( decBuffer, outBlock, 16 );
+    // With a CFList the encrypted payload has a second 16-byte block.
+    if( size >= 32 )
     {
-        lora_aes_encrypt( buffer + 16, decBuffer + 16, &AesContext );
+        memcpy1( inBlock, buffer + 16, 16 );
+        lora_aes_encrypt( inBlock, outBlock, &AesContext );
+        memcpy1( decBuffer + 16, outBlock, 16 );
     }
 }
 

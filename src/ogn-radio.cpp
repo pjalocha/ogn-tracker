@@ -1505,7 +1505,7 @@ void Radio_Task(void *Parms)
     SlotLen = Slot2_End-msTime;
     bool WANnearRx = 0;
 #ifdef WITH_LORAWAN
-    static uint8_t WAN_RxPacket[64];                  //
+    static uint8_t WAN_RxPacket[LoRaWANnode::MaxPacketSize]; // keep the buffer in step with LoRaWANnode::Packet
     static uint32_t WAN_RespTick=0;                   // [msec]
     static uint8_t WAN_RxWindow=0;                    // 0:none, 1:RX1, 2:RX2
     static uint8_t  WAN_BackOff=60;                   // [sec]
@@ -1628,7 +1628,7 @@ void Radio_Task(void *Parms)
              (long)msMaxTime);
 #endif
       float RSSI=0; float SNR=0; float FreqOfs=0;
-      int RxLen=Radio_RxLoRaWAN(WAN_RxPacket, 64, msMaxTime, &RSSI, &SNR, &FreqOfs);
+      int RxLen=Radio_RxLoRaWAN(WAN_RxPacket, sizeof(WAN_RxPacket), msMaxTime, &RSSI, &SNR, &FreqOfs);
 #ifdef WITH_LORAWAN_DEBUG
       printf("LoRaWAN RX%u result len=%d now=%lu\n",
              WAN_RxWindow, RxLen, (unsigned long)millis());

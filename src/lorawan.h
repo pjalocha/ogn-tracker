@@ -173,7 +173,8 @@ class LoRaWANnode
    //   return Ret; }
 
    int procJoinAccept(const uint8_t *PktData, int PktLen)                        // process Join-Accept packet (5sec after Join-Request)
-   { if(PktLen<13) return -1;
+   { // LoRaWAN 1.0 Join-Accept: 17 bytes without CFList, 33 bytes with CFList.
+     if(PktLen!=17 && PktLen!=33) return -1;
      uint8_t Type = PktData[0]>>5; if(Type!=1) return -1;
      Packet[0] = PktData[0];
      LoRaMacJoinDecrypt(PktData+1, PktLen-1, AppKey, Packet+1);                  // decrypt the Join-Accept packet
