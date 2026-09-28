@@ -10,6 +10,7 @@
 
 #include "ogn1.h"
 #include "ogn.h"
+#include "adsl.h"
 
 // =====================================================================================================
 
@@ -152,15 +153,22 @@ static int ProcessFile(const char *FileName)
   { if(fread(&Packet, Packet.Bytes, 1, File)!=1) break;     // read the next packet from the file
     if(!Packet.isCorrect()) continue;                       //
     uint32_t Time=Packet.getTime(UpdTime);                  // [sec] get full time from short time in the aprox. full time
-    int Len=Packet.Packet.WriteAPRS(Line, Time);
+    int Len;
+    if(Packet.Prot)                                         // ADS-L packet
+    { ADSL_Packet AdslPacket;
+      AdslPacket.Version=0x00;
+      memcpy(AdslPacket.Byte, Packet.PktByte(), 20);
+      Len=AdslPacket.WriteAPRS(Line, Time); }
+    else                                                    // OGN1 packet
+      Len=Packet.Packet.WriteAPRS(Line, Time);
     if(Len==0) continue;
     if(Packet.Rx)
     { OGN1_Packet __pkt = Packet.Packet;
-      ProcessRx(__pkt);
+      if(!Packet.Prot) ProcessRx(__pkt);
       IGC.LogComment(MAC, AcftID, Time, Line); }
     else
     { OGN1_Packet __pkt = Packet.Packet;
-      ProcessOwn(__pkt);
+      if(!Packet.Prot) ProcessOwn(__pkt);
       IGC.LogPosition(MAC, AcftID, Time, Line); }
     UpdTime=Time;
     printf("%s\n", Line); }
@@ -196,4 +204,3 @@ int main(int argc, char *argv[])
   { ProcessFile(FileList[Idx]); }
 
   return 0; }
-
