@@ -217,11 +217,15 @@ static void ProcessRxPkt(const char *Line)
       if(GoodCRC) ProcRxPacket(PAW_RxPkt, RxChan, RxRSSI);
     }
     if(GoodCRC && !isPAW)
-    { if(ADSL_RxPkt.getEncrKey()==0) ADSL_RxPkt.Descramble();
+    { const char *Prot="---";
+      if(SysID==Radio_SysID_ADSL) Prot="MDR";
+      else if(SysID==Radio_SysID_LDR) Prot="LDR";
+      else if(SysID==Radio_SysID_HDR) Prot="HDR";
+      if(ADSL_RxPkt.getEncrKey()==0) ADSL_RxPkt.Descramble();
       Address=ADSL_RxPkt.getAddress();
       AddrType=ADSL_RxPkt.getAddrType();
       Altitude=ADSL_RxPkt.getAlt();
-      ProcRxPacket(ADSL_RxPkt, RxChan, RxRSSI, "LDR"); }
+      ProcRxPacket(ADSL_RxPkt, RxChan, RxRSSI, Prot); }
   }
   else if(SysID==Radio_SysID_OGN)
   { if(PktLen!=26) return;
