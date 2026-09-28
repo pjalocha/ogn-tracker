@@ -489,6 +489,7 @@ static uint8_t WritePFLAU(char *NMEA, uint8_t GPS=1)    // produce the (mostly d
 #ifdef WITH_MESHT
 static MeshtProto_NodeInfo Mesht_NodeInfo;
 static MeshtProto_GPS Mesht_GPS;
+static MeshtProto_GPS Mesht_RefGPS;
 static AES128 AES;
 
 static uint32_t MeshtHash(uint32_t X)
@@ -534,12 +535,17 @@ static int getMeshtPacket(MESHT_Packet *Packet, const GPS_Position *Position)
   int Len=0;
   OK=getMeshtGPS(Position);
   if(OK) Len=MeshtProto::EncodeGPS(Packet->getMeshtMsg(), Mesht_GPS);
-  if(InfoBackOff) InfoBackOff--;
+  bool Pos=OK;
   if(!OK || InfoBackOff==0)
   { OK=getMeshNodeInfo();
     if(OK) Len=MeshtProto::EncodeNodeInfo(Packet->getMeshtMsg(), Mesht_NodeInfo);
-    InfoBackOff = 10+Random.RX%5; }
+    InfoBackOff = 7+Random.RX%5;
+    Pos=0; }
   if(!OK || Len==0) return 0;
+  if(Pos)
+  { if(!Mesht_GPS.TimeDistLimit(Mesht_RefGPS)) return 0;
+    if(InfoBackOff) InfoBackOff--;
+    Mesht_RefGPS=Mesht_GPS; }
   Packet->Len=Packet->HeaderSize+Len;
   Packet->Header.PktID ^= MeshtHash(Packet->Header.Src+Mesht_GPS.Time);  // scramble packet-ID by the hash of MAC and Time
   OK=Packet->encryptMeshtMsg(AES);
@@ -1258,13 +1264,13 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_MESHT
       static uint8_t MSHbackOff=0;
       if(MSHbackOff) MSHbackOff--;
-      else if(Parameters.TxMSH && Position->isValid() && Radio_FreqPlan.Plan<=1)
+      else if(Parameters.TxMSHT && Position->isValid() && Radio_FreqPlan.Plan<=1 && MSH_TxFIFO.Full()==0)
       { MESHT_Packet *Packet = MSH_TxFIFO.getWrite();
         int OK=getMeshtPacket(Packet, Position);
         if(OK)
         { MSH_TxFIFO.Write();
           XorShift32(Random.RX);                                              // random for next packet time
-          MSHbackOff = 50+(Random.RX%19); }                                   // every minute or so
+          MSHbackOff = 20+(Random.RX%21); }                                   // minimum 20..40 seconds
       }
 #endif // WITH_MESHT
 #ifdef WITH_PAW

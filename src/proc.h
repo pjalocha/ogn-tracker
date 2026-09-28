@@ -4,6 +4,8 @@
 extern uint8_t AlarmThresh;
 #endif
 
+extern uint8_t AlarmLevel;             // current alarm level, from Lookout, 0=no alarm
+
 #ifdef WITH_LOOKOUT                   // traffic awareness and warnings
 #include "lookout.h"
 extern LookOut<32> Look;
@@ -29,4 +31,3 @@ extern Relay_PrioQueue<ADSL_RxPacket, RelayQueueSize>           ADSL_RelayQueue;
   extern "C"
 #endif
  void vTaskPROC(void* pvParameters);
-

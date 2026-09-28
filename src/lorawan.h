@@ -174,13 +174,28 @@ class LoRaWANnode
 
    int procJoinAccept(const uint8_t *PktData, int PktLen)                        // process Join-Accept packet (5sec after Join-Request)
    { // LoRaWAN 1.0 Join-Accept: 17 bytes without CFList, 33 bytes with CFList.
+#ifdef WITH_LORAWAN_DEBUG
+     printf("LoRaWAN join-accept: enter len=%d state=%u\n", PktLen, State);
+#endif
      if(PktLen!=17 && PktLen!=33) return -1;
      uint8_t Type = PktData[0]>>5; if(Type!=1) return -1;
      Packet[0] = PktData[0];
      LoRaMacJoinDecrypt(PktData+1, PktLen-1, AppKey, Packet+1);                  // decrypt the Join-Accept packet
+#ifdef WITH_LORAWAN_DEBUG
+     printf("LoRaWAN join-accept: decrypted\n");
+#endif
      uint32_t MIC=0;
      LoRaMacJoinComputeMic(Packet, PktLen-4, AppKey, &MIC);                      // Compute MIC
-     if(memcmp( Packet+PktLen-4, &MIC, 4)) return -1;                            // Compare with the packet
+     if(memcmp( Packet+PktLen-4, &MIC, 4))
+     {
+#ifdef WITH_LORAWAN_DEBUG
+       printf("LoRaWAN join-accept: MIC mismatch\n");
+#endif
+       return -1;
+     }                                                                    // Compare with the packet
+#ifdef WITH_LORAWAN_DEBUG
+     printf("LoRaWAN join-accept: MIC OK, deriving keys\n");
+#endif
      LoRaMacJoinComputeSKeys(AppKey, Packet+1, DevNonce, NetSesKey, AppSesKey);  // derive Network Session and Application Session keys
      JoinNonce = readInt<uint32_t>(Packet+1, 3);                                 // this should be not smaller than the previous one
      HomeNetID = readInt<uint32_t>(Packet+4, 3);
@@ -191,6 +206,10 @@ class LoRaWANnode
      UpCount = 0;
      DnCount = 0xFFFFFFFF;
      TxOptLen  = 0;
+#ifdef WITH_LORAWAN_DEBUG
+     printf("LoRaWAN join-accept: keys ready DevAddr=%08lX DL=%02X RxDelay=%u\n",
+            (unsigned long)DevAddr, DLsetting, getRxDelaySeconds());
+#endif
 #ifdef WITH_LORAWAN_DEBUG
      printf("Accept[%d] ", PktLen-4);
      for(int Idx=0; Idx<PktLen-4; Idx++)
