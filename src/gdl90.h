@@ -185,7 +185,7 @@ class GDL90_GEOMALT     // Geometrical altitude: ID = 11 (GPS ref. to Ellipsoid)
    int Send(char  *Output       , bool EscCtrl=0) const { return GDL90_Send(Output, 11, Data, Size, EscCtrl); }
 
    void Print(void) const
-   { printf("GDL90_GEOMALT: %dft (%dm) Warn:%d\n", getAltitude()*5, getFOM(), getWarning()); }
+   { printf("GDL90_GEOMALT: %ldft (%dm) Warn:%d\n", getAltitude()*5, getFOM(), getWarning()); }
 
 } ;
 
@@ -301,10 +301,10 @@ class GDL90_REPORT  // Position report: Traffic: ID = 20, Ownship: ID = 10
   int Send(char  *Output       , uint8_t ID=10, bool EscCtrl=0) const { return GDL90_Send(Output, ID, Data, Size, EscCtrl); }
 
   void Print(void) const
-  { printf("%X:%06X %02X/%8s NIC:%X NACp:%X %5dft",
+  { printf("%X:%06lX %02X/%8s NIC:%X NACp:%X %5ldft",
        getAddrType(), getAddress(), getAcftCatADSB(), getAcftCall(),
        getNIC(), getNACp(), getAltitude());
-    if(hasClimbRate()) printf(" %+5dfpm", getClimbRate());
+    if(hasClimbRate()) printf(" %+5ldfpm", getClimbRate());
     printf(" [%+09.5f,%+010.5f] %03.0f/%dkt MI:%X Alrt:%X Prio:%X\n",
        (90.0/0x40000000)*getLatitude(), (90.0/0x40000000)*getLongitude(),
        (360.0/256)*getHeading(), getSpeed(),

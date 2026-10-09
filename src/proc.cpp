@@ -503,7 +503,7 @@ static uint32_t MeshtHash(uint32_t X)
 static int getMeshNodeInfo(void)
 { Mesht_NodeInfo.Clear();
   Mesht_NodeInfo.MAC=getUniqueID();
-  sprintf(Mesht_NodeInfo.ID,    "!%08x",   (uint32_t)Mesht_NodeInfo.MAC);
+  sprintf(Mesht_NodeInfo.ID,    "!%08lx",   (unsigned long)(uint32_t)Mesht_NodeInfo.MAC);
   sprintf(Mesht_NodeInfo.Short, "%04x",    (uint16_t)Mesht_NodeInfo.MAC);
   Mesht_NodeInfo.Role=5;                 // 5:tracker
 #if defined(WITH_TBEAM07) || defined(WITH_TBEAM10) || defined(WITH_TBEAM12)
@@ -1221,7 +1221,7 @@ void vTaskPROC(void* pvParameters)
       static uint8_t TxBackOff=0;
       if(TxBackOff) TxBackOff--;
       else
-      { if(!GhostSilent) OGN_TxFIFO.Write();                                                // complete the write into the TxFIFO
+      { if(Parameters.TxOGN && !GhostSilent) OGN_TxFIFO.Write();                            // complete the write into the TxFIFO
         TxBackOff = 0;
         if(AlarmLevel==0 && AverSpeed<10 && !FloatAcft) TxBackOff += 3+(Random.RX&0x1);
         if(Radio_TxCredit<=0) TxBackOff+=1; }
@@ -1231,7 +1231,9 @@ void vTaskPROC(void* pvParameters)
       ADSL_Packet *AdslPacket=0;                                               // keep the pointer to the
       { static uint8_t TxBackOff=0;
         if(TxBackOff) TxBackOff--;
-        else if(!GhostSilent && (Radio_FreqPlan.Plan<=1 || Radio_FreqPlan.Plan==4)) // ADS-L only in Europe/Africa or NZ
+        else if(Parameters.TxADSL && Parameters.AcftType<15                    // no ADS-L position for fix-object
+                && !GhostSilent
+                && (Radio_FreqPlan.Plan<=1 || Radio_FreqPlan.Plan==4))         // ADS-L only in Europe/Africa or NZ
         { AdslPacket = ADSL_TxFIFO.getWrite();
           AdslPacket->Init();
           AdslPacket->setAddress (Parameters.Address);
@@ -1252,7 +1254,9 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_FANET
       static uint8_t FNTbackOff=0;
       if(FNTbackOff) FNTbackOff--;
-      else if(Parameters.TxFNT && !GhostSilent && Position->isValid() && Radio_FreqPlan.Plan<=4)
+      else if(Parameters.TxFNT && Parameters.AcftType<15
+              && !GhostSilent && Position->isValid()
+              && Radio_FreqPlan.Plan<=4)
       { FANET_Packet *Packet = FNT_TxFIFO.getWrite();
         Packet->setAddress(Parameters.Address);
         Position->EncodeAirPos(*Packet, Parameters.AcftType, !Parameters.Stealth);
@@ -1270,18 +1274,20 @@ void vTaskPROC(void* pvParameters)
         if(OK)
         { MSH_TxFIFO.Write();
           XorShift32(Random.RX);                                              // random for next packet time
-          MSHbackOff = 20+(Random.RX%21); }                                   // minimum 20..40 seconds
+          MSHbackOff = 20+(Random.RX%21);                                     // minimum 20..40 seconds
+          if(Parameters.AcftType) MSHbackOff+=300; }
       }
 #endif // WITH_MESHT
 #ifdef WITH_PAW
       XorShift32(Random.RX);
       static uint8_t PAW_BackOff=0;
       if(PAW_BackOff) PAW_BackOff--;
-      else if(Parameters.TxFNT && !GhostSilent && Position->isValid() && Radio_FreqPlan.Plan<=1 && FNT_TxFIFO.Full()==0)
+      else if(Parameters.TxOGN && !GhostSilent && Position->isValid() && Radio_FreqPlan.Plan<=1 && PAW_TxFIFO.Full()==0)
       { PAW_Packet *TxPacket = PAW_TxFIFO.getWrite();                    // get place for a new PAW packet in the transmitter queue
         int Good=TxPacket->Read(PosPacket.Packet);                       // convert OGN position packet to PilotAware
         if(Good)
-        { PAW_TxFIFO.Write();                                            // complete the write into the transmitter queue
+        { TxPacket->Whiten();
+          PAW_TxFIFO.Write();                                            // complete the write into the transmitter queue
           PAW_BackOff = 3+Random.RX%3; }                                 // randomly choose time to transmit next PAW packet
       }
 #endif
@@ -1293,13 +1299,13 @@ void vTaskPROC(void* pvParameters)
 #ifdef WITH_PFLAA
 #ifdef WITH_BLE_SPP
       if(xSemaphoreTake(BLE_Mutex, 25))
-      { if(BLE_UART_Free()>80) Look.WritePFLA(BLE_UART_Write);
+      { Look.WritePFLA(BLE_UART_Write, BLE_UART_Free());
         xSemaphoreGive(BLE_Mutex); }
 #endif
 #ifdef CONS_OUTPUT
       if(Parameters.Verbose>0)
       { if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))
-        { if(CONS_UART_Free()>80) Look.WritePFLA(CONS_UART_Write);        // produce PFLAU and PFLAA for all tracked targets
+        { Look.WritePFLA(CONS_UART_Write, CONS_UART_Free());        // produce PFLAU and PFLAA for all tracked targets
           xSemaphoreGive(CONS_Mutex); }
         Look.WritePFLA(SysLog_Line, 0, 25, 1);                            // write all PFLA'a to the console/sys-log
       }
@@ -1472,7 +1478,7 @@ void vTaskPROC(void* pvParameters)
       static uint8_t StatTxPkt = 0;
       XorShift32(Random.RX);
       if(StatTxBackOff) StatTxBackOff--;
-      else if(ADSL_TxFIFO.Full()<2 )                    // decide whether to transmit the status/info packet
+      else if(Parameters.TxADSL && ADSL_TxFIFO.Full()<2 )         // decide whether to transmit the status/info packet
       { ADSL_Packet *Packet = ADSL_TxFIFO.getWrite();
         StatTxPkt++; if(StatTxPkt>3) StatTxPkt=0;
         if(getTelemetry(*Packet, Position, StatTxPkt))

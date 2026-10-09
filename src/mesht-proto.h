@@ -309,7 +309,7 @@ class MeshtProto
       { uint32_t Int;
         int Len=ReadInt32(Int, Inp, InpLen); if(Len<=0) break;
         Inp+=Len; InpLen-=Len;
-        printf("%2d:Int32 : 0x%08X = %10d\n", ID, Int, Int); continue; }
+        printf("%2d:Int32 : 0x%08lX = %10ld\n", ID, Int, Int); continue; }
       if(Wire==2)
       { uint64_t Int;
         int Len=ReadVarInt(Int, Inp, InpLen); if(Len<=0) break;
@@ -502,9 +502,9 @@ class MeshtProto
     }
     OutLen=sprintf(Out, "GPS: [%+09.5f,%+010.5f]deg", 1e-7*Lat, 1e-7*Lon);
     if(PosSrc>=0) OutLen+=sprintf(Out+OutLen, "/%d", PosSrc);
-    if(Alt>=0) OutLen+=sprintf(Out+OutLen, " %dm", Alt);
+    if(Alt>=0) OutLen+=sprintf(Out+OutLen, " %ldm", Alt);
     if(AltSrc>=0) OutLen+=sprintf(Out+OutLen, "/%d", AltSrc);
-    if(Time>0) OutLen+=sprintf(Out+OutLen, " %10ds", Time);
+    if(Time>0) OutLen+=sprintf(Out+OutLen, " %10lds", Time);
     if(PrecBits>=0) OutLen+=sprintf(Out+OutLen, " %dbits", PrecBits);
     return OutLen; }
 
@@ -631,9 +631,9 @@ class MeshtProto
         if(ID==Node_PubKey)    { OutLen+=sprintf(Out+OutLen, " Key=");   OutLen+=PrintHex(Out+OutLen, chVal, chLen); }
       }
       else
-      { if(ID==Node_Hardware) OutLen+=sprintf(Out+OutLen, " HW=%u", Value);
-        if(ID==Node_Licenced) OutLen+=sprintf(Out+OutLen, " Licence=%u", Value);
-        if(ID==Node_Role)     OutLen+=sprintf(Out+OutLen, " Role=%u", Value);
+      { if(ID==Node_Hardware) OutLen+=sprintf(Out+OutLen, " HW=%lu", Value);
+        if(ID==Node_Licenced) OutLen+=sprintf(Out+OutLen, " Licence=%lu", Value);
+        if(ID==Node_Role)     OutLen+=sprintf(Out+OutLen, " Role=%lu", Value);
       }
     }
     return OutLen; }
@@ -690,7 +690,7 @@ class MeshtProto
         if(ID==Telem_Health)   { OutLen+=PrintTelem_Health(Out+OutLen, chVal, chLen); }
       }
       else
-      { if(ID==Telem_Time) OutLen+=sprintf(Out+OutLen, " Time=%us", Value);
+      { if(ID==Telem_Time) OutLen+=sprintf(Out+OutLen, " Time=%lus", Value);
       }
     }
     return OutLen; }
@@ -719,11 +719,11 @@ class MeshtProto
       { Inp+=chLen; InpLen-=chLen;
       }
       else
-      { if(ID==Telem_Dev_BattLevel) OutLen+=sprintf(Out+OutLen, " Bat=%u%%", Value);
+      { if(ID==Telem_Dev_BattLevel) OutLen+=sprintf(Out+OutLen, " Bat=%lu%%", Value);
         if(ID==Telem_Dev_BattVolt)  OutLen+=sprintf(Out+OutLen, " Bat=%5.3fV", Float(Value));
         if(ID==Telem_Dev_AirUtil)   OutLen+=sprintf(Out+OutLen, " Air=%4.2f%%", Float(Value));
         if(ID==Telem_Dev_ChanUtil)  OutLen+=sprintf(Out+OutLen, " Chan=%4.2f%%", Float(Value));
-        if(ID==Telem_Dev_UpTime)    OutLen+=sprintf(Out+OutLen, " Up=%us", Value);
+        if(ID==Telem_Dev_UpTime)    OutLen+=sprintf(Out+OutLen, " Up=%lus", Value);
       }
     }
     return OutLen; }
@@ -772,8 +772,8 @@ class MeshtProto
         if(ID==Telem_Env_GasResist)   OutLen+=sprintf(Out+OutLen, " Gas=%1.0fMOhm",  Float(Value));
         if(ID==Telem_Env_Voltage)     OutLen+=sprintf(Out+OutLen, " Volt=%5.3fV",    Float(Value));
         if(ID==Telem_Env_Current)     OutLen+=sprintf(Out+OutLen, " Curr=%3.1fmA",   Float(Value));
-        if(ID==Telem_Env_IAQ)         OutLen+=sprintf(Out+OutLen, " IAQ=%u", Value);
-        if(ID==Telem_Env_WindDir)     OutLen+=sprintf(Out+OutLen, " Wind=%udeg", Value);
+        if(ID==Telem_Env_IAQ)         OutLen+=sprintf(Out+OutLen, " IAQ=%lu", Value);
+        if(ID==Telem_Env_WindDir)     OutLen+=sprintf(Out+OutLen, " Wind=%ludeg", Value);
         if(ID==Telem_Env_WindSpeed)   OutLen+=sprintf(Out+OutLen, " Wind=%3.1fm/s", Float(Value));
         if(ID==Telem_Env_WindGust)    OutLen+=sprintf(Out+OutLen, " Gust=%3.1fm/s", Float(Value));
         if(ID==Telem_Env_WindLull)    OutLen+=sprintf(Out+OutLen, " Lull=%3.1fm/s", Float(Value));

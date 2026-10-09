@@ -876,8 +876,8 @@ static int Radio_Slot(uint8_t TxChannel, float TxPower, uint32_t msTimeLen, cons
     if(Parameters.Verbose>=2)
     { uint32_t msTime = millis()-GPS_TimeSync.sysTime;
       uint8_t PktLen=24; if(TxPktLen) PktLen=TxPktLen;
-      int Len=sprintf(Line, "<%10u:%4d [%d:%d] #%d %3.1fdBm ",
-          GPS_TimeSync.UTC, msTime, TxSysID, PktLen, TxChannel, TxPower);
+      int Len=sprintf(Line, "<%10lu:%4d [%d:%d] #%d %3.1fdBm ",
+          (unsigned long)GPS_TimeSync.UTC, msTime, TxSysID, PktLen, TxChannel, TxPower);
       for(uint8_t Idx=0; Idx<PktLen; Idx++)
       { Len+=Format_Hex(Line+Len, TxPacket[Idx]); }
       Line[Len++]='\n'; Line[Len]=0;
@@ -1437,20 +1437,6 @@ void Radio_Task(void *Parms)
     if(FNTpacket) FNT_TxFIFO.Read();
 #endif
 
-#ifdef WITH_PAW
-    PAW_Packet *PawPacket = PAW_TxFIFO.getRead();
-    uint32_t FreqPAW = Radio_FreqPlan.getFreqOBAND();
-    if(PawPacket && FreqPAW)                         // if there is a packet to be transmitted and the frequency plan allows it
-    { Radio.standby();
-      int Ret=Radio_ConfigLDR();
-      Radio_setFrequency(1e-6*FreqPAW);
-      Radio_setOutputPower(Parameters.TxPower+13);       // we can transmit PAW with higher power
-      // Serial.printf("TxPAW: Freq:%7.3fMHz/%ddBm (%d) [%X:%X:%08X]\n",
-      //          1e-6*FreqPAW, Parameters.TxPower+13, Ret, (int)PAW_TxFIFO.ReadPtr, (int)PAW_TxFIFO.WritePtr, (int)PawPacket);
-      Radio_TxPAW(*PawPacket); }
-    if(PawPacket) PAW_TxFIFO.Read();
-#endif
-
     const OGN_TxPacket<OGN_Packet> *OgnPacket1 = OGN_TxFIFO.getRead();   // 1st OGN packet (possibly NULL)
     if(OgnPacket1) OGN_TxFIFO.Read();
     const OGN_TxPacket<OGN_Packet> *OgnPacket2 = OGN_TxFIFO.getRead();   // 2nd OGN packet (possibly NULL)
@@ -1464,6 +1450,11 @@ void Radio_Task(void *Parms)
     if(AdslPacket2) { ADSL_TxFIFO.Read(); }
     //            else { AdslPacket2=AdslPacket1; }
     if(Random.RX&8) Swap(AdslPacket1, AdslPacket2);
+
+#ifdef WITH_PAW
+    const PAW_Packet *PawPacket = PAW_TxFIFO.getRead();
+    if(PawPacket) PAW_TxFIFO.Read();
+#endif
 
     bool EU = Radio_FreqPlan.Plan<=1;
     bool NZ = Radio_FreqPlan.Plan==4;
@@ -1484,8 +1475,12 @@ void Radio_Task(void *Parms)
       if(TxChan>2) TxChan=2;
            if(TxChan==FLR_Chan) { TxPkt=ADSL_Pkt; TxProt=Radio_SysID_ADSL; RxProt=Radio_SysID_FLR_ADSL; }           // 0
       else if(TxChan==OGN_Chan) { TxPkt=OGN_Pkt;  TxProt=Radio_SysID_OGN;  RxProt=Radio_SysID_OGN_ADSL; }           // 1
-      else /* if(TxChan==2) */  { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR; }           // 2
-      // else                { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_HDR;  RxProt=Radio_SysID_HDR; TxChan=2; } // 3
+      else                                                                                                 // 2 (or 3)
+      { TxPwr+=13; TxPkt=ADSL_Pkt; TxProt=Radio_SysID_LDR;  RxProt=Radio_SysID_LDR;
+#ifdef WITH_PAW
+        if(PawPacket) TxPkt=PawPacket->Byte;
+#endif
+      }
     }
     else if(NZ)                                                            // New Zealand
     { TxChan = Radio_FreqPlan.HopChan1(TimeRef.UTC);
@@ -1708,12 +1703,12 @@ void Radio_Task(void *Parms)
     // Serial.printf("Radio: %us %ums %dpkt\n", TimeRef.UTC, millis()-TimeRef.sysTime, PktCountSum);
     if(TimeRef.UTC%10!=5) continue; // only print every 10sec
     int LineLen=sprintf(Line,
-     "Radio: Tx: %u:%u:%u:%u:%u:%u  Rx: %u:%u:%u:%u:%u:%u %u:%u  %u:%u:%u:%u:%u:%u  %3.1fdBm %u+%ums %u:%3.1f/s",
-       Radio_TxCount[0], Radio_TxCount[1], Radio_TxCount[2], Radio_TxCount[4], Radio_TxCount[5], Radio_TxCount[6],
-       Radio_RxCount[0], Radio_RxCount[1], Radio_RxCount[2], Radio_RxCount[4], Radio_RxCount[5], Radio_RxCount[6],
-       Radio_RxCount[8], Radio_RxCount[9],
-       RxProc_Count[0], RxProc_Count[1], RxProc_Count[2], RxProc_Count[4], RxProc_Count[5], RxProc_Count[6],
-       Radio_BkgRSSI, Radio_msLiveTime, Radio_msDeadTime, PktCountSum, Radio_PktRate /*, 0.001*Radio_TxCredit, */
+     "Radio: Tx: %lu:%lu:%lu:%lu:%lu:%lu  Rx: %lu:%lu:%lu:%lu:%lu:%lu %lu:%lu  %lu:%lu:%lu:%lu:%lu:%lu  %3.1fdBm %lu+%lums %lu:%3.1f/s",
+       (unsigned long)Radio_TxCount[0], (unsigned long)Radio_TxCount[1], (unsigned long)Radio_TxCount[2], (unsigned long)Radio_TxCount[4], (unsigned long)Radio_TxCount[5], (unsigned long)Radio_TxCount[6],
+       (unsigned long)Radio_RxCount[0], (unsigned long)Radio_RxCount[1], (unsigned long)Radio_RxCount[2], (unsigned long)Radio_RxCount[4], (unsigned long)Radio_RxCount[5], (unsigned long)Radio_RxCount[6],
+       (unsigned long)Radio_RxCount[8], (unsigned long)Radio_RxCount[9],
+       (unsigned long)RxProc_Count[0], (unsigned long)RxProc_Count[1], (unsigned long)RxProc_Count[2], (unsigned long)RxProc_Count[4], (unsigned long)RxProc_Count[5], (unsigned long)RxProc_Count[6],
+       Radio_BkgRSSI, (unsigned long)Radio_msLiveTime, (unsigned long)Radio_msDeadTime, (unsigned long)PktCountSum, Radio_PktRate /*, 0.001*Radio_TxCredit, */
        /* uxTaskGetStackHighWaterMark(NULL) */ );
              // FNT_TxFIFO.isCorrupt()?'!':'_', FNT_RxFIFO.isCorrupt()?'!':'_',
              // OGN_TxFIFO.isCorrupt()?'!':'_', ADSL_TxFIFO.isCorrupt()?'!':'_',

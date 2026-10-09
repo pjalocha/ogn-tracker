@@ -246,7 +246,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      Out[Len++]='0'+Header.Relay;
      if(!Header.NonPos) return Len+PrintPosition(Out+Len);
      if(isStatus()) return Len+PrintDeviceStatus(Out+Len);
-     if(isInfo  ()) return Len+PrintDeviceInfo(Out+Len);
+     if(isInfo  ()) { if(!goodInfoCheck()) { Out[0]=0; return 0; } return Len+PrintDeviceInfo(Out+Len); }
      if(isMeteo ()) return Len+PrintMeteo(Out+Len);
      Out[Len]=0; return Len; }
 
@@ -304,7 +304,8 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
 */
 
    uint8_t getInfo(char *Value, uint8_t Type=5) const
-   { int Len=0;
+   { if(!goodInfoCheck()) return 0;
+     int Len=0;
      uint8_t InfoType;
      uint8_t Idx=0;
      for( ; ; )
@@ -316,6 +317,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
 
    int PrintDeviceInfo(char *Out) const
    { int Len=0;
+     if(!goodInfoCheck()) { Out[0]=0; return 0; }
      char Value[16];
      uint8_t InfoType;
      uint8_t Idx=0;
@@ -361,7 +363,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
 
   int Meteo_DBreport(char *Line, double Time, uint32_t ID, float RSSI) const
   { int Len=0;
-    Len+=sprintf(Line+Len, "%14.3f;%ld;;%3.1f;", Time, ID, RSSI);                        // time, ID, no radio channel, radio RSSI
+    Len+=sprintf(Line+Len, "%14.3f;%d;;%3.1f;", Time, ID, RSSI);                        // time, ID, no radio channel, radio RSSI
     if(Meteo.hasWind) Len+=sprintf(Line+Len, ";%03d;%3.1f;%3.1f;",                      // wind-direction [deg], wind speed [kt]
                             ((uint16_t)Meteo.WindDir*90+32)>>6, 0.86898*Meteo.WindSpeed, 0.86898*Meteo.WindGust);
                  else Len+=sprintf(Line+Len, ";;;;");
@@ -407,7 +409,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
    void Print(void) const
    { if(!Header.NonPos) return PrintPosition();
      if(isStatus()) return PrintDeviceStatus();
-     if(isInfo  ()) return PrintDeviceInfo();
+     if(isInfo  ()) { if(!goodInfoCheck()) { printf(" BadInfoCheck\n"); return; } return PrintDeviceInfo(); }
      // if(isMeteo ()) return PrintMeteo();
      printf(" NonPos:%d\n", Status.ReportType); }
 
@@ -610,14 +612,6 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      return AcftType<16 ? AprsIcon[AcftType]:0;
    }
 
-   static uint8_t ReadAddrType(const char *Msg)
-   { if(memcmp(Msg, "RND", 3)==0) return 0;
-     if(memcmp(Msg, "ICA", 3)==0) return 1;
-     if(memcmp(Msg, "FLR", 3)==0) return 2;
-     if(memcmp(Msg, "FNT", 3)==0) return 2;
-     if(memcmp(Msg, "OGN", 3)==0) return 3;
-     return 0; }
-
    int ReadAPRS(const char *Msg)                                                 // read an APRS position message
    { Clear();
 
@@ -777,7 +771,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
 
      if(Header.NonPos)                                            // status and info packets
      {      if(isStatus()) Len+=PrintDeviceStatus(Msg+Len);
-       else if(isInfo()  ) Len+=PrintDeviceInfo(Msg+Len);
+       else if(isInfo()  ) { if(!goodInfoCheck()) { Msg[0]=0; return 0; } Len+=PrintDeviceInfo(Msg+Len); }
        else if(isMeteo() ) Len+=PrintMeteo(Msg+Len);
        Msg[Len]=0; return Len; }
 
@@ -859,7 +853,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
    { LatDist = DecodeLatitude()-RefLat; if(abs(LatDist)>1080000) return -1; // to prevent overflow, corresponds to about 200km
      LatDist = (LatDist*1517+0x1000)>>13;      // convert from 1/600000deg to meters (40000000m = 360deg) => x 5/27 = 1517/(1<<13)
      if(abs(LatDist)>MaxDist) return -1;
-     LonDist = DecodeLongitude()-RefLon; if(abs(LonDist)>1080000) return -1;
+     LonDist = DecodeLongitude()-RefLon; if(abs(LatDist)>1080000) return -1;
      LonDist = (LonDist*1517+0x1000)>>13;
      if(abs(LonDist)>(4*MaxDist)) return -1;
              LonDist = (LonDist*LatCos+0x800)>>12;
@@ -974,7 +968,7 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      return (Heading*3600+512)>>10; }
 
    void EncodeHeading(int16_t Heading)
-   { Position.Heading = (((int32_t)Heading<<10)+1800)/3600; }
+   { Position.Heading = (((int32_t)Heading<<10)+180)/3600; }
 
    void setHeadingAngle(uint16_t HeadingAngle)
    { Position.Heading = (((HeadingAngle+32)>>6)); }
@@ -1045,22 +1039,22 @@ class __attribute__((packed, aligned(4))) OGN1_Packet  // Packet structure for t
      return (Info.Data[Idx]>>Ofs) | ((Info.Data[Idx+1]<<Len)&0x7F); }
 
    void clrInfo(void)                                    // clear the info packet
-   { Data[0]=0; Data[1]=0; Data[2]=0; Data[3]=0;
-     // Info.DataChars=0;                                   // clear number of characters
+   { for(uint8_t Idx=0; Idx<sizeof(Info.Byte); Idx++) Info.Byte[Idx]=0;
      Info.ReportType=1; }                                // just in case: set the report-type
 
    uint8_t addInfo(const char *Value, uint8_t InfoType)  // add an info field
    { uint8_t Idx=Info.DataChars;                         // number of characters already in the info packet
      if(Idx) Idx++;                                      // if at least one already, then skip over the terminator
-     if(Idx>=15) return 0;                               // return zero when no more space
+     if(Idx>=15) return 0;                               // return zero when no more speca
      uint8_t Len=0;
-     for( ; ; )                                          // loop over characters in Value
-     { uint8_t Char = Value[Len]; if(Char==0) break;     // next character, NL means end-of-string
-       if(Idx>=15) return 0;                             // return zero when no more space
-       setInfoChar(Char, Idx++);
+     for( ; ; )
+     { uint8_t Char = Value[Len]; if(Char==0) break;
+       if((Idx+Len)>=15) return 0;                       // return zero when no more space
        Len++; }
-     setInfoChar(InfoType, Idx);                         // terminating character
-     Info.DataChars=Idx;                                 // update number of characters
+     for(uint8_t Pos=0; Pos<Len; Pos++)
+     { setInfoChar(Value[Pos], Idx+Pos); }
+     setInfoChar(InfoType, Idx+Len);                     // terminating character
+     Info.DataChars=Idx+Len;                             // update number of characters
      return Len+1; }                                     // return number of added Value characters
 
    uint8_t readInfo(char *Value, uint8_t &InfoType, uint8_t ValueIdx=0) const
@@ -1145,4 +1139,3 @@ class OGN1_DiffPacket
 */
 
 #endif // of __OGN1_H__
-

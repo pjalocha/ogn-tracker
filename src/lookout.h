@@ -136,11 +136,10 @@ class LookOut_Target           // describes a flying aircrafts
      Len+=Format_SignDec(NMEA+Len, (int32_t)dZ/2, 1, 0, 1);        // [m] relative altitude
      NMEA[Len++]=',';
      uint8_t AddrType = (ID>>24)&0x03F;
-// #ifdef WITH_SKYDEMON                                            // SkyDemon hack which accepts only 1 or 2
-//      if(AddrType!=1) AddrType=2;
-     bool ICAO=AddrType==5;                                        //
-// #endif
-     NMEA[Len++]='2'-ICAO;                                         // address-type (3=OGN, but not accepted by SkyDemon)
+     if(AddrType<4) AddrType=4;
+     else if(AddrType>6) AddrType=6;
+     AddrType-=4;
+     NMEA[Len++]='0'+AddrType;                                     // address-type 0=RND, 1=ICAO, 2=FLARM/OGN
      NMEA[Len++]=',';
      uint32_t Addr = ID&0xFFFFFF;                                  // [24-bit] address
      Len+=Format_Hex(NMEA+Len, (uint8_t)(Addr>>16));               // 24-bit address: RND, ICAO, FLARM, OGN
@@ -151,7 +150,7 @@ class LookOut_Target           // describes a flying aircrafts
      Len+=Format_UnsDec(NMEA+Len, ((uint32_t)Pos.Heading*45+0x1000)>>13);  // [deg] heading - without decimal part
      NMEA[Len++]=',';
      // Len+=Format_SignDec(NMEA+Len, ((int32_t)Pos.Turn*225+0x800)>>12, 2, 1); // [deg/sec] turn rate
-     if(Pos.hasTurn) Len+=Format_SignDec(NMEA+Len, ((int32_t)Pos.Turn*45+0x1000)>>13, 1, 0, 1); // [deg/s] turning rate - without decimal part
+     // Turn-rate omitted for SkyDemon compatibility
      NMEA[Len++]=',';
      // Len+=Format_UnsDec(NMEA+Len, (uint32_t)Pos.Speed*5, 2, 1);              // [approx. m/s] ground speed
      Len+=Format_UnsDec(NMEA+Len, (uint32_t)Pos.Speed/2, 1);              // [approx. m/s] ground speed - without decimal
@@ -238,20 +237,21 @@ template <const uint8_t MaxTgts=32>
      RxProtPipeMask=1;
      SortSize=0; }
 
-   static bool Lower_Dist(LookOut_Target *A, LookOut_Target *B) // sorting function: lower distance first
-   { if(!B->Alloc) return 1;
-     if(!A->Alloc) return 0;
-     if(A->WarnLevel>0 || B->WarnLevel>0 ) return A->WarnLevel > B->WarnLevel;
-     if(A->DistMargin>0 || B->DistMargin>0) return A->DistMargin < B->DistMargin;
-     return A->TimeMargin < B->TimeMargin; }
+   static bool HigherThreat(LookOut_Target *A, LookOut_Target *B)
+   { if(A->WarnLevel!=B->WarnLevel) return A->WarnLevel>B->WarnLevel;
+     if(A->WarnLevel && A->TimeMargin!=B->TimeMargin) return A->TimeMargin<B->TimeMargin;
+     if(A->DistMargin!=B->DistMargin) return A->DistMargin<B->DistMargin;
+     if(A->TimeMargin!=B->TimeMargin) return A->TimeMargin<B->TimeMargin;
+     if(A->HorDist!=B->HorDist) return A->HorDist<B->HorDist;
+     return A->ID<B->ID; }
 
-   void Sort_Dist(void)                                         // sort targets: lower distance first
+   void Sort_Threat(void)                                       // sort targets by threat priority
    { SortSize=0;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { LookOut_Target *Tgt = Target+Idx; if(!Tgt->Alloc) continue;
        Sort[SortSize++]=Tgt; }
      if(SortSize<=1) return;
-     std::sort(Sort, Sort+SortSize, Lower_Dist); }
+     std::sort(Sort, Sort+SortSize, HigherThreat); }
 
    uint8_t countNearAcft(void) const
    { uint8_t Count=0;
@@ -300,6 +300,22 @@ template <const uint8_t MaxTgts=32>
      }
    }
 
+   uint16_t WritePFLA(void (*Output)(char), uint16_t MaxBytes) // write whole sentences within the available output budget
+   { uint16_t Written=0;
+     uint8_t Len=WritePFLAU(Line);
+     if(Len>MaxBytes) return 0;
+     Format_String(Output, Line, 0, Len);
+     Written+=Len; MaxBytes-=Len;
+     Sort_Threat();
+     for(uint8_t Idx=0; Idx<SortSize; Idx++)
+     { Len=Sort[Idx]->WritePFLAA(Line);
+       if(Len>MaxBytes) break;
+       Format_String(Output, Line, 0, Len);
+       Written+=Len; MaxBytes-=Len;
+     }
+     return Written;
+   }
+
    void WritePFLA(void (*Output)(const char *, int, bool, int, bool), bool Timestamp, int msTimeout, bool LogOnly)
    { uint8_t Len=WritePFLAU(Line); Output(Line, Len, Timestamp, msTimeout, LogOnly);
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
@@ -326,7 +342,7 @@ template <const uint8_t MaxTgts=32>
      NMEA[Len++]='0'+WarnLevel;                            // Warning level: 0..3
      NMEA[Len++]=',';
      if(Tgt)                                               // [deg] relative bearing: -180..+180
-     { Len+=Format_SignDec(NMEA+Len, ((int32_t)getRelBearing(Tgt)*45+0x1000)>>13, 1); }
+     { Len+=Format_SignDec(NMEA+Len, ((int32_t)getRelBearing(Tgt)*45+0x1000)>>13, 1, 0, 1); }
      NMEA[Len++]=',';
      NMEA[Len++]='0'+((WarnLevel>0)<<1);                   // alarm-type: 0=none, 2=aircraft, 3=obstacle/zone/terrain
      NMEA[Len++]=',';
@@ -529,7 +545,7 @@ template <const uint8_t MaxTgts=32>
      return ProcessTarget(&New); }
 
    void setTargetCall(uint32_t Address, uint8_t AddrType, const char *Call)
-   { uint32_t ID=AddrType; ID = (ID<<=24)|Address;
+   { uint32_t ID=AddrType; ID = (ID<<24)|Address;
      uint8_t Idx=0;
      for( ; Idx<MaxTargets; Idx++)
      { if(Target[Idx].Alloc==0) continue;
@@ -682,7 +698,7 @@ template <const uint8_t MaxTgts=32>
      printf("MissTime = %+4.1f, MissDist = %4.1f\n", 0.5*Tgt->MissTime, 0.5*Tgt->MissDist);
 #endif
      if( (Tgt->MissTime<0) || (Tgt->MissTime>(2*WarnTime)) || (Tgt->MissDist>MinMissDist) ) Tgt->WarnLevel=0;
-     else if(Tgt->MissDist<(2*MinHorizSepar)) { Tgt->WarnLevel=2; if(Tgt->MissTime<(2*WarnTime/3)) Tgt->WarnLevel=3; }
+     else if(Tgt->MissDist<(2*MinHorizSepar)) { Tgt->WarnLevel=2; if(Tgt->MissTime<WarnTime) Tgt->WarnLevel=3; }
 #ifdef DEBUG_PRINT
      printf("calcTarget(%08X) V=[%+5.1f, %+5.1f, %+5.1f]m/s D=[%+7.1f, %+7.1f, %+7.1f]m MissTime=%5.1fsec MissDist=%6.1fm\n",
               Tgt->ID, 0.5*Tgt->Vx, 0.5*Tgt->Vy, 0.5*Tgt->Vz, 0.5*Tgt->dX, 0.5*Tgt->dY, 0.5*Tgt->dZ, 0.5*Tgt->MissTime, 0.5*Tgt->MissDist);

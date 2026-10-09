@@ -449,7 +449,8 @@ int TFT_DrawLookout(void)
   //                                  "Pwrd", "Jet ", "Gyro", "Ball",
   //                                  "Zepp", "UAV ", "Car ", "Fix " } ;
 
-  Look.Sort_Dist();
+  // Look.Sort_Dist();
+  Look.Sort_Threat();
   for( uint8_t Idx=0; Idx<Look.SortSize; Idx++)
   { const LookOut_Target *Tgt = Look.Sort[Idx]; if(!Tgt->Alloc) continue;
     uint16_t Dir=Tgt->getBearing();                                                   // [cordic]

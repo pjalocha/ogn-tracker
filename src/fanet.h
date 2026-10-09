@@ -208,12 +208,12 @@ class FANET_Packet
 
   int Print(char *Out) const
   { int OutLen=0;
-    OutLen+=sprintf(Out+OutLen, "[%2d:%d:%2d] FNT%06X", Len, getMsgType(), MsgLen(), getAddr());
+    OutLen+=sprintf(Out+OutLen, "[%2d:%d:%2d] FNT%06lX", Len, getMsgType(), MsgLen(), getAddr());
     Out[OutLen]=0; return OutLen; }
 
   void Print(const char *Name=0) const
   { if(Name) printf("%s ", Name);
-    printf("[%2d:%d:%2d] FNT%06X", Len, getMsgType(), MsgLen(), getAddr());
+    printf("[%2d:%d:%2d] FNT%06lX", Len, getMsgType(), MsgLen(), getAddr());
     if(getMsgType()==2)                                                      // Name
     { printf(" ");
       for(uint8_t Idx=getMsgOfs(); Idx<Len; Idx++)

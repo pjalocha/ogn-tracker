@@ -228,7 +228,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    int PrintSatPPS(char *Out) const  // print GNSS PPS monitor timestamp and status
    { int Len=0;
      uint8_t RefClock=SatPPS.Data.RefClock; if(RefClock==0) RefClock=1;
-     Len+=sprintf(Out+Len, " SatPPS: %08X:%08X/%dMHz/%3.1fus %+dppm %3.1fus %ds",
+     Len+=sprintf(Out+Len, " SatPPS: %08lX:%08lX/%dMHz/%3.1fus %+dppm %3.1fus %ds",
               SatPPS.Data.UTC, SatPPS.Data.ClockTime, SatPPS.Data.RefClock,
               (1.0/RefClock)*SatPPS.Data.ClockTimeRMS,
               SatPPS.Data.PPSerror, (1.0/RefClock)*SatPPS.Data.PPSresid,
@@ -251,7 +251,7 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    int PrintFlight(char *Out, uint32_t Time=0) const // type #2 = Flight status
    { int Len=0;
      Len+=sprintf(Out+Len, " %s", Flight.Takeoff.Landing?"Landing:":"Takeoff:");
-     Len+=sprintf(Out+Len, "[%+09.5f,%+010.5f] %3dm %03.0f %dm/%dkm",
+     Len+=sprintf(Out+Len, "[%+09.5f,%+010.5f] %3ldm %03.0f %ldm/%dkm",
              1e-7*FNTtoUBX(Flight.Takeoff.Lat<<4), 1e-7*FNTtoUBX(Flight.Takeoff.Lon<<4),
              UnsVRdecode<int32_t,12>(Flight.Takeoff.Alt<<2)-316, (90.0/0x40)*Flight.Takeoff.Dir,
              UnsVRdecode<int32_t,12>(Flight.Takeoff.MaxAlt<<2)-316, Flight.Takeoff.Dist);
@@ -293,22 +293,22 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
    int Print(char *Out) const
    { Out[0]=0;
      if(isPosition())
-       return sprintf(Out, "%02X:%06X R%d %4.1fs [%+09.5f,%+010.5f]deg %dm %+4.1fm/s %05.1fdeg %3.1fm/s NIC:%d, NICp:%d",
+       return sprintf(Out, "%02X:%06lX R%d %4.1fs [%+09.5f,%+010.5f]deg %ldm %+4.1fm/s %05.1fdeg %3.1fm/s NIC:%d, NICp:%d",
          getAddrTable(), getAddress(), isRelay(), 0.25*TimeStamp, FNTtoFloat(getLat()), FNTtoFloat(getLon()),
          getAlt(), 0.125*getClimb(), (45.0/0x40)*getTrack(), 0.25*getSpeed(), NavigIntegrity, HorizAccuracy );
      if(isTelemetry())
      { int Len=0;
        if(Telemetry.Header.TelemType==0)
-       { Len=sprintf(Out, "%02X:%06X %4.1fs", getAddrTable(), getAddress(), 0.25*Telemetry.Header.TimeStamp);
+       { Len=sprintf(Out, "%02X:%06lX %4.1fs", getAddrTable(), getAddress(), 0.25*Telemetry.Header.TimeStamp);
          Len+=PrintTelemetry(Out+Len); }
        else if(Telemetry.Header.TelemType==1)
-       { Len=sprintf(Out, "%02X:%06X ", getAddrTable(), getAddress() );
+       { Len=sprintf(Out, "%02X:%06lX ", getAddrTable(), getAddress() );
          Len+=PrintInfo(Out+Len); }
        else if(Telemetry.Header.TelemType==2)
-       { Len=sprintf(Out, "%02X:%06X ", getAddrTable(), getAddress() );
+       { Len=sprintf(Out, "%02X:%06lX ", getAddrTable(), getAddress() );
          Len+=PrintFlight(Out+Len); }
        else
-       { Len=sprintf(Out, "%02X:%06X ", getAddrTable(), getAddress() );
+       { Len=sprintf(Out, "%02X:%06lX ", getAddrTable(), getAddress() );
          // Len+=sprintf(Out, "%02X:%06X %d:%02X (telemetry/diagnostic)",
          //        getAddrTable(), getAddress(), Telemetry.Header.TelemType, Telemetry.Header.TimeStamp); }
          Len+=PrintGNSS(Out+Len); }

@@ -111,7 +111,7 @@ class __attribute__((packed, aligned(4))) PAW_Packet
      Latitude  = (0.0001f/60)*Packet.DecodeLatitude();     // [deg]
      Longitude = (0.0001f/60)*Packet.DecodeLongitude();    // [deg]
      SeqMsg = 0;
-     setCRC();
+     setCRC();                                             // set internal XOR-CRC
      return 1; }
 
    int WriteStxJSON(char *JSON) const
@@ -148,7 +148,7 @@ class __attribute__((packed, aligned(4))) PAW_Packet
 
    void Print(const char *Name="PAW:") const
    { if(Name) printf("%s ", Name);
-     printf("%02X:%06X [%+09.5f,%+010.5f]deg %4dm, %03ddeg %3dkt %02X:%02X%02X%02X ",
+     printf("%02X:%06lX [%+09.5f,%+010.5f]deg %4dm, %03ddeg %3dkt %02X:%02X%02X%02X ",
             TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed, Seq, Msg[0], Msg[1], Msg[2]);
      for(int Idx=0; Idx<3; Idx++)
      { printf("%c", Msg[Idx]<' '?'.':Msg[Idx]); }
@@ -252,13 +252,13 @@ class __attribute__((packed, aligned(4))) PAW_RxPacket: public PAW_Packet  // Re
 
   public:
    void Print(void) const
-   { printf("%d.%03ds %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
+   { printf("%ld.%03lds %02X:%06lX [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
             Time, nsTime/1000000, TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed,
             Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs); }
 
    int Print(char *Out) const
    { if(!isADSL())
-       return sprintf(Out, "%d.%03ds %02X:%06X [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
+       return sprintf(Out, "%ld.%03lds %02X:%06lX [%+09.5f, %+010.5f]deg %4dm, %03ddeg %3dkt #%02X %3.1f/%3.1fdB %+4.1fkHz\n",
             Time, nsTime/1000000, TypeByte, Address, Latitude, Longitude, Altitude, Heading, Speed,
             Seq, 0.25*SNR, 0.5*CSNR, 0.01*FreqOfs);
      ADSL_Packet ADSL; memcpy(&ADSL.Version, Byte, 24); ADSL.Descramble();
