@@ -1122,37 +1122,87 @@ class GPS_Position: public GPS_Time
      if(RxMsg.isNAV_TIMEUTC()) return ReadUBX_NAV_TIMEUTC(RxMsg);
      if(RxMsg.isNAV_POSLLH() ) return ReadUBX_NAV_POSLLH(RxMsg);
      if(RxMsg.isNAV_SOL()    ) return ReadUBX_NAV_SOL(RxMsg);
+     if(RxMsg.isNAV_DOP()    ) return ReadUBX_NAV_DOP(RxMsg);
+     if(RxMsg.isNAV_PVT()    ) return ReadUBX_NAV_PVT(RxMsg);
      return 0; }
 
+   void ReadUBX_UTC(uint16_t UtcYear, uint8_t UtcMonth, uint8_t UtcDay,
+                    uint8_t UtcHour, uint8_t UtcMin, uint8_t UtcSec,
+                    int32_t Nano, bool DateValid, bool TimeValid)
+   { hasDate=DateValid;
+     if(DateValid)
+     { Year=(int8_t)(UtcYear-2000); Month=UtcMonth; Day=UtcDay; }
+     else { Year=Month=Day=-1; }
+     hasTime=TimeValid;
+     if(!TimeValid)
+     { Hour=Min=Sec=-1; mSec=0; return; }
+     Hour=UtcHour; Min=UtcMin; Sec=UtcSec;
+     if(Nano<0)
+     { if(DateValid) decrTimeDate(); else decrTime();
+       Nano+=1000000000; }
+     mSec=(Nano+500000)/1000000;
+     if(mSec>=1000)
+     { if(DateValid) incrTimeDate(); else incrTime();
+       mSec-=1000; } }
+
+   int8_t ReadUBX_NAV_PVT(UBX_RxMsg &RxMsg)
+   { const UBX_NAV_PVT *PVT=(const UBX_NAV_PVT *)RxMsg.Byte;
+     ReadUBX_UTC(PVT->year, PVT->month, PVT->day, PVT->hour, PVT->min, PVT->sec,
+                 PVT->nano, (PVT->valid&0x01)!=0, (PVT->valid&0x02)!=0);
+     FixMode = (PVT->fixType==2) ? 2 : ((PVT->fixType==3 || PVT->fixType==4) ? 3 : 1);
+     bool FixOK=(PVT->flags&0x01)!=0;
+     FixQuality=(FixOK && FixMode>=2) ? ((PVT->flags&0x02) ? 2 : 1) : 0;
+     Satellites=PVT->numSV;
+     Latitude=(int64_t)PVT->lat*3/50;
+     Longitude=(int64_t)PVT->lon*3/50;
+     Altitude=PVT->hMSL/100;
+     GeoidSeparation=((int64_t)PVT->height-PVT->hMSL)/100;
+     hasGeoidSepar=1;
+     Speed=PVT->gSpeed/100;
+     int32_t Heading10=PVT->headMot;
+     Heading10=(Heading10>=0 ? Heading10+5000 : Heading10-5000)/10000;
+     if(Heading10<0) Heading10+=3600;
+     else if(Heading10>=3600) Heading10-=3600;
+     Heading=Heading10;
+     PDOP=PVT->pDOP/10;
+     hasGPS=1;
+     calcLatitudeCosine();
+     return 1; }
+
    int8_t ReadUBX_NAV_TIMEUTC(UBX_RxMsg &RxMsg)
-   { UBX_NAV_TIMEUTC *TIMEUTC = (UBX_NAV_TIMEUTC *)(RxMsg.Byte);
-     Year  = TIMEUTC->year-2000;
-     Month = TIMEUTC->month;
-     Day   = TIMEUTC->day;
-     Hour  = TIMEUTC->hour;
-     Min   = TIMEUTC->min;
-     Sec   = TIMEUTC->sec;
-     if(TIMEUTC->nano<0) { decrTimeDate(); TIMEUTC->nano+=1000000000; }
-     mSec  =  (TIMEUTC->nano+500000)/1000000;             // [ms]
-     if(mSec>=1000) { incrTimeDate(); mSec-=1000; }
-     hasTime = (TIMEUTC->valid&0x02)!=0;
+   { const UBX_NAV_TIMEUTC *TIMEUTC=(const UBX_NAV_TIMEUTC *)RxMsg.Byte;
+     bool UTCValid=(TIMEUTC->valid&0x04)!=0;
+     ReadUBX_UTC(TIMEUTC->year, TIMEUTC->month, TIMEUTC->day,
+                 TIMEUTC->hour, TIMEUTC->min, TIMEUTC->sec,
+                 TIMEUTC->nano, UTCValid, UTCValid);
      return hasTime; }
 
    int8_t ReadUBX_NAV_POSLLH(UBX_RxMsg &RxMsg)
-   { UBX_NAV_POSLLH *POSLLH = (UBX_NAV_POSLLH *)(RxMsg.Byte);
-     Latitude        =  3*(int64_t)POSLLH->lat/50;
-     Longitude       =  3*(int64_t)POSLLH->lon/50;
-     Altitude        =  POSLLH->hMSL/100;
-     GeoidSeparation = (POSLLH->height-POSLLH->hMSL)/100;
+   { const UBX_NAV_POSLLH *POSLLH=(const UBX_NAV_POSLLH *)RxMsg.Byte;
+     Latitude        =  (int64_t)POSLLH->lat*3/50;               // [1e-7deg] => [1/60000deg]
+     Longitude       =  (int64_t)POSLLH->lon*3/50;               // [1e-7deg] => [1/60000deg]
+     Altitude        =  POSLLH->hMSL/100;                        // [mm] => [0.1m]
+     GeoidSeparation = ((int64_t)POSLLH->height-POSLLH->hMSL)/100; // [mm] => [0.1m]
+     hasGeoidSepar=1;
      hasGPS = 1;
+     calcLatitudeCosine();
+     return 1; }
+
+   int8_t ReadUBX_NAV_DOP(UBX_RxMsg &RxMsg)
+   { const UBX_NAV_DOP *DOP=(const UBX_NAV_DOP *)RxMsg.Byte;
+     PDOP       = DOP->pDOP/10;
+     HDOP       = DOP->hDOP/10;
+     VDOP       = DOP->vDOP/10;
+     hasGSA = 1;
      return 1; }
 
    int8_t ReadUBX_NAV_SOL(UBX_RxMsg &RxMsg)
-   { UBX_NAV_SOL *SOL = (UBX_NAV_SOL *)(RxMsg.Byte);
-     FixMode    = SOL->gpsFix;
-     FixQuality = FixMode>=2;
-     PDOP       = SOL->PDOP/10;
-     Satellites = SOL->numSV;
+   { const UBX_NAV_SOL *SOL=(const UBX_NAV_SOL *)RxMsg.Byte;
+     FixMode=(SOL->gpsFix==2) ? 2 : ((SOL->gpsFix==3 || SOL->gpsFix==4) ? 3 : 1);
+     bool FixOK=(SOL->flags&0x01)!=0;
+     FixQuality=(FixOK && FixMode>=2) ? ((SOL->flags&0x02) ? 2 : 1) : 0;
+     PDOP=SOL->PDOP/10;
+     Satellites=SOL->numSV;
      return 1; }
 
    int8_t ReadNMEA(NMEA_RxMsg &RxMsg)

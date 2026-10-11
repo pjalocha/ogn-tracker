@@ -107,6 +107,14 @@ static Delay<uint16_t, 32> BatteryVoltagePipe;
 uint32_t BatteryVoltage = 0;          // [1/256 mV] low-pass filtered battery voltage
  int32_t BatteryVoltageRate = 0;      // [1/256 mV/sec] low-pass filtered battery voltage rise/drop rate
 
+int8_t BattCapacity(uint16_t mVolt)        // deduce battery capacity from its voltage
+{ if(mVolt>=4100) return 100;              // if 4.1V or more then full
+  if(mVolt<=1000) return  -1;              // if below 1.0V then no-battery
+  if(mVolt<=3300) return   0;              // if below 3.3V then empty
+  return (mVolt-3300+4)>>3; }              // otherwise a linear function from 3.3V to 4.1V
+
+int8_t BattCapacity(void) { return BattCapacity((BatteryVoltage+128)>>8); }
+
 static char           Line[640];      // for printing out to the console, etc.
 
 static LDPC_Decoder     Decoder;      // decoder and error corrector for the OGN Gallager/LDPC code

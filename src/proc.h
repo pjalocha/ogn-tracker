@@ -14,6 +14,9 @@ extern LookOut<32> Look;
 extern uint32_t BatteryVoltage;       // [1/256 mV] averaged
 extern  int32_t BatteryVoltageRate;   // [1/256 mV] averaged
 
+int8_t BattCapacity(uint16_t mVolt);  // [%]
+int8_t BattCapacity(void);            // [%]
+
 extern uint32_t RxProc_Count[8];
 
 // extern FlightMonitor Flight;

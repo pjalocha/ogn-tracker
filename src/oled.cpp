@@ -50,17 +50,11 @@ void OLED_DrawLogo(u8g2_t *OLED, const GPS_Position *GPS)  // draw logo and hard
 #endif
 }
 
-static int8_t BattCapacity(uint16_t mVolt) // deduce battery capacity from its voltage
-{ if(mVolt>=4100) return 100;              // if 4.1V or more then full
-  if(mVolt<=1000) return  -1;              // if below 1.0V then no-battery
-  if(mVolt<=3600) return   0;              // if below 3.6V then empty
-  return (mVolt-3600+2)/5; }               // otherwise a linear function from 3.6V to 4.1V
-
 void OLED_DrawStatusBar(u8g2_t *OLED, const GPS_Position *GPS)   // status bar on top of the OLED
 { static bool Odd=0;
-  int8_t Cap = BattCapacity(BatteryVoltage>>8);           // [%] est. battery capacity
-  uint8_t BattLev = (Cap+10)/20;                          // [0..5] convert to display scale
-  uint8_t Charging = BatteryVoltageRate>0;                // charging or not changing ?
+  int8_t Cap = BattCapacity();                        // [%] est. battery capacity
+  uint8_t BattLev = (Cap+10)/20;                      // [0..5] convert to display scale
+  uint8_t Charging = BatteryVoltageRate>0;            // charging or not changing ?
   static uint8_t DispLev = 0;
   if(Charging==1 || Charging==2) { DispLev++; if(DispLev>5) DispLev = BattLev?BattLev-1:0; }
                            else  { DispLev = BattLev; }

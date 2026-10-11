@@ -275,20 +275,36 @@ static void GPS_BurstStart(int CharDelay=0)  // when GPS starts sending the data
         UBX_RxMsg::Send(0x06, 0x24, GPS_UART_Write);                     // send the query for the navigation mode setting
         UBX_RxMsg::Send(0x06, 0x3E, GPS_UART_Write);                     // send the query for the GNSS configuration
         UBX_RxMsg::Send(0x06, 0x16, GPS_UART_Write);                     // send the query for the SBAS configuration
-        // if(!GPS_Status.NMEA)                                             // if NMEA sentences are not there
-        { UBX_CFG_MSG CFG_MSG;                                           // send CFG_MSG to enable the NMEA sentences
+        { UBX_CFG_MSG CFG_MSG;
+#ifdef WITH_GPS_UBX_UBX
+          // Disable the standard NMEA sentences and request one UBX solution
+          // message per navigation epoch.
           CFG_MSG.msgClass = 0xF0;                                       // NMEA class
-          CFG_MSG.rate     =    1;                                       // send every measurement event
-          CFG_MSG.msgID    = 0x00;                                        // ID for GGA
+          CFG_MSG.rate     = 0;
+          for(uint8_t MsgID=0; MsgID<=0x05; MsgID++)                     // GGA, GLL, GSA, GSV, RMC, VTG
+          { CFG_MSG.msgID = MsgID;
+            UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG)); }
+          CFG_MSG.msgID = 0x41;                                           // TXT
           UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
-          CFG_MSG.msgID    = 0x02;                                        // ID for RMC
+          CFG_MSG.msgClass = 0x01;                                       // UBX-NAV class
+          CFG_MSG.msgID    = 0x07;                                       // NAV-PVT
+          CFG_MSG.rate     = 1;
           UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
-          CFG_MSG.msgID    = 0x04;                                        // ID for GSA
+#else
+          // Send NMEA position, time, fix and satellite information.
+          CFG_MSG.msgClass = 0xF0;                                       // NMEA class
+          CFG_MSG.rate     = 1;                                          // send every measurement event
+          CFG_MSG.msgID    = 0x00;                                       // ID for GGA
           UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
-          CFG_MSG.rate     = Parameters.NavRate*4;                        // send only at some interval
+          CFG_MSG.msgID    = 0x02;                                       // ID for GSA
+          UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
+          CFG_MSG.msgID    = 0x04;                                       // ID for RMC
+          UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
+          CFG_MSG.rate     = Parameters.NavRate*4;                       // send only at some interval
           if(CFG_MSG.rate<4) CFG_MSG.rate=4;
-          CFG_MSG.msgID    = 0x03;                                        // ID for GSV
+          CFG_MSG.msgID    = 0x03;                                       // ID for GSV
           UBX_RxMsg::Send(0x06, 0x01, GPS_UART_Write, (uint8_t *)(&CFG_MSG), sizeof(CFG_MSG));
+#endif
         }
 #endif // WITH_GPS_UBX
 #ifdef WITH_GPS_CFG
@@ -762,18 +778,21 @@ static void DumpUBX(void)
 static void GPS_UBX(void)                                                         // when GPS gets an UBX packet
 { GPS_Status.UBX=1;
   GPS_Status.BaudConfig = (GPS_getBaudRate() == GPS_TargetBaudRate);
-  LED_PCB_Flash(10);
+  LED_PCB_Flash(5);
 #ifdef DEBUG_PRINT
   DumpUBX();
 #endif
-  // GPS_Pos[GPS_PosIdx].ReadUBX(UBX);
+  GPS_Pos[GPS_PosIdx].ReadUBX(UBX);
+  if(UBX.isNAV_DOP())                 // if this was a NAV-DOP
+  { GPS_Burst.GxGSA=1; }
+  if(UBX.isNAV_PVT())                 // if this was a NAV-PVT
+  { GPS_DateTime = GPS_Pos[GPS_PosIdx];
+    GPS_Burst.GxGGA=1;                // then signal that we have all navigation data ready
+    GPS_Burst.GxRMC=1;
+    GPS_Burst.GxGSA=1; }
 #ifdef WITH_GPS_UBX_PASS
   { if(CONS_UART_isConnected() && xSemaphoreTake(CONS_Mutex, 25))                 // send the UBX packet to the console
     { UBX.Send(CONS_UART_Write);
-    // DumpUBX();
-    // Format_String(CONS_UART_Write, "UBX");
-    // Format_Hex(CONS_UART_Write, UBX.Class);
-    // Format_Hex(CONS_UART_Write, UBX.ID);
       xSemaphoreGive(CONS_Mutex); }
   }
 #endif

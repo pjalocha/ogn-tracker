@@ -59,37 +59,37 @@ class UBX_NAV_SOL     // 0x01 0x06
 
 class UBX_NAV_PVT     // 0x01 0x07
 { public:
-   uint32_t iTOW;      // [ms]
-   uint16_t year;
-   uint8_t  month;
-   uint8_t  day;
-   uint8_t  hour;
-   uint8_t  min;
-   uint8_t  sec;
-   uint8_t  valid;
-   uint32_t tAcc;
-    int32_t nano;
-   uint8_t  fixType;
-   uint8_t  flags;
-   uint8_t  flags2;
-   uint8_t  numSV;
-    int32_t lon;
-    int32_t lat;
-    int32_t height;
-    int32_t hMSL;
-   uint32_t hAcc;
-   uint32_t vAcc;
-    int32_t velN;
-    int32_t velE;
-    int32_t velD;
-    int32_t gSpeed;
-    int32_t headMot;
-   uint32_t sAcc;
-   uint32_t headAcc;
-   uint16_t pDOP;
-   uint8_t  reserved1[6];
-    int32_t headVeh;
-   uint8_t  reserved2[4];
+   uint32_t iTOW;      // [ms] GPS time-of-week
+   uint16_t year;      // [year] UTC year
+   uint8_t  month;     // [month] UTC month, 1..12
+   uint8_t  day;       // [day] UTC day of month, 1..31
+   uint8_t  hour;      // [hour] UTC hour, 0..23
+   uint8_t  min;       // [min] UTC minute, 0..59
+   uint8_t  sec;       // [s] UTC second
+   uint8_t  valid;     // bit 0: validDate, bit 1: validTime, bit 2: fullyResolved
+   uint32_t tAcc;      // [ns] time accuracy estimate
+    int32_t nano;      // [ns] fractional part of UTC second
+   uint8_t  fixType;   // fix type: 0=none, 1=DR-only, 2=2D, 3=3D, 4=GNSS+DR, 5=time-only
+   uint8_t  flags;     // fix status and carrier-solution flags
+   uint8_t  flags2;    // additional fix-status flags
+   uint8_t  numSV;     // [satellites] number used in the navigation solution
+    int32_t lon;       // [1e-7 deg] longitude
+    int32_t lat;       // [1e-7 deg] latitude
+    int32_t height;    // [mm] height above ellipsoid
+    int32_t hMSL;      // [mm] height above mean sea level
+   uint32_t hAcc;      // [mm] horizontal accuracy estimate
+   uint32_t vAcc;      // [mm] vertical accuracy estimate
+    int32_t velN;      // [mm/s] north velocity
+    int32_t velE;      // [mm/s] east velocity
+    int32_t velD;      // [mm/s] down velocity
+    int32_t gSpeed;    // [mm/s] ground speed
+    int32_t headMot;   // [1e-5 deg] heading of motion
+   uint32_t sAcc;      // [mm/s] speed accuracy estimate
+   uint32_t headAcc;   // [1e-5 deg] heading accuracy estimate
+   uint16_t pDOP;      // [1/100] position dilution of precision
+   uint8_t  reserved1[6]; // reserved
+    int32_t headVeh;   // [1e-5 deg] heading of vehicle
+   uint8_t  reserved2[4]; // reserved
 } ;
 
 class UBX_NAV_VELNED  // 0x01 0x12
@@ -282,7 +282,7 @@ const uint8_t UBX_ACK = 0x05; // acknoledgement of configuration
 const uint8_t UBX_CFG = 0x06; // configuration
 const uint8_t UBX_MON = 0x0A; //
 
-class UBX_RxMsg // receiver for the UBX sentences
+class __attribute__((packed, aligned(4))) UBX_RxMsg // receiver for the UBX sentences
 { public:
    // most information in the UBX packets is already aligned to 32-bit boundary
    // thus it makes sense to have the packet so aligned when receiving it.
@@ -294,7 +294,7 @@ class UBX_RxMsg // receiver for the UBX sentences
    uint8_t  Class;                     // Class (01=NAV)
    uint8_t  ID;                        // ID
    uint16_t Bytes;                     // number of bytes in the packet (excl. head and tail)
-   union
+   union                               // this is aligned to 32-bits
    { uint32_t Word[MaxWords];          // here we store the UBX packet (excl. head and tail)
      uint8_t  Byte[MaxBytes]; } ;
 
@@ -302,7 +302,14 @@ class UBX_RxMsg // receiver for the UBX sentences
    uint8_t CheckA;                     // UBX check sum (two bytes)
    uint8_t CheckB;
 
-   uint8_t State;                      // bits: 0:loading, 1:complete, 2:locked,
+   union
+   { uint16_t State;                     // bits: 0:loading, 1:complete, 2:locked,
+     struct
+     { bool  Loading:1;
+       bool Complete:1;
+       bool   Locked:1;
+     } ;
+   } ;
    uint16_t Idx;                       // loading index
 
    void CheckInit(void) { CheckA=0; CheckB=0; }                   // initialize the checksum
@@ -318,8 +325,8 @@ class UBX_RxMsg // receiver for the UBX sentences
      CheckPass(Class); CheckPass(ID); CheckPass(Bytes); CheckPass(0x00);
      for(uint16_t Idx=0; Idx<Bytes; Idx++) CheckPass(Byte[Idx]); }
 
-   uint8_t isLoading(void)  const { return State&0x01; }
-   uint8_t isComplete(void) const { return State&0x02; }
+   uint8_t isLoading(void)  const { return  Loading; }
+   uint8_t isComplete(void) const { return Complete; }
 
    void ProcessByte(uint8_t RxByte) // pass all bytes through this call and it will build the frame
      {
@@ -327,7 +334,7 @@ class UBX_RxMsg // receiver for the UBX sentences
        switch(Idx)
        { case 0:  // expect SyncL
             if(RxByte!=SyncL) { Clear(); return; }
-            State=0x01; break;  // declare "isLoading" state
+            State=0; Loading=1; break;  // declare "isLoading" state
          case 1: // expect SyncH
             if(RxByte!=SyncH) { Clear(); return; }
             break;
@@ -351,7 +358,7 @@ class UBX_RxMsg // receiver for the UBX sentences
             { if(RxByte!=CheckA) { Clear(); return; } }
             else if(ByteIdx==(Bytes+1))    // second checksum byte
             { if(RxByte!=CheckB) { Clear(); return; }
-              State=0x02; }                // declare "isComplete" state
+              State=0; Complete=1; }       // declare "isComplete" state
             else
             { Clear(); return; }
             break;
@@ -434,8 +441,9 @@ class UBX_RxMsg // receiver for the UBX sentences
 
    bool isNAV_POSLLH (void) const { return isNAV() && (ID==0x02) && (Bytes==sizeof(UBX_NAV_POSLLH)); }
    bool isNAV_STATUS (void) const { return isNAV() && (ID==0x03); }
-   bool isNAV_DOP    (void) const { return isNAV() && (ID==0x04); }
+   bool isNAV_DOP    (void) const { return isNAV() && (ID==0x04) && (Bytes==18); }
    bool isNAV_SOL    (void) const { return isNAV() && (ID==0x06) && (Bytes==sizeof(UBX_NAV_SOL)); }
+   bool isNAV_PVT    (void) const { return isNAV() && (ID==0x07) && (Bytes==sizeof(UBX_NAV_PVT)); }
    bool isNAV_VELNED (void) const { return isNAV() && (ID==0x12); }
    bool isNAV_TIMEGPS(void) const { return isNAV() && (ID==0x20); }
    bool isNAV_TIMEUTC(void) const { return isNAV() && (ID==0x21) && (Bytes==sizeof(UBX_NAV_TIMEUTC)); }

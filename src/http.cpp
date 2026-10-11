@@ -820,11 +820,6 @@ static void Table_RF(httpd_req_t *Req)
 */
   httpd_resp_sendstr_chunk(Req, "</table>\n"); }
 
-static uint8_t BattCapacity(uint16_t mVolt)
-{ if(mVolt>=4100) return 100;
-  if(mVolt<=3600) return   0;
-  return (mVolt-3600+2)/5; }
-
 // -------------------------------------------------------------------------------------------------------------
 
 static void Table_Batt(httpd_req_t *Req)
@@ -846,7 +841,7 @@ static void Table_Batt(httpd_req_t *Req)
 #ifdef WITH_MAVLINK
   uint8_t Cap=MAVLINK_BattCap;                         // [%] from the drone's telemetry
 #else
-  uint8_t Cap=BattCapacity(BatteryVoltage>>8);         // [%] est. battery capacity based on the voltage readout
+  uint8_t Cap=BattCapacity();                          // [%] est. battery capacity based on the voltage readout
 #endif
   Len+=Format_UnsDec(Line+Len, (uint32_t)Cap);
   Len+=Format_String(Line+Len, " %</td></tr>\n");

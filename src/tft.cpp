@@ -236,9 +236,11 @@ static void TFT_DrawBatt(uint16_t X, uint16_t Y, uint16_t CellSize,
 }
 
 static void TFT_DrawBatt(uint16_t X, uint16_t Y)
-{  int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
+{ // int16_t BattVolt=(BatteryVoltage+128)>>8; // [mV] measured and averaged  battery voltage
   // int16_t Full=(BattVolt-3300+80)/160; if(Full<0) Full=0;
-   int16_t Full=(BattVolt-3500+64)>>7; if(Full<0) Full=0;
+  // int16_t Full=(BattVolt-3500+64)>>7; if(Full<0) Full=0;
+  int16_t Full=BattCapacity(); if(Full<0) Full=0;
+  Full = (Full+10)/20;
   const uint16_t Cells=5;
   uint16_t CellColor=ST77XX_GREEN;
   uint16_t FrameColor=ST77XX_WHITE;
@@ -841,8 +843,9 @@ int TFT_DrawGPS(const GPS_Position *GPS)
   TFT.setCursor(TFT.getCursorX(), Vert-4); TFT.write('o');
   Vert+=TFT_LineVert;
 
-  if(GPS && GPS->isValid()) sprintf(Line, "%7.1fm MSL", 0.1*GPS->Altitude);
-                      else   strcpy(Line, "-----.-m MSL");
+  int8_t BattCap = BattCapacity(); if(BattCap<0) BattCap=0;
+  if(GPS && GPS->isValid()) sprintf(Line, "%7.1fm %2d%% ", 0.1*GPS->Altitude, BattCap);
+                      else  sprintf(Line, "-----.-m %2d%% ", BattCap);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
