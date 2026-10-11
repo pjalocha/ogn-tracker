@@ -538,6 +538,10 @@ void OGN_LED_Flash(void)
 const  uint8_t  TFT_Pages      = 10;      // number of LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+static uint8_t  TFT_TTNView    = 0;       // 0=status, 1=replace confirmation, 2=QR, 3=error
+static uint8_t  TFT_TTNLastRegisterStatus=0xFF;
+#endif
 static uint8_t  TFT_PageOFF    = 0;       // Backlight to be OFF
 static uint8_t  TFT_PanelOFF   = 0;       // TFT controller is sleeping
 #ifdef WITH_TFT_DIM
@@ -549,6 +553,29 @@ static void TFT_NextPage(void)
 { TFT_Page++;
   if(TFT_Page>=TFT_Pages) TFT_Page=0;
   TFT_PageChange=1; }
+
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+static void TFT_TTNMakeAppKey(uint8_t *AppKey)
+{ // Temporary prototype source: mix the existing radio/GPS random state with device/time state.
+  uint64_t Seed=Random.Word+getUniqueID()+((uint64_t)millis()<<32);
+  Seed+=((uint64_t)Random.GPS<<17)+Random.RX;
+  if(!Seed) Seed=UINT64_C(0x9E3779B97F4A7C15);
+  for(uint8_t Idx=0; Idx<16; Idx++)
+  { if((Idx&7)==0) XorShift64(Seed);
+    AppKey[Idx]=(uint8_t)(Seed>>(8*(Idx&7))); } }
+
+static void TFT_TTNStartRegistration(void)
+{ uint8_t AppKey[16];
+  if(!Radio_LoRaWANReady())
+  { TFT_TTNView=3; TFT_PageChange=1; return; }
+  TFT_TTNMakeAppKey(AppKey);
+  if(!TFT_LoRaWANBuildQR(AppKey) || !Radio_LoRaWANRegister(AppKey))
+    TFT_TTNView=3;
+  else
+  { TFT_TTNView=2;
+    TFT_TTNLastRegisterStatus=0xFF; }
+  TFT_PageChange=1; }
+#endif
 
 static int TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
@@ -562,9 +589,18 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 #endif
   if(TFT_Page==5) return TFT_DrawLookout();
   if(TFT_Page==9) return TFT_DrawNetwork();
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+  if(TFT_Page==7)
+  { if(TFT_TTNView==1) return TFT_DrawLoRaWANConfirm();
+    if(TFT_TTNView==2)
+    { uint8_t Status=Radio_LoRaWANRegisterStatus();
+      const char *Text=Status==2 ? "KEY SAVED" : Status==3 ? "SAVE FAILED" : "SAVING KEY";
+      return TFT_DrawLoRaWANQR(Text); }
+    if(TFT_TTNView==3) return TFT_DrawLoRaWANSetupError(); }
+#endif
+  if(TFT_Page==7) return TFT_DrawLoRaWAN(GPS);
   if(!GPS) return TFT_DrawID();
   if(TFT_Page==6) return TFT_DrawBaro(GPS);
-  if(TFT_Page==7) return TFT_DrawLoRaWAN(GPS);
   if(TFT_Page==8) return TFT_DrawLog(GPS);
   return TFT_DrawGPS(GPS); }
 
@@ -859,6 +895,11 @@ static void PrimaryButton_Single(void)
   if(TFT_PageOFF)
   { TFT_PageOFF=0;
     TFT_PageChange=1; }
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+  else if(TFT_Page==7 && TFT_TTNView)
+  { TFT_TTNView=0;
+    TFT_PageChange=1; }
+#endif
   else
     TFT_NextPage();
   #ifdef WITH_TFT_DIM
@@ -967,6 +1008,11 @@ static void PrimaryButton_PowerOff(void)
 
 static void PrimaryButton_Long(void)
 {
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+  if(TFT_Page==7 && TFT_TTNView==1)
+  { TFT_TTNStartRegistration();
+    return; }
+#endif
 #ifdef WITH_OLED
   PrimaryButton_DisplayLong();
 #else
@@ -978,10 +1024,44 @@ static void PrimaryButton_Long(void)
 static Button2 Button(Button_Pin);
 static bool Button_isPressed(void) { return digitalRead(Button_Pin)==0; }
 
-static void Button_Single(Button2 Butt) // callback when a single press on the button
-{ PrimaryButton_Single(); }
+#if defined(WITH_LORAWAN_DEBUG) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735) && defined(WITH_LORAWAN)
+static void Button_PressedDebug(Button2 Butt)
+{ Serial.printf("TTN button press clicks=%u page=%u view=%u\n",
+                Butt.getNumberOfClicks(), TFT_Page, TFT_TTNView); }
+#endif
 
-static void Button_Double(Button2 Butt) { }
+static void Button_Single(Button2 Butt) // callback when a single press on the button
+{
+#if defined(WITH_LORAWAN_DEBUG) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735) && defined(WITH_LORAWAN)
+  Serial.printf("TTN button single page=%u view=%u\n", TFT_Page, TFT_TTNView);
+#endif
+  PrimaryButton_Single(); }
+
+static void Button_Double(Button2 Butt)
+{
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+#ifdef WITH_LORAWAN_DEBUG
+  Serial.printf("TTN button double page=%u off=%u view=%u ready=%u hasKey=%u\n",
+                TFT_Page, TFT_PageOFF, TFT_TTNView,
+                Radio_LoRaWANReady(), Radio_LoRaWANHasAppKey());
+#endif
+  if(TFT_Page!=7) return;
+  if(TFT_PageOFF)
+  { TFT_PageOFF=0;
+    TFT_PageChange=1; }
+  else if(TFT_TTNView==0)
+  { if(!Radio_LoRaWANReady())
+    { TFT_TTNView=3; TFT_PageChange=1; }
+    else if(Radio_LoRaWANHasAppKey())
+    { TFT_TTNView=1; TFT_PageChange=1; }
+    else
+      TFT_TTNStartRegistration(); }
+  #ifdef WITH_TFT_DIM
+  TFT_PageActive=millis();
+  #endif
+  TFT_SetPowerSave(0);
+#endif
+}
 
 static void Button_Long(Button2 Butt)
 { PrimaryButton_Long(); }
@@ -989,6 +1069,11 @@ static void Button_Long(Button2 Butt)
 static void Button_Init(void)
 { pinMode(Button_Pin, INPUT);
   Button.setLongClickTime(2000);
+  // The default 300 ms gap is short for a deliberate two-press gesture.
+  Button.setDoubleClickTime(600);
+#if defined(WITH_LORAWAN_DEBUG) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735) && defined(WITH_LORAWAN)
+  Button.setPressedHandler(Button_PressedDebug);
+#endif
   Button.setClickHandler(Button_Single);
   Button.setDoubleClickHandler(Button_Double);
   Button.setLongClickDetectedHandler(Button_Long); }
@@ -1753,6 +1838,9 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   xTaskCreate(vTaskSENS   ,  "SENS" ,  5000, NULL, 1, NULL);  // read data from I2C sensors
 #endif
   xTaskCreate(vTaskPROC   ,  "PROC" ,  5000, NULL, 1, NULL);  // process received packets, prepare packets for transmission
+#ifdef WITH_LORAWAN
+  Radio_LoRaWANInit();
+#endif
   xTaskCreate(Radio_Task  ,  "RF"   ,  5000, NULL, 2, NULL);  // transmit/receive packets
 #ifdef WITH_AP
   if(StartAP)
@@ -2167,6 +2255,13 @@ void loop()
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+  if(TFT_TTNView==2)
+  { uint8_t Status=Radio_LoRaWANRegisterStatus();
+    if(Status!=TFT_TTNLastRegisterStatus)
+    { TFT_TTNLastRegisterStatus=Status;
+      TFT_PageChange=1; } }
+#endif
   if(TFT_PageChange)
   { TFT_PageChange=0;
     if(TFT_DrawPage(GPS)==0) TFT_NextPage(); }

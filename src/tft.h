@@ -58,6 +58,12 @@ int TFT_DrawRFcounts(void);
 int TFT_DrawBaro(const GPS_Position *GPS);
 int TFT_DrawGPS(const GPS_Position *GPS);
 int TFT_DrawLoRaWAN(const GPS_Position *GPS);
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+bool TFT_LoRaWANBuildQR(const uint8_t *AppKey);
+int TFT_DrawLoRaWANConfirm(void);
+int TFT_DrawLoRaWANQR(const char *Status);
+int TFT_DrawLoRaWANSetupError(void);
+#endif
 int TFT_DrawLog(const GPS_Position *GPS);
 int TFT_DrawNetwork(void);
 

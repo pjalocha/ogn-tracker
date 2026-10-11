@@ -6,6 +6,15 @@
 #include "gps.h"
 #include "log.h"
 
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+#include <qrcode.h>
+static const uint8_t TFT_QRVersion=2;
+static const uint8_t TFT_QRPayloadLength=24; // DevEUI (8 bytes) + AppKey (16 bytes)
+static uint8_t TFT_QRPayload[TFT_QRPayloadLength];
+static uint8_t TFT_QRModules[79];
+static QRCode TFT_QRCode;
+#endif
+
 #ifdef WITH_WIFI
 #include "wifi.h"
 #endif
@@ -752,6 +761,7 @@ int TFT_DrawLog(const GPS_Position *GPS) { return 0; }
 #ifdef WITH_LORAWAN
 int TFT_DrawLoRaWAN(const GPS_Position *GPS)
 { char Line[32];
+  TFT.fillScreen(ST77XX_DARKBLUE);
   TFT.setTextColor(ST77XX_WHITE);
   TFT_SetMainFont();
 
@@ -795,11 +805,78 @@ int TFT_DrawLoRaWAN(const GPS_Position *GPS)
   Len+=Format_HexBytes(Line+Len, WANdev.AppKey, 2); Line[Len++]='.'; Line[Len++]='.';
   Len+=Format_Hex(Line+Len, WANdev.AppKey[15]); Line[Len]=0;
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
-  TFT_ClearTextLine(Vert); Vert+=TFT_LineVert;
+  TFT_ClearTextLine(Vert);
 
   return 1; }
 #else
 int TFT_DrawLoRaWAN(const GPS_Position *GPS) { return 0; }
+#endif
+
+#if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
+bool TFT_LoRaWANBuildQR(const uint8_t *AppKey)
+{ if(!AppKey) return false;
+  uint64_t DevEUI=getUniqueID();
+  for(uint8_t Idx=0; Idx<8; Idx++)
+    TFT_QRPayload[Idx]=(uint8_t)(DevEUI>>(56-8*Idx));
+  memcpy(TFT_QRPayload+8, AppKey, 16);
+  return qrcode_initBytes(&TFT_QRCode, TFT_QRModules, TFT_QRVersion,
+                          ECC_MEDIUM, TFT_QRPayload, TFT_QRPayloadLength)==0; }
+
+int TFT_DrawLoRaWANConfirm(void)
+{ TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT_SetMainFont();
+  TFT.setCursor(2, 16); TFT.print("REPLACE KEY?");
+  TFT.setCursor(2, 32); TFT.print("old key will");
+  TFT.setCursor(2, 48); TFT.print("STOP working");
+  TFT.setCursor(2, 64); TFT.print("Long=YES");
+  return 1; }
+
+int TFT_DrawLoRaWANQR(const char *Status)
+{ TFT.fillScreen(ST77XX_WHITE);
+  const uint8_t Scale=2;
+  const uint8_t Size=TFT_QRCode.size;
+  const int QRSide=(Size+8)*Scale;
+  const int QRX=TFT.width()>=QRSide+66 ? 2 : (TFT.width()-QRSide)/2;
+  const int QRY=4;
+  for(uint8_t Row=0; Row<Size; Row++)
+    for(uint8_t Col=0; Col<Size; Col++)
+      if(qrcode_getModule(&TFT_QRCode, Col, Row))
+        TFT.fillRect(QRX+(Col+4)*Scale, QRY+(Row+4)*Scale,
+                     Scale, Scale, ST77XX_BLACK);
+
+  char EUI[17];
+  Format_Hex(EUI, getUniqueID());
+  EUI[16]=0;
+  TFT.setTextColor(ST77XX_BLACK);
+  TFT.setFont(0);
+  TFT.setTextSize(1);
+  if(TFT.width()>=QRSide+66)
+  { int X=QRX+QRSide+4;
+    TFT.setCursor(X, 14); TFT.print("TTN SETUP");
+    TFT.setCursor(X, 30); TFT.print("EUI:");
+    EUI[8]=0; TFT.setCursor(X, 42); TFT.print(EUI);
+    Format_Hex(EUI, getUniqueID()); EUI[16]=0;
+    TFT.setCursor(X, 54); TFT.print(EUI+8);
+    TFT.setCursor(X, 70); TFT.print(Status ? Status : "Scan TTN QR"); }
+  else
+  { TFT.setCursor(2, QRY+QRSide+14); TFT.print("Scan with TTN");
+    TFT.setCursor(2, QRY+QRSide+28); TFT.print("EUI:");
+    EUI[8]=0; TFT.setCursor(2, QRY+QRSide+40); TFT.print(EUI);
+    Format_Hex(EUI, getUniqueID()); EUI[16]=0;
+    TFT.setCursor(2, QRY+QRSide+52); TFT.print(EUI+8);
+    TFT.setCursor(2, QRY+QRSide+68); TFT.print(Status ? Status : "KEY SAVED"); }
+  return 1; }
+
+int TFT_DrawLoRaWANSetupError(void)
+{ TFT.fillScreen(ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT.setFont(0);
+  TFT.setTextSize(1);
+  TFT.setCursor(2, 48); TFT.print("SETUP FAILED");
+  TFT.setCursor(2, 68); TFT.print("Check radio");
+  TFT.setCursor(2, 94); TFT.print("Short = back");
+  return 1; }
 #endif
 
 

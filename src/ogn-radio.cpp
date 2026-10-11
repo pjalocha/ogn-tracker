@@ -1080,6 +1080,26 @@ static int Radio_FANETslot(float BW, float Freq, float TxPower, uint32_t msTimeL
 // #include "lorawan.h"
 
 LoRaWANnode WANdev;
+static QueueHandle_t WAN_RegisterQueue=0;
+static volatile bool WAN_Ready=false;
+static volatile bool WAN_HasAppKey=false;
+static volatile uint8_t WAN_RegisterStatus=0; // 0 idle, 1 pending, 2 saved, 3 save error
+
+bool Radio_LoRaWANInit(void)
+{ if(WAN_RegisterQueue) return true;
+  WAN_RegisterQueue=xQueueCreate(1, 16);
+  return WAN_RegisterQueue!=0; }
+
+bool Radio_LoRaWANReady(void) { return WAN_Ready; }
+bool Radio_LoRaWANHasAppKey(void) { return WAN_Ready && WAN_HasAppKey; }
+uint8_t Radio_LoRaWANRegisterStatus(void) { return WAN_RegisterStatus; }
+
+bool Radio_LoRaWANRegister(const uint8_t *AppKey)
+{ if(!AppKey || !WAN_Ready || !WAN_RegisterQueue) return false;
+  WAN_RegisterStatus=1;
+  if(xQueueOverwrite(WAN_RegisterQueue, AppKey)!=pdPASS)
+  { WAN_RegisterStatus=3; return false; }
+  return true; }
 
 #ifdef WITH_LORAWAN_DEBUG
 static void Radio_LoRaWANDebugTime(const char *Event, uint32_t Tick)
@@ -1328,6 +1348,11 @@ void Radio_Task(void *Parms)
 */
 #endif
 
+  WAN_HasAppKey=false;
+  for(uint8_t Idx=0; Idx<16; Idx++)
+    if(WANdev.AppKey[Idx]) { WAN_HasAppKey=true; break; }
+  WAN_Ready=true;
+
   SPI.begin(Radio_PinSCK, Radio_PinMISO, Radio_PinMOSI);  // CLK, MISO, MOSI, CS given by the Radio contructor
 #ifdef Radio_SckFreq
   SPI.setFrequency(Radio_SckFreq);
@@ -1377,7 +1402,22 @@ void Radio_Task(void *Parms)
 #endif
 
   for( ; ; )                                                      // main task loop: infinite
-  { if(!HardwareStatus.Radio) { vTaskDelay(1000); continue; }
+  {
+#ifdef WITH_LORAWAN
+    uint8_t NewAppKey[16];
+    if(WAN_RegisterQueue && xQueueReceive(WAN_RegisterQueue, NewAppKey, 0)==pdPASS)
+    { LoRaWANnode Previous=WANdev;
+      WANdev.Reset(getUniqueID(), NewAppKey);
+      WANdev.Enable=1;
+      WANdev.ABP=0;
+      if(WANdev.WriteToNVS()==ESP_OK)
+      { WAN_HasAppKey=true;
+        WAN_RegisterStatus=2; }
+      else
+      { WANdev=Previous;
+        WAN_RegisterStatus=3; } }
+#endif
+    if(!HardwareStatus.Radio) { vTaskDelay(1000); continue; }
     if(PowerMode==0) { Radio.standby(); Radio.sleep(); Radio_Cache_Clear(); vTaskDelay(5000); continue; }
 
     int PktCount=0;

@@ -300,18 +300,28 @@ static int RunTTNCommand(const char *Command, char *Output, size_t OutputSize)
   printf("%s => %d\n%s", Command, Status, Output);
   return Status; }
 
-static bool ReadTTNHexField(const char *Output, const char *Name, uint64_t &Value)
-{ const char *Field=strstr(Output, Name); if(!Field) return false;
+static const char *ReadTTNFieldValue(const char *Output, const char *Name)
+{ const char *Field=strstr(Output, Name); if(!Field) return 0;
   Field+=strlen(Name);
+  while(*Field==' ' || *Field=='\t') Field++;
+  if(*Field=='"') Field++;                           // JSON key terminator
+  while(*Field==' ' || *Field=='\t') Field++;
+  if(*Field!='=' && *Field!=':') return 0;            // text key=value or JSON key:value
+  Field++;
+  while(*Field==' ' || *Field=='\t') Field++;
+  if(*Field=='"') Field++;                           // JSON string value
+  return Field; }
+
+static bool ReadTTNHexField(const char *Output, const char *Name, uint64_t &Value)
+{ const char *Field=ReadTTNFieldValue(Output, Name); if(!Field) return false;
   char *End=0;
   Value=strtoull(Field, &End, 16);
-  return End!=Field && (*End==0 || *End=='\r' || *End=='\n' || *End==' ' || *End=='\t'); }
+  return End!=Field && (*End==0 || *End=='"' || *End=='\r' || *End=='\n' || *End==' ' || *End=='\t' || *End==',' || *End=='}'); }
 
 static bool ReadTTNTextField(const char *Output, const char *Name, char *Value, size_t ValueSize)
-{ const char *Field=strstr(Output, Name); if(!Field || ValueSize==0) return false;
-  Field+=strlen(Name);
+{ const char *Field=ReadTTNFieldValue(Output, Name); if(!Field || ValueSize==0) return false;
   size_t Len=0;
-  while(Field[Len] && Field[Len]!='\r' && Field[Len]!='\n' && Field[Len]!=' ' && Field[Len]!='\t') Len++;
+  while(Field[Len] && Field[Len]!='"' && Field[Len]!='\r' && Field[Len]!='\n' && Field[Len]!=' ' && Field[Len]!='\t' && Field[Len]!=',' && Field[Len]!='}') Len++;
   if(Len==0 || Len>=ValueSize) return false;
   memcpy(Value, Field, Len); Value[Len]=0; return true; }
 
@@ -319,9 +329,9 @@ static bool ParseDuplicateDevice(const char *Output, char *ExistingDevID, size_t
 { if(!strstr(Output, "end_device_euis_taken")) return false;
   uint64_t ExistingDevEUI=0, ExistingJoinEUI=0;
   char ApplicationID[64];
-  if(!ReadTTNHexField(Output, "dev_eui=", ExistingDevEUI) || ExistingDevEUI!=DevEUI ||
-     !ReadTTNHexField(Output, "join_eui=", ExistingJoinEUI) || ExistingJoinEUI!=JoinEUI ||
-     !ReadTTNTextField(Output, "application_id=", ApplicationID, sizeof(ApplicationID)) ||
+  if(!ReadTTNHexField(Output, "dev_eui", ExistingDevEUI) || ExistingDevEUI!=DevEUI ||
+     !ReadTTNHexField(Output, "join_eui", ExistingJoinEUI) || ExistingJoinEUI!=JoinEUI ||
+     !ReadTTNTextField(Output, "application_id", ApplicationID, sizeof(ApplicationID)) ||
      strcmp(ApplicationID, "ogn")!=0) return false;
 
   const char *Start=strstr(Output, "is already registered as `");
@@ -337,14 +347,32 @@ static bool ParseDuplicateDevice(const char *Output, char *ExistingDevID, size_t
   memcpy(ExistingDevID, Start, Len); ExistingDevID[Len]=0;
   return true; }
 
-static bool SetExistingDeviceAppKey(const char *ExistingDevID)
+static bool SetExistingDeviceAppKey(const char *ExistingDevID, bool &DeviceNotFound)
 { int CmdLen=sprintf(CmdLine, "%s end-devices set ogn %s --root-keys.app-key.key ", TTNCLI, ExistingDevID);
   CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
   char Output[4096];
   int Status=RunTTNCommand(CmdLine, Output, sizeof(Output));
+  DeviceNotFound=strstr(Output, "end_device_not_found")!=0;
   if(Status<0 || !WIFEXITED(Status) || WEXITSTATUS(Status)!=0) return false;
   strncpy(DevID, ExistingDevID, sizeof(DevID)-1); DevID[sizeof(DevID)-1]=0;
   return true; }
+
+static bool DeleteExistingDeviceByEUI(const char *ExistingDevID)
+{ sprintf(CmdLine, "%s end-devices delete --application-id ogn --device-id %s --dev-eui %016" PRIX64 " --join-eui %016" PRIX64,
+          TTNCLI, ExistingDevID, DevEUI, JoinEUI);
+  char Output[4096];
+  int Status=RunTTNCommand(CmdLine, Output, sizeof(Output));
+  return Status>=0 && WIFEXITED(Status) && WEXITSTATUS(Status)==0; }
+
+static int CreateTTNDevice(const char *DeviceID, char *Output, size_t OutputSize)
+{ int CmdLen=sprintf(CmdLine, "%s end-devices create ogn %s", TTNCLI, DeviceID);
+  CmdLen+=sprintf(CmdLine+CmdLen, " --dev-eui %016" PRIX64 " --join-eui %016" PRIX64 " --root-keys.app-key.key ", DevEUI, JoinEUI);
+  CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
+  CmdLen+=sprintf(CmdLine+CmdLen, " --frequency-plan-id EU_863_870_TTN --lorawan-version 1.0.3 --lorawan-phy-version 1.0.3-a");
+  CmdLen+=sprintf(CmdLine+CmdLen, " --supports-join");
+  CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.status-time-periodicity 0 --mac-settings.status-count-periodicity 0");
+  CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.adr.mode.disabled");
+  return RunTTNCommand(CmdLine, Output, OutputSize); }
 
 static bool RegisterTTN(void)
 { sprintf(DevID, "ogntrk-%012" PRIx64, DevEUI);
@@ -355,21 +383,24 @@ static bool RegisterTTN(void)
   int CmdRet=system(CmdLine);
   printf("%s => %d\n", CmdLine, CmdRet);
 
-  CmdLen=sprintf(CmdLine, "%s end-devices create ogn %s", TTNCLI, DevID);
-  CmdLen+=sprintf(CmdLine+CmdLen, " --dev-eui %016" PRIX64 " --join-eui %016" PRIX64 " --root-keys.app-key.key ", DevEUI, JoinEUI);
-  CmdLen+=PrintHex(CmdLine+CmdLen, AppKey, 16);
-  CmdLen+=sprintf(CmdLine+CmdLen, " --frequency-plan-id EU_863_870_TTN --lorawan-version 1.0.3 --lorawan-phy-version 1.0.3-a");
-  CmdLen+=sprintf(CmdLine+CmdLen, " --supports-join");
-  CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.status-time-periodicity 0 --mac-settings.status-count-periodicity 0");
-  CmdLen+=sprintf(CmdLine+CmdLen, " --mac-settings.adr.mode.disabled");
-
   char Output[4096];
-  CmdRet=RunTTNCommand(CmdLine, Output, sizeof(Output));
+  CmdRet=CreateTTNDevice(DevID, Output, sizeof(Output));
   if(CmdRet<0 || !WIFEXITED(CmdRet) || WEXITSTATUS(CmdRet)!=0)
   { char ExistingDevID[40];
     if(!ParseDuplicateDevice(Output, ExistingDevID, sizeof(ExistingDevID))) return false;
     printf("DevEUI already registered as %s in application ogn; updating its AppKey\n", ExistingDevID);
-    if(!SetExistingDeviceAppKey(ExistingDevID)) return false; }
+    bool DeviceNotFound=0;
+    if(!SetExistingDeviceAppKey(ExistingDevID, DeviceNotFound))
+    { if(!DeviceNotFound)
+      { fprintf(stderr, "Could not update AppKey for existing TTN device %s\n", ExistingDevID); return false; }
+      fprintf(stderr, "TTN reports %s as missing by device ID; trying to remove the stale EUI registration\n", ExistingDevID);
+      if(!DeleteExistingDeviceByEUI(ExistingDevID))
+      { fprintf(stderr, "Could not delete the existing TTN registration by DevEUI/JoinEUI\n"); return false; }
+      CmdRet=CreateTTNDevice(ExistingDevID, Output, sizeof(Output));
+      if(CmdRet<0 || !WIFEXITED(CmdRet) || WEXITSTATUS(CmdRet)!=0)
+      { fprintf(stderr, "Could not recreate TTN device %s after removing its EUI registration\n", ExistingDevID); return false; }
+      strncpy(DevID, ExistingDevID, sizeof(DevID)-1); DevID[sizeof(DevID)-1]=0;
+    } }
   return true; }
 
 static bool SendAppKeyToTracker(void)

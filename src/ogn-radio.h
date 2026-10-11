@@ -73,4 +73,9 @@ void Radio_Task(void *Parms);
 #ifdef WITH_LORAWAN
 #include "lorawan.h"
 extern LoRaWANnode WANdev;
+bool Radio_LoRaWANInit(void);
+bool Radio_LoRaWANReady(void);
+bool Radio_LoRaWANHasAppKey(void);
+bool Radio_LoRaWANRegister(const uint8_t *AppKey);
+uint8_t Radio_LoRaWANRegisterStatus(void);
 #endif
