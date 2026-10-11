@@ -50,6 +50,8 @@ void TFT_BL(uint8_t Lev);
 void TFT_DrawLogo(void);
 
 int TFT_DrawID(bool WithAP=0);
+bool TFT_IDScrollNext(void);
+void TFT_IDScrollReset(void);
 int TFT_DrawLookout(void);
 int TFT_DrawSatMap(void);
 int TFT_DrawSat(const GPS_Position *GPS);

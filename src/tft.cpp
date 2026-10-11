@@ -59,6 +59,10 @@ static inline void TFT_SetMainFont(void)
 { TFT.setFont(TFT_FontMain);
   TFT.setTextSize(TFT_FontMainSize); }
 
+static uint8_t TFT_IDInfoCount=0;
+static uint8_t TFT_IDInfoRows=0;
+static uint8_t TFT_IDScrollOffset=0;
+
 static inline void TFT_ClearTextLine(int Vert)
 { TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT_LineFillHeight, ST77XX_DARKBLUE); }
 
@@ -282,61 +286,50 @@ static const char *AcftTypeName(uint8_t AcftType)
 */
 
 int TFT_DrawID(bool WithAP)
-{ char Line[32];
-  // TFT.fillScreen(ST77XX_DARKBLUE);
-  TFT.setTextColor(ST77XX_WHITE);
-  TFT_SetMainFont();
-
-  int Vert=TFT_TopVert;
-  sprintf(Line, "%s:%c:%06X", Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
-  TFT_ClearTextLine(Vert);
-  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+{ char Info[12][32];
+  uint8_t Count=0;
+  snprintf(Info[Count++], sizeof(Info[0]), "%s:%c:%06X",
+           Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
 #ifdef WITH_BLE_SPP
   if(Parameters.BTname[0])
-  { sprintf(Line, "BT:%s", Parameters.BTname);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+    snprintf(Info[Count++], sizeof(Info[0]), "BT:%s", Parameters.BTname);
 #endif
 #ifdef WITH_AP
   if(WithAP)
-  { sprintf(Line, "AP:%s", Parameters.APname);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+    snprintf(Info[Count++], sizeof(Info[0]), "AP:%s", Parameters.APname);
 #endif
   if(Parameters.Reg[0])
-  { sprintf(Line, "Reg:%s", Parameters.Reg);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Manuf[0] && Vert<TFT.height())
-  { sprintf(Line, "Manuf:%s", Parameters.Manuf);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Model[0] && Vert<TFT.height())
-  { sprintf(Line, "Model:%s", Parameters.Model);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Pilot[0] && Vert<TFT.height())
-  { sprintf(Line, "Pilot:%s", Parameters.Pilot);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Base[0] && Vert<TFT.height())
-  { sprintf(Line, "Base:%s", Parameters.Base);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Crew[0] && Vert<TFT.height())
-  { sprintf(Line, "Crew:%s", Parameters.Crew);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Parameters.Task[0] && Vert<TFT.height())
-  { sprintf(Line, "Task:%s", Parameters.Task);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
-  if(Vert<TFT.height())
-  { sprintf(Line, "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
-    TFT_ClearTextLine(Vert);
-    TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight; }
+    snprintf(Info[Count++], sizeof(Info[0]), "Reg:%s", Parameters.Reg);
+  if(Parameters.Manuf[0])
+    snprintf(Info[Count++], sizeof(Info[0]), "Manuf:%s", Parameters.Manuf);
+  if(Parameters.Model[0])
+    snprintf(Info[Count++], sizeof(Info[0]), "Model:%s", Parameters.Model);
+  if(Parameters.Pilot[0])
+    snprintf(Info[Count++], sizeof(Info[0]), "Pilot:%s", Parameters.Pilot);
+  if(Parameters.Base[0])
+    snprintf(Info[Count++], sizeof(Info[0]), "Base:%s", Parameters.Base);
+  if(Parameters.Crew[0])
+    snprintf(Info[Count++], sizeof(Info[0]), "Crew:%s", Parameters.Crew);
+  if(Parameters.Task[0])
+    snprintf(Info[Count++], sizeof(Info[0]), "Task:%s", Parameters.Task);
+  snprintf(Info[Count++], sizeof(Info[0]), "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
 
-  TFT.fillRect(0, Vert-TFT_LineFillOfs, TFT.width(), TFT.height()-Vert+TFT_LineFillHeight, ST77XX_DARKBLUE);
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT_SetMainFont();
+
+  uint8_t MaxRows=(TFT_Footer1-TFT_TopVert)/TFT_LineVertTight;
+  TFT_IDInfoRows=Count<MaxRows ? Count : MaxRows;
+  TFT_IDInfoCount=Count;
+  if(TFT_IDScrollOffset>=Count) TFT_IDScrollOffset=0;
+  int ClearY=TFT_TopVert-TFT_LineFillOfs;
+  TFT.fillRect(0, ClearY, TFT.width(), TFT_Footer1-ClearY, ST77XX_DARKBLUE);
+  for(uint8_t Row=0; Row<TFT_IDInfoRows; Row++)
+  { uint8_t Idx=(TFT_IDScrollOffset+Row)%Count;
+    int Vert=TFT_TopVert+Row*TFT_LineVertTight;
+    TFT.setCursor(2, Vert);
+    TFT.print(Info[Idx]); }
+
+  char Line[32];
   uint64_t ID=getUniqueID();
   uint8_t Len=Format_String(Line, "#");
   Len+=Format_Hex(Line+Len, (uint16_t)(ID>>32));
@@ -352,6 +345,15 @@ int TFT_DrawID(bool WithAP)
 
   TFT_DrawBatt(TFT_BattX(), TFT_BattY);
   return 1; }
+
+bool TFT_IDScrollNext(void)
+{ if(TFT_IDInfoCount<=TFT_IDInfoRows) return false;
+  TFT_IDScrollOffset++;
+  if(TFT_IDScrollOffset>=TFT_IDInfoCount) TFT_IDScrollOffset=0;
+  return true; }
+
+void TFT_IDScrollReset(void)
+{ TFT_IDScrollOffset=0; }
 
 int TFT_DrawSatMap(void)
 { const int16_t CenterX = TFT.width()/2-1;

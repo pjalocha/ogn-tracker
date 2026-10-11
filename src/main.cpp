@@ -538,6 +538,8 @@ void OGN_LED_Flash(void)
 const  uint8_t  TFT_Pages      = 10;      // number of LCD pages
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
+static uint32_t TFT_IDScrollTick=0;
+static const uint32_t TFT_IDScrollPeriod=2000; // [ms] advance the ID page's information list
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
 static uint8_t  TFT_TTNView    = 0;       // 0=status, 1=replace confirmation, 2=QR, 3=error
 static uint8_t  TFT_TTNLastRegisterStatus=0xFF;
@@ -552,6 +554,7 @@ const  uint32_t TFT_PageTimeout = (uint32_t)60000*WITH_TFT_DIM;  // [ms] timeout
 static void TFT_NextPage(void)
 { TFT_Page++;
   if(TFT_Page>=TFT_Pages) TFT_Page=0;
+  TFT_IDScrollReset();
   TFT_PageChange=1; }
 
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
@@ -2255,6 +2258,13 @@ void loop()
   if(GPS==0) { GPS = GPS_Pos+GPS_PosIdx; }
   // if(GPS && !GPS->isTimeValid()) GPS==0;
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
+  uint32_t IDScrollNow=millis();
+  if(TFT_Page==1 && !TFT_PageOFF)
+  { if(IDScrollNow-TFT_IDScrollTick>=TFT_IDScrollPeriod)
+    { TFT_IDScrollTick=IDScrollNow;
+      TFT_IDScrollNext();
+      TFT_PageChange=1; } }
+  else TFT_IDScrollTick=IDScrollNow;
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
   if(TFT_TTNView==2)
   { uint8_t Status=Radio_LoRaWANRegisterStatus();
