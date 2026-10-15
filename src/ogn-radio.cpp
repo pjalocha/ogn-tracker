@@ -470,7 +470,7 @@ static int Radio_ConfigManchFSK(uint8_t PktLen, bool RxMode, const uint8_t *SYNC
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_55, 5, 5); // preamble polarity
   else if(SYNC[0]==0xAA)
     State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
-  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
@@ -587,7 +587,7 @@ static int Radio_ConfigLDR(uint8_t PktLen=PAW_Packet::Size+7, bool RxMode=0, con
   // State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
   State=Radio.invertPreamble(true);                                 // true=0xAA, false=0x55
   // State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polarity
-  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262
@@ -677,7 +677,7 @@ static int Radio_ConfigHDR(uint8_t PktLen, bool RxMode, const uint8_t *SYNC, uin
   if(State) ErrState=State;
   // we could actually use: invertPreamble(true) // true=0xAA, false=0x55
   State = Radio.mod->SPIsetRegValue(RADIOLIB_SX127X_REG_SYNC_CONFIG, RADIOLIB_SX127X_PREAMBLE_POLARITY_AA, 5, 5); // preamble polar$
-  State=Radio.setRSSIConfig(8, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
+  State=Radio.setRSSIConfig(7, 0);                                  // set RSSI smoothing (3 bits) and offset (5 bits)
   if(State) ErrState=State;
 #endif
 #ifdef WITH_SX1262

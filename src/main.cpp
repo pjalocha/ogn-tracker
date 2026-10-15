@@ -544,6 +544,17 @@ static const uint32_t TFT_IDScrollPeriod=2000; // [ms] advance the ID page's inf
 static bool TFT_AcftTypeSelect=0;
 static bool TFT_AcftTypeSaveFailed=0;
 static uint8_t TFT_AcftTypeCandidate=0;
+static bool TFT_TxPowerSelect=0;
+static bool TFT_TxPowerSaveFailed=0;
+static uint8_t TFT_TxPowerCandidate=0;
+static const int8_t TFT_TxPowerLevels[3]={10,14,22};
+static uint8_t TFT_TxPowerChoice(int8_t Power)
+{ uint8_t Choice=0;
+  int16_t Best=abs((int)Power-TFT_TxPowerLevels[0]);
+  for(uint8_t Idx=1; Idx<3; Idx++)
+  { int16_t Diff=abs((int)Power-TFT_TxPowerLevels[Idx]);
+    if(Diff<Best) { Best=Diff; Choice=Idx; } }
+  return Choice; }
 #endif
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
 static uint8_t  TFT_TTNView    = 0;       // 0=status, 1=replace confirmation, 2=QR, 3=error
@@ -595,7 +606,13 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 #endif
     return TFT_DrawID(); }
   if(TFT_Page==2) return TFT_DrawSat(GPS);
-  if(TFT_Page==3) return TFT_DrawRF();
+  if(TFT_Page==3)
+  {
+#if defined(WITH_ESP32) && defined(Button_Pin)
+    if(TFT_TxPowerSelect)
+      return TFT_DrawRF(TFT_TxPowerLevels[TFT_TxPowerCandidate], TFT_TxPowerSaveFailed);
+#endif
+    return TFT_DrawRF(); }
 #ifdef WITH_ST7789
   if(TFT_Page==4) return TFT_DrawSatMap();
 #else
@@ -916,6 +933,15 @@ static void PrimaryButton_Single(void)
 #endif
     TFT_SetPowerSave(0);
     return; }
+  if(TFT_TxPowerSelect)
+  { TFT_TxPowerCandidate=(TFT_TxPowerCandidate+1)%3;
+    TFT_TxPowerSaveFailed=0;
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
 #endif
   if(TFT_PageOFF)
   { TFT_PageOFF=0;
@@ -1050,6 +1076,21 @@ static void PrimaryButton_Long(void)
 #endif
     TFT_SetPowerSave(0);
     return; }
+  if(TFT_Page==3 && TFT_TxPowerSelect)
+  { int8_t PreviousPower=Parameters.TxPower;
+    Parameters.TxPower=TFT_TxPowerLevels[TFT_TxPowerCandidate];
+    if(Parameters.WriteToNVS()==ESP_OK)
+    { TFT_TxPowerSelect=0;
+      TFT_TxPowerSaveFailed=0; }
+    else
+    { Parameters.TxPower=PreviousPower;
+      TFT_TxPowerSaveFailed=1; }
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
 #endif
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
   if(TFT_Page==7 && TFT_TTNView==1)
@@ -1089,6 +1130,29 @@ static void Button_Double(Button2 Butt)
       TFT_AcftTypeSaveFailed=0;
       TFT_AcftTypeCandidate=Parameters.AcftType;
       TFT_IDScrollReset(); }
+    TFT_PageOFF=0;
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
+  if(TFT_Page==3)
+  { if(!TFT_TxPowerSelect)
+    { TFT_TxPowerSelect=1;
+      TFT_TxPowerSaveFailed=0;
+      TFT_TxPowerCandidate=TFT_TxPowerChoice(Parameters.TxPower); }
+    TFT_PageOFF=0;
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
+#endif
+#if defined(Button_Pin) && (defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)) && !defined(WITH_ST7789)
+  if(TFT_Page==4)
+  { for(uint8_t Idx=0; Idx<8; Idx++) RxProc_Count[Idx]=0;
     TFT_PageOFF=0;
     TFT_PageChange=1;
 #ifdef WITH_TFT_DIM

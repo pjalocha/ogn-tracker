@@ -613,13 +613,22 @@ int TFT_DrawRFcounts(void)
   TFT_ClearTextLine(Vert);
   return 1; }
 
-int TFT_DrawRF(void)
+int TFT_DrawRF(int8_t SelectTxPower, bool SaveFailed)
 { char Line[32];
   TFT.setTextColor(ST77XX_WHITE);
   TFT_SetMainFont();
 
   int Vert=TFT_TopVert;
   uint8_t Len=0;
+  if(SelectTxPower>=0)
+  { const char *Level=SelectTxPower<=10 ? "Low" : SelectTxPower<=14 ? "Medium" : "High";
+    Len+=Format_String(Line+Len, "TX: ");
+    Len+=Format_String(Line+Len, Level);
+    Line[Len++]=' ';
+    Len+=Format_SignDec(Line+Len, SelectTxPower);
+    Len+=Format_String(Line+Len, "dBm"); }
+  else
+  {
 #ifdef WITH_SX1262
   Len+=Format_String(Line+Len, "SX1262");
 #endif
@@ -632,18 +641,25 @@ int TFT_DrawRF(void)
   // Line[Len++]=' ';
   // Len+=Format_SignDec(Line+Len, (int32_t)Parameters.RFchipFreqCorr, 2, 1); // frequency correction
   // Len+=Format_String(Line+Len, "ppm");
+  }
   Line[Len]=0;
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 
-  sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
+  if(SelectTxPower>=0)
+    sprintf(Line, "%s", SaveFailed ? "Save failed" : "Short: next");
+  else
+    sprintf(Line, "Rx: %+4.1fdBm", Radio_BkgRSSI);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
   // uint32_t Sum=0;
   // for(uint8_t Sys=0; Sys<8; Sys++)
   //   Sum+=Radio_RxCount[Sys];
   // sprintf(Line, "Rx: %d pkt", Sum);
-  sprintf(Line, "Rx: %3.1f pkt/s", Radio_PktRate);
+  if(SelectTxPower>=0)
+    sprintf(Line, "%s", SaveFailed ? "Long: retry" : "Long: save");
+  else
+    sprintf(Line, "Rx: %3.1f pkt/s", Radio_PktRate);
   TFT_ClearTextLine(Vert);
   TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVert;
 

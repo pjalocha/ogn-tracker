@@ -55,7 +55,7 @@ void TFT_IDScrollReset(void);
 int TFT_DrawLookout(void);
 int TFT_DrawSatMap(void);
 int TFT_DrawSat(const GPS_Position *GPS);
-int TFT_DrawRF(void);
+int TFT_DrawRF(int8_t SelectTxPower=-1, bool SaveFailed=0);
 int TFT_DrawRFcounts(void);
 int TFT_DrawBaro(const GPS_Position *GPS);
 int TFT_DrawGPS(const GPS_Position *GPS);
