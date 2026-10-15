@@ -4,7 +4,7 @@
 
 #define Reset_Pin      4   // peripheral reset: LOW active, HIGH released
 
-#define Button_Pin    38   // user button: LOW when pushed
+#define Button_Pin    39   // user button: LOW when pushed
 
 #define BATT_ADC_CHANNEL ADC1_CHANNEL_0 // GPIO 36 (internal battery)
 #define BATT_ADC_RATIO  2.0              //
