@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 // #define BITCOUNT_USE_BUILTIN
-#define BITCOUNT_SAVE_FLASH
+// #define BITCOUNT_SAVE_FLASH
 
 // ==========================================================================
 // a table for fast bit counting

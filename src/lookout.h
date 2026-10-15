@@ -18,6 +18,17 @@
 
 // =======================================================================================================
 
+const uint8_t LookRxProt_FLR = 0;
+const uint8_t LookRxProt_OGN = 1;
+const uint8_t LookRxProt_MDR = 2;
+const uint8_t LookRxProt_LDR = 3;
+const uint8_t LookRxProt_HDR = 4;
+const uint8_t LookRxProt_FNT = 5;
+const uint8_t LookRxProt_PAW = 6;
+const uint8_t LookRxProt_ADSB = 7;
+
+// =======================================================================================================
+
 class LookOut_Target           // describes a flying aircrafts
 { public:
    union
@@ -27,6 +38,8 @@ class LookOut_Target           // describes a flying aircrafts
        uint8_t  AddrType: 8;  // ADS-L address-type
      }  __attribute__((packed));
    } ;
+   uint8_t     AddrTypeRank;  // confidence and preference for the selected address-type
+   uint8_t     AcftTypeRank;  // source priority for the selected aircraft-type
    Acft_RelPos     Pos;        // Position relative to the reference Lat/Lon/Alt
     int8_t        Pred;        // [0.5sec] amount of time by which own position has been predicted/extrapolated
    uint8_t     GpsPrec;        // GPS position error (includes prediction errors)
@@ -42,7 +55,8 @@ class LookOut_Target           // describes a flying aircrafts
      { // bool   isMoving   :1;   // is a moving target
        bool   isTracked  :1;   // is being tracked or only stored
        // bool   isHidden   :1;   // hidden track, should normally not be revealed
-       bool   OtherMe    :1;   // this is a dupplicated-me target
+       bool   PreOtherMe :1;   // passes the inexpensive pre-candidate gate
+       bool   OtherMe    :1;   // confirmed duplicate of own aircraft
        bool   Omni       :1;   // this is an omni-directional target
        bool   Reported   :1;   // this target has already been reported with $PFLAA or GDL90
        bool   Alloc      :1;   // is allocated or not (a free slot, where a new target can go into)
@@ -70,15 +84,18 @@ class LookOut_Target           // describes a flying aircrafts
    int16_t  MissTime;        // [0.5s]   estimated closest approach time
   uint16_t  MissDist;        // [0.5m]   estimated closest approach distance
 
-  uint16_t  RxProtPipe[8];
-  // uint16_t  RxProtPipeMask;
+  uint32_t OtherMeHistory;   // rolling fine-match decisions, one bit per fresh target position
+  uint32_t  RxProtPipe[8];   // 31-second history: bit 0 newest, bit 30 oldest
+  uint16_t  RxProtRSSI[8];   // [1/16 dBm] low-pass average in Q3
+  uint32_t  RxProtPipeTime;  // newest UTC second represented in RxProtPipe
+  uint8_t   RxProtPipeValid;
 
   public:
    void Clear(void)
-   { Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF;
+   { AddrTypeRank=0; AcftTypeRank=0; Pred=0; Flags=0; HorDist=0; MissDist=0; Call[0]=0; WarnLevel=0; TimeMargin=0xFF; DistMargin=0xFFFF; OtherMeHistory=0;
      for(uint8_t Prot=0; Prot<8; Prot++)
-       RxProtPipe[Prot]=0;
-     // RxProtPipeMask=1;
+     { RxProtPipe[Prot]=0; RxProtRSSI[Prot]=0; }
+     RxProtPipeTime=0; RxProtPipeValid=0;
    }
 
    void setCall(const char *NewCall)
@@ -212,6 +229,15 @@ template <const uint8_t MaxTgts=32>
    const static int32_t   DistRange = 10000; // [m] drop immediately anything beyond this distance
    const static int16_t MinHorizSepar = 100; // [m] minimum horizontal separation
    const static int16_t MinVertSepar  =  50; // [m] minimum vertical separation
+   const static int16_t OtherMeMaxDist     = 200; // [m] loose candidate gate, not confirmation
+   const static int16_t OtherMeMaxRelSpeed =   5; // [m/s] loose candidate gate, not confirmation
+   const static int16_t OtherMeMaxTimeSkew =   4; // [s] linear position correction limit
+   const static int16_t OtherMeFineMaxDist =  25; // [m] fine-match horizontal distance
+   const static int16_t OtherMeFineMaxVertDist = 50; // [m] altitude-source tolerance
+   const static int16_t OtherMeFineMaxRelSpeed = 3; // [m/s] fine-match relative speed
+   const static uint8_t OtherMeConfirmVotes = 24; // positive votes in 32 updates
+   const static uint8_t OtherMeReleaseVotes =  8; // at/below this count confirmation clears
+   const static int16_t OtherMeHistoryTimeout = 20; // [s] reset evidence after a long target gap
    const static int16_t WarnTime      =  20; // [sec] target warning prior to closest miss
    const static int16_t MaxPastPacketTime   = 20; // [sec] accept/reject threshold for delayed packets
    const static int16_t MaxFuturePacketTime = 20; // [sec] reject own packets too far ahead of RxTime
@@ -220,8 +246,6 @@ template <const uint8_t MaxTgts=32>
 
    LookOut_Target *Sort[MaxTargets];      // for sorting, vector of pointers
    uint8_t SortSize;
-
-   uint16_t  RxProtPipeMask;
 
    char Line[120];                        // for printing
 
@@ -234,7 +258,6 @@ template <const uint8_t MaxTgts=32>
      WorstTgtIdx=0; WorstTgtTime=0xFF;
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
      { Target[Idx].Clear(); }
-     RxProtPipeMask=1;
      SortSize=0; }
 
    static bool HigherThreat(LookOut_Target *A, LookOut_Target *B)
@@ -462,7 +485,6 @@ template <const uint8_t MaxTgts=32>
    template <class OGNx_Packet> // after starting the algorithm, process own position packets
     const LookOut_Target *ProcessOwn(OGNx_Packet &OwnPos, uint32_t RxTime) // process own position
    { // printf("ProcessOwn() ... entry\n");
-    RxProtPipeMask<<=1; if(RxProtPipeMask==0) RxProtPipeMask=1;
 
     if(hasPosition)                                                                      // in my position is valid
      { Acft_RelPos NewPos;
@@ -497,6 +519,7 @@ template <const uint8_t MaxTgts=32>
      for(uint8_t Idx=0; Idx<MaxTargets; Idx++)                                        // go over targets
      { LookOut_Target *Tgt = Target+Idx;
        if(!Tgt->Alloc) continue;                                                      // skip empty slots
+       AdvanceRxPipeTime(Tgt, RxTime);                                                // expire old protocol history bins
        if(Tgt->DistMargin==0)                                                         // those with no safety margin
        { while(Tgt->Pos.T<=(Pos.T-4))                                                 // bring closer in time to my (new) position
          { Tgt->Pos.StepFwd2secs(); Tgt->Pred+=4; }
@@ -514,7 +537,54 @@ template <const uint8_t MaxTgts=32>
      if( (!Tgt->Alloc) || (Tgt->DistMargin>0) ) return 0;                              // return NULL if target is not a thread
      return Tgt; }                                                                     // return the pointer to the most dangerous target
 
-   LookOut_Target *ProcessTarget(ADSL_Packet &Packet, uint32_t RxTime)           // process a position of another aircraft in ADS-L format
+   static void LowPass(uint16_t &Aver, uint16_t Inp)
+   { if(Aver==0) Aver  = Inp<<3;
+            else Aver += ((int16_t)(Inp<<3)-(int16_t)Aver+8)>>3; }
+
+   static bool AdvanceRxPipeTime(LookOut_Target *Tgt, uint32_t RxTime)
+   { if(!Tgt->RxProtPipeValid)
+     { Tgt->RxProtPipeTime=RxTime;
+       Tgt->RxProtPipeValid=1;
+       return 1; }
+     uint32_t Ahead=RxTime-Tgt->RxProtPipeTime;
+     if(Ahead && Ahead<0x80000000u)                                                   // newer time, including counter wrap
+     { if(Ahead>=31)
+       { for(uint8_t Prot=0; Prot<8; Prot++) Tgt->RxProtPipe[Prot]=0; }
+       else
+       { for(uint8_t Prot=0; Prot<8; Prot++) Tgt->RxProtPipe[Prot]<<=Ahead; }         // move observations toward older bins
+       Tgt->RxProtPipeTime=RxTime;
+       return 1; }
+     return (Tgt->RxProtPipeTime-RxTime)<31; }                                        // accept out-of-order times still in the window
+
+   static void UpdateRxStats(LookOut_Target *Tgt, uint8_t RxProt, uint8_t RSSI, uint32_t RxTime)
+   { if(RxProt>=8) return;
+     if(AdvanceRxPipeTime(Tgt, RxTime))
+     { uint32_t Age=Tgt->RxProtPipeTime-RxTime;
+       Tgt->RxProtPipe[RxProt] |= (uint32_t)1<<Age; }                                 // bit 0 is newest second; same-time protocols set separate pipes
+     LowPass(Tgt->RxProtRSSI[RxProt], RSSI); }                                       // update average RSSI
+
+   static uint8_t AddrTypePriority(uint8_t AddrType, uint8_t RxProt)
+   { if(AddrType<=4) return 0;                                                       // ADS-L tables 0..4 are random-ID forms
+     if(RxProt==LookRxProt_PAW || RxProt==LookRxProt_FNT) return 64+AddrType;          // address-type inferred from a packet without one
+     return 128+AddrType; }                                                          // explicit type; higher ADS-L table wins, extensions preserved
+
+   static uint8_t AcftTypePriority(uint8_t AcftType, uint8_t RxProt)
+   { if(AcftType==0) return 0;                                                       // unknown/other is always lowest priority
+     if(RxProt==LookRxProt_OGN || RxProt==LookRxProt_FLR ||
+        RxProt==LookRxProt_PAW || RxProt==LookRxProt_FNT) return 2;                  // native FLARM/OGN/PAW aircraft-type set
+     return 1; }                                                                      // ADS-L aircraft-category converted to FLARM/OGN type
+
+   LookOut_Target *findTargetByAddress(uint32_t Address)
+   { for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
+     { if(Target[Idx].Alloc && Target[Idx].Address==Address) return Target+Idx; }
+     return 0; }
+
+   const LookOut_Target *findTargetByAddress(uint32_t Address) const
+   { for(uint8_t Idx=0; Idx<MaxTargets; Idx++)
+     { if(Target[Idx].Alloc && Target[Idx].Address==Address) return Target+Idx; }
+     return 0; }
+
+   LookOut_Target *ProcessTarget(ADSL_Packet &Packet, uint32_t RxTime, uint8_t RxProt, uint8_t RSSI=0) // process a position of another aircraft in ADS-L format
    { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
      if(!hasPosition) return 0;
      LookOut_Target New;                                                               // parse into a scratch slot first
@@ -525,10 +595,10 @@ template <const uint8_t MaxTgts=32>
      New.Address  = Packet.getAddress();
      New.AddrType = Packet.getAddrType();
      New.AcftType = Packet.getAcftTypeOGN();
-     return ProcessTarget(&New); }
+     return ProcessTarget(&New, RxTime, RxProt, RSSI, Packet.isRelay()); }
 
    template <class OGNx_Packet>
-    LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime)  // process a position of another aircraft in OGN format
+    LookOut_Target *ProcessTarget(OGNx_Packet &Packet, uint32_t RxTime, uint8_t RxProt, uint8_t RSSI=0)  // process a position of another aircraft in OGN format
    { // printf("ProcessTarget(%d) ... entry\n", SafestIdx);
      if(!hasPosition) return 0;
      LookOut_Target New;                                                               // parse into a scratch slot first
@@ -542,31 +612,37 @@ template <const uint8_t MaxTgts=32>
      // if(Call) { strncpy(New->Call, Call, 10); New->Call[10]=0; }
      //     else   New->Call[0]=0;
      New.Call[0]=0;
-     return ProcessTarget(&New); }
+     return ProcessTarget(&New, RxTime, RxProt, RSSI, Packet.Header.Relay); }
 
-   void setTargetCall(uint32_t Address, uint8_t AddrType, const char *Call)
-   { uint32_t ID=AddrType; ID = (ID<<24)|Address;
-     uint8_t Idx=0;
-     for( ; Idx<MaxTargets; Idx++)
-     { if(Target[Idx].Alloc==0) continue;
-       if(Target[Idx].ID==ID) break; }
-     if(Idx>=MaxTargets) return;
-     Target[Idx].setCall(Call); }
+   void setTargetCall(uint32_t Address, const char *Call)
+   { LookOut_Target *Tgt=findTargetByAddress(Address);
+     if(Tgt) Tgt->setCall(Call); }
 
-   LookOut_Target *ProcessTarget(LookOut_Target *New)
+   LookOut_Target *ProcessTarget(LookOut_Target *New, uint32_t RxTime, uint8_t RxProt, uint8_t RSSI, bool IsRelayed)
    {  // printf("ProcessTarget() ... %08X\n", ID);
-     uint8_t OldIdx;
-     LookOut_Target *Old = 0;                                                          // possible previous index to the same ID
-     for(OldIdx=0; OldIdx<MaxTargets; OldIdx++)                                        // scan targets already on the list
-     { if(Target[OldIdx].Alloc==0) continue;                                           // skip not allocated
-       if(Target[OldIdx].ID==New->ID) break; }                                         // to find previous position for the target
-     if(OldIdx<MaxTargets)                                                             // if found
-     { Old = Target+OldIdx;
+     LookOut_Target *Old=findTargetByAddress(New->Address);                            // address identifies target across protocols
+     if(Old)
+     { uint8_t NewRank=AddrTypePriority(New->AddrType, RxProt);
+       if(NewRank>Old->AddrTypeRank)
+       { Old->AddrType=New->AddrType;
+         Old->AddrTypeRank=NewRank; }
+       New->AddrType=Old->AddrType;
+       New->AddrTypeRank=Old->AddrTypeRank;
+       uint8_t NewAcftTypeRank=AcftTypePriority(New->AcftType, RxProt);
+       if(NewAcftTypeRank>Old->AcftTypeRank)
+       { Old->AcftType=New->AcftType;
+         Old->AcftTypeRank=NewAcftTypeRank; }
+       New->AcftType=Old->AcftType;
+       New->AcftTypeRank=Old->AcftTypeRank;
        int16_t OldTime = Old->Pos.T-Old->Pred;                                         // [0.5s] last measured target-position time
        int16_t Lag = OldTime-New->Pos.T;                                               // [0.5s] positive when the new packet is older
        if(Lag>0)                                                                       // if position is not really newer
-       { if(Lag>(2*MaxPastPacketTime)) return 0;                                       // very delayed packet: ignore completely
+       { if(!IsRelayed) UpdateRxStats(Old, RxProt, RSSI, RxTime);                      // count only direct RF receptions
+         if(Lag>(2*MaxPastPacketTime)) return 0;                                       // very delayed position: ignore completely
          return Old; } }                                                               // small delay/duplicate: keep previous state
+     else
+     { New->AddrTypeRank=AddrTypePriority(New->AddrType, RxProt);                     // remember address-type source confidence
+       New->AcftTypeRank=AcftTypePriority(New->AcftType, RxProt); }                   // and aircraft-type source
 
      if(Old && Old->Call[0] && New->Call[0]==0) { strncpy(New->Call, Old->Call, 10); New->Call[10]=0; } // copy the call
 
@@ -591,6 +667,18 @@ template <const uint8_t MaxTgts=32>
        // printf("Climb/Turn %08X dT=%3.1fs ", New->ID, 0.5*dT); New->Pos.Print();
      }
 
+     if(Old)                                                                       // carry history when replacing a recent target slot
+     { int16_t OldTime=Old->Pos.T-Old->Pred;
+       int16_t Gap=New->Pos.T-OldTime;                                             // [0.5sec]
+       if(Gap>=0 && Gap<=(2*OtherMeHistoryTimeout))
+       { New->OtherMeHistory=Old->OtherMeHistory;
+         New->OtherMe=Old->OtherMe;
+         for(uint8_t Prot=0; Prot<8; Prot++)
+         { New->RxProtPipe[Prot]=Old->RxProtPipe[Prot];
+           New->RxProtRSSI[Prot]=Old->RxProtRSSI[Prot]; }
+         New->RxProtPipeTime=Old->RxProtPipeTime;
+         New->RxProtPipeValid=Old->RxProtPipeValid; } }
+
      if(Old) Old->Alloc=0;                                                             // mark old position as "not allocated"
      New->Alloc=1;                                                                     // mark this position as allocated
      LookOut_Target *Slot = Target+SafestIdx;                                          // get a free or safest slot
@@ -603,8 +691,11 @@ template <const uint8_t MaxTgts=32>
      if(Pos.T<=(New->Pos.T-4))                                                         // if new position more than 2sec away from own
      { Pos.StepFwd2secs(); Pred+=4; }                                                  // bring own position closer in time
 
-     uint8_t Warn=calcTarget(New);                                                     // calculate the safety margin for the target
-     if(Warn>WarnLevel) WarnLevel=Warn;                                                // record higest warnign level
+     New->PreOtherMe=isPreOtherMeCandidate(New);                                      // inexpensive coarse pre-candidate gate
+     calcTarget(New);                                                                  // calculate the safety margin and relative position
+     updateOtherMeHistory(New, isOtherMeFineMatch(New));                               // one vote per fresh target position
+     if(New->OtherMe) New->WarnLevel=0;                                                // a confirmed copy of own flight is not an alert source
+     if(New->WarnLevel>WarnLevel) WarnLevel=New->WarnLevel;                           // record highest warning level
      // printf("ProcessTarget() ... calc()\n");
 
      uint8_t MaxIdx=SafestIdx; uint32_t Max=New->calcSafeDist();                       // look for the safest position on the list
@@ -618,7 +709,67 @@ template <const uint8_t MaxTgts=32>
      }
      SafestIdx=MaxIdx;                                                                 // take the safest slot for the next time
 
+     if(!IsRelayed) UpdateRxStats(New, RxProt, RSSI, RxTime);                          // count only direct RF receptions
+
      return New; }
+
+   bool isPreOtherMeCandidate(LookOut_Target *Tgt)
+   { int16_t TimeSkew=abs((int)Pos.T-(int)Tgt->Pos.T);                                 // [0.5sec]
+     if(TimeSkew>(2*OtherMeMaxTimeSkew)) return 0;                                     // don't trust long linear extrapolations
+
+     int32_t dX=(int32_t)Tgt->Pos.X-Pos.X;
+     int32_t dY=(int32_t)Tgt->Pos.Y-Pos.Y;
+     int32_t dZ=(int32_t)Tgt->Pos.Z-Pos.Z;
+     int16_t dT=Pos.T-Tgt->Pos.T;                                                      // [0.5sec]
+     if(dT)
+     { int32_t Vx,Vy;
+       Tgt->Pos.getSpeedVector(Vx,Vy);
+       dX+=(dT*Vx)>>1;                                                                // [0.5m]
+       dY+=(dT*Vy)>>1;
+       if(Tgt->Pos.hasClimb) dZ+=(dT*(int32_t)Tgt->Pos.Climb)>>1; }
+
+     const int32_t MaxDist=2*OtherMeMaxDist;                                           // [0.5m]
+     if(abs(dX)>MaxDist || abs(dY)>MaxDist || abs(dZ)>MaxDist) return 0;
+     if(Acft_RelPos::SqrDistance((int16_t)dX, (int16_t)dY, (int16_t)dZ)>(uint32_t)(MaxDist*MaxDist)) return 0;
+
+     int32_t TgtVx,TgtVy,OwnVx,OwnVy;
+     Tgt->Pos.getSpeedVector(TgtVx,TgtVy);
+     Pos.getSpeedVector(OwnVx,OwnVy);
+     int32_t dVx=TgtVx-OwnVx, dVy=TgtVy-OwnVy;                                        // [0.5m/s]
+     int32_t dVz=0;
+     if(Tgt->Pos.hasClimb && Pos.hasClimb) dVz=(int32_t)Tgt->Pos.Climb-Pos.Climb;
+
+     const int32_t MaxRelSpeed=2*OtherMeMaxRelSpeed;                                  // [0.5m/s]
+     if(abs(dVx)>MaxRelSpeed || abs(dVy)>MaxRelSpeed || abs(dVz)>MaxRelSpeed) return 0;
+     if((dVx*dVx+dVy*dVy+dVz*dVz)>(MaxRelSpeed*MaxRelSpeed)) return 0;
+     return 1; }
+
+   bool isOtherMeFineMatch(LookOut_Target *Tgt)
+   { if(!Tgt->PreOtherMe || !Pos.isMoving || !Tgt->Pos.isMoving) return 0;
+     const int32_t MaxDist=2*OtherMeFineMaxDist;                                      // [0.5m]
+     if(abs((int32_t)Tgt->dX)>MaxDist || abs((int32_t)Tgt->dY)>MaxDist) return 0;
+     if(Acft_RelPos::SqrDistance(Tgt->dX,Tgt->dY)>(uint32_t)(MaxDist*MaxDist)) return 0;
+     if(abs((int32_t)Tgt->dZ)>(2*OtherMeFineMaxVertDist)) return 0;
+
+     int32_t TgtVx,TgtVy,OwnVx,OwnVy;
+     Tgt->Pos.getSpeedVector(TgtVx,TgtVy);
+     Pos.getSpeedVector(OwnVx,OwnVy);
+     int32_t dVx=TgtVx-OwnVx, dVy=TgtVy-OwnVy, dVz=0;                                // [0.5m/s]
+     if(Tgt->Pos.hasClimb && Pos.hasClimb) dVz=(int32_t)Tgt->Pos.Climb-Pos.Climb;
+     const int32_t MaxRelSpeed=2*OtherMeFineMaxRelSpeed;                             // [0.5m/s]
+     if(abs(dVx)>MaxRelSpeed || abs(dVy)>MaxRelSpeed || abs(dVz)>MaxRelSpeed) return 0;
+     return (dVx*dVx+dVy*dVy+dVz*dVz)<=(MaxRelSpeed*MaxRelSpeed); }
+
+   static uint8_t countOtherMeVotes(uint32_t History)
+   { uint8_t Count=0;
+     for( ; History; History&=(History-1)) Count++;
+     return Count; }
+
+   void updateOtherMeHistory(LookOut_Target *Tgt, bool Match)
+   { Tgt->OtherMeHistory=(Tgt->OtherMeHistory<<1)|(Match?1u:0u);
+     uint8_t Votes=countOtherMeVotes(Tgt->OtherMeHistory);
+     if(!Tgt->OtherMe && Votes>=OtherMeConfirmVotes) Tgt->OtherMe=1;
+     else if(Tgt->OtherMe && Votes<=OtherMeReleaseVotes) Tgt->OtherMe=0; }
 
    void calcRelPos(LookOut_Target *Tgt)
    { Tgt->dX = Tgt->Pos.X - Pos.X;                                     // [0.5m] relative distance
@@ -647,6 +798,7 @@ template <const uint8_t MaxTgts=32>
      if(Margin>0)                                                                       // if there is still safety margin, no more calc. (dealloc. ?)
      { // Tgt->TimeMargin = Margin/;
        return 0; }                                                                      // return warning level = 0
+     if(Tgt->OtherMe) return 0;                                                         // confirmed copy of own flight is not an alert source
                                                                                         // at this point the distance is possibly small enough so we may hit the target
 #ifdef DEBUG_PRINT
      printf("calcTarget(0x%08X) ... no abs. safety margin\n", Tgt->ID);

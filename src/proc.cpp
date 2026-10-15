@@ -567,11 +567,10 @@ uint32_t RxProc_Count[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 static const int32_t MaxRxDist = 25000;  // [m] assumed maximum reception distance, what is more is asusmed be badly decoded and dropped
 
 // process received OGN packets
-static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime)
+static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime, uint8_t RxProt)
 { uint32_t Address  = RxPacket->Packet.Header.Address;                               // address
   uint8_t  AddrType = RxPacket->Packet.Header.AddrType;                              // address-type: FLR/OGN convention
-  uint8_t OwnPacket = ( Address  == Parameters.Address  )                            // my own aircraft ?
-                   && ( AddrType == Parameters.AddrType );
+  bool OwnPacket = Address==Parameters.Address;                                      // same address may arrive with another protocol's type
   RxPacket->LatDist=0;
   RxPacket->LonDist=0;
   if(RxPacket->Packet.Header.NonPos)                                                 // status or info packet
@@ -583,7 +582,7 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       if(RxPacket->RxErr<=8 && RxPacket->Packet.getInfo(Call, 5)>0)
       { // Serial.printf("ProcessRxOGN() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
 #ifdef WITH_LOOKOUT
-        Look.setTargetCall(Address, AddrType+4, Call);
+        Look.setTargetCall(Address, Call);
 #endif
       }
     }
@@ -621,17 +620,13 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
       SysLog_Line(Line, Len, 0, 25, 1);
     }
 #endif
-    RxPacket->Packet.Header.Relay=1;
-#if defined(WITH_MOBILE) && defined(WITH_WIFI)
-    MOBILE_SendOGN(RxPacket->Packet);                      // send received OGN packet to the mobile network
-#endif
 //     Len=RxPacket->Packet.WriteAPRS(Line, RxTime);                                     // print on the console as APRS message
 //     xSemaphoreTake(CONS_Mutex, 25);
 //     Format_String(CONS_UART_Write, Line, 0, Len);
 //     xSemaphoreGive(CONS_Mutex);
 
 #ifdef WITH_LOOKOUT
-    const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime);           // process the received target postion
+    const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime, RxProt, RxPacket->RxRSSI); // process the received target postion
     if(Tgt) Warn=Tgt->WarnLevel;                                                      // remember warning level of this target
     RxPacket->Warn = Warn>0;
 #ifdef WITH_GDL90
@@ -649,6 +644,11 @@ static void ProcessRxOGN(OGN_RxPacket<OGN_Packet> *RxPacket, uint8_t RxPacketIdx
     // if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                         // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
+
+    RxPacket->Packet.Header.Relay=1;                                                  // keep local relay marking for forwarding
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+    MOBILE_SendOGN(RxPacket->Packet);                                                // send received OGN packet to the mobile network
+#endif
 
      bool Signif = Warn || PrevRxPacket==0;
      if(!Signif) Signif=OGN_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID from the relay queue
@@ -733,13 +733,13 @@ static bool ADSL_isSignif(const ADSL_Packet *Packet, const ADSL_Packet *PrevPack
   return 0; }
 
 // process received ADS-L packets
-static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime, bool doRelay)
+static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t RxTime, bool doRelay, uint8_t RxProt)
 { uint32_t Address = RxPacket->Packet.getAddress();                                      // address
   uint8_t AddrType = RxPacket->Packet.getAddrTable();                                    // address-type: ADS-L convention
-  if(AddrType<4) AddrType=0;
-  else AddrType-=4;                                                                      // address-type: FLR/OGN convention
-  uint8_t MyOwnPacket = ( Address  == Parameters.Address )                               // is it my own aircraft ?
-                     && ( AddrType == Parameters.AddrType);
+  uint8_t AddrTypeOGN = AddrType-4;
+  if(AddrType<4) AddrTypeOGN=0;
+  bool OwnPacket = Address==Parameters.Address                                           // is it my own aircraft ?
+                && AddrTypeOGN==Parameters.AddrType;
   RxPacket->LatDist=0;
   RxPacket->LonDist=0;
   if(RxPacket->Packet.isTelemetry())
@@ -748,7 +748,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     if(RxPacket->RxErr<=4 && RxPacket->Packet.getInfo(Call, 5)>0)
     { // Serial.printf("ProcessRxADSL() %02X:%06X Call=%s %de\n", AddrType, Address, Call, RxPacket->RxErr);
 #ifdef WITH_LOOKOUT
-      Look.setTargetCall(Address, AddrType+4, Call);
+      Look.setTargetCall(Address, Call);
 #endif
     }
 #ifdef WITH_SDLOG
@@ -756,7 +756,7 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
 #endif
     return ; }
   if(!RxPacket->Packet.isPosition()) return;
-  if(MyOwnPacket) return;                                                             // don't process my own (relayed) packets
+  if(OwnPacket) return;                                                               // don't process my own (relayed) packets
   if(RxPacket->Packet.hasAlt())
     GhostAltitudeObserve(RxPacket->Packet.getAlt(), true, RxTime,
                          (GPS_Altitude+GPS_GeoidSepar)/10);
@@ -770,12 +770,8 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     ADSL_RxPacket *PrevRxPacket = ADSL_RelayQueue.addNew(RxPacketIdx);   // add to the relay queue and get the previ>
     // Serial.printf("ProcessRxADSL: %02X:%06X [%+5d,%+5d]m\n",
     //          RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), LatDist, LonDist);
-    RxPacket->Packet.setRelay(1);
-#if defined(WITH_MOBILE) && defined(WITH_WIFI)
-    MOBILE_SendADSL(RxPacket->Packet);                      // send received ADS-L packet to the mobile network
-#endif
 #ifdef WITH_LOOKOUT
-    const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime);           // process the received target postion
+    const LookOut_Target *Tgt=Look.ProcessTarget(RxPacket->Packet, RxTime, RxProt, RxPacket->RxRSSI);  // process the received target postion
     if(Tgt) Warn=Tgt->WarnLevel;                                                      // remember warning level of this target
     RxPacket->Warn = Warn>0;
 #ifdef WITH_GDL90
@@ -793,6 +789,11 @@ static void ProcessRxADSL(ADSL_RxPacket *RxPacket, uint8_t RxPacketIdx, uint32_t
     // if(AlarmThresh==0) Play(Play_Vol_1 | Play_Oct_2 | 7, 3);                            // if Knob>12 => make a beep for every received packet
 #endif
 #endif // WITH_LOOKOUT
+
+    RxPacket->Packet.setRelay(1);                                                     // keep local relay marking for forwarding
+#if defined(WITH_MOBILE) && defined(WITH_WIFI)
+    MOBILE_SendADSL(RxPacket->Packet);                                               // send received ADS-L packet to the mobile network
+#endif
 
     bool Signif = Warn || PrevRxPacket==0;
     if(!Signif) Signif=ADSL_isSignif(&(RxPacket->Packet), &(PrevRxPacket->Packet));  // compare against previous packet of same ID fr>
@@ -851,9 +852,9 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
   RxProc_Count[Radio_SysID_OGN]++;
   RxPacket->Packet.Dewhiten();
-  ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
+  ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time, LookRxProt_OGN); }
 
-static void DecodeRxADSL(FSK_RxPacket *RxPkt)
+static void DecodeRxADSL(FSK_RxPacket *RxPkt, uint8_t RxProt=LookRxProt_MDR)
 { uint8_t RxPacketIdx  = ADSL_RelayQueue.getNew();                   // get place for this new packet
   ADSL_RxPacket *RxPacket = ADSL_RelayQueue[RxPacketIdx];
   int CorrErr=RxPkt->ErrCount();
@@ -873,7 +874,7 @@ static void DecodeRxADSL(FSK_RxPacket *RxPkt)
   RxPacket->Packet.setEncrKey(3);
   // Serial.printf("DecodeRxADSL : #%d %02X:%06X Err:%d Corr:%d\n",
   //          RxPkt->Channel, RxPacket->Packet.getAddrTable(), RxPacket->Packet.getAddress(), RxPkt->ErrCount(), CorrErr);
-  ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time, 1); }
+  ProcessRxADSL(RxPacket, RxPacketIdx, RxPkt->Time, 1, RxProt); }
 
 static void DecodeRxLDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=25 || RxPkt->Manchester) return;
@@ -894,7 +895,7 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   { // Serial.printf("LDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
     // RxPkt->Bytes--;
-    DecodeRxADSL(RxPkt);
+    DecodeRxADSL(RxPkt, LookRxProt_LDR);
     return; }
   RxProc_Count[Radio_SysID_LDR]++;
   PAW_Packet::Whiten(RxPkt->Data, 24);
@@ -905,12 +906,22 @@ static void DecodeRxLDR(FSK_RxPacket *RxPkt)
   uint8_t RxPacketIdx  = OGN_RelayQueue.getNew();
   OGN_RxPacket<OGN_Packet> *RxPacket = OGN_RelayQueue[RxPacketIdx];
   PAW->Write(RxPacket->Packet);
+#ifdef WITH_LOOKOUT
+  const LookOut_Target *Tgt=Look.findTargetByAddress(PAW->Address);
+  if(Tgt && (Tgt->AddrType<=4 || Tgt->AddrTypeRank>=128))                             // preserve random or explicitly observed address-type
+  { uint8_t TargetAddrType=Tgt->AddrType;
+    if(TargetAddrType<=4) RxPacket->Packet.Header.AddrType=0;                         // ADS-L random-ID tables => OGN random-ID
+    else if(TargetAddrType<=7) RxPacket->Packet.Header.AddrType=TargetAddrType-4;     // ADS-L ICAO/FLARM/OGN => OGN type
+    else TargetAddrType=0xFF;                                                         // OGN cannot represent extended ADS-L tables
+    if(TargetAddrType!=0xFF) RxPacket->Packet.calcAddrParity();                       // type changed: restore header parity
+  }
+#endif
   RxPacket->Packet.Position.Time = RxPkt->Time%60;
   RxPacket->RxErr  = 0;
   RxPacket->RxChan = RxPkt->Channel;
   RxPacket->RxRSSI = RxPkt->RSSI;
   RxPacket->Correct = 1;
-  ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time); }
+  ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time, LookRxProt_PAW); }
 
 static void DecodeRxHDR(FSK_RxPacket *RxPkt)
 { if(RxPkt->Bytes!=24 || RxPkt->Manchester) return;
@@ -925,7 +936,7 @@ static void DecodeRxHDR(FSK_RxPacket *RxPkt)
   if(CRC24==0x000000)
   { // Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de\n",
     //          (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount());
-    DecodeRxADSL(RxPkt); }
+    DecodeRxADSL(RxPkt, LookRxProt_HDR); }
   // else Serial.printf("HDR: %02ds+%dms #%d %+4.1fdBm %de !%06X!\n",
   //            (RxPkt->Time)%60, RxPkt->msTime, RxPkt->Channel, -0.5*RxPkt->RSSI, RxPkt->ErrCount(), CRC);
 }
@@ -972,7 +983,7 @@ static void DecodeRxFLR(FSK_RxPacket *RxPkt)
   RxPacket->RxChan = RxPkt->Channel;
   RxPacket->RxRSSI = RxPkt->RSSI;
   RxPacket->Correct = 1;
-  ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time, !FLR->FAMP.NoTrack); }
+  ProcessRxADSL(RxPacket, RxPacketIdx, FLR->Time, !FLR->FAMP.NoTrack, LookRxProt_FLR); }
 
 static void DecodeRxPacket(FSK_RxPacket *RxPkt)
 {
@@ -1045,7 +1056,7 @@ static void DecodeRxPacket(FANET_RxPacket *RxPkt)
   uint32_t SlotTime = RxPkt->SlotTime();
   if(FNT2OGN(RxPacket->Packet, *RxPkt, SlotTime%60)<=0) return;
   RxPacket->RxRSSI = -2*RxPkt->RSSI;
-  ProcessRxOGN(RxPacket, RxPacketIdx, SlotTime); }
+  ProcessRxOGN(RxPacket, RxPacketIdx, SlotTime, LookRxProt_FNT); }
 #endif
 
 // -------------------------------------------------------------------------------------------------------------------
