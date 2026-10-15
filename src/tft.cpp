@@ -285,11 +285,22 @@ static const char *AcftTypeName(uint8_t AcftType)
   return TypeName[0]; }
 */
 
-int TFT_DrawID(bool WithAP)
+int TFT_DrawID(bool WithAP, int8_t SelectAcftType, bool SaveFailed)
 { char Info[12][32];
   uint8_t Count=0;
-  snprintf(Info[Count++], sizeof(Info[0]), "%s:%c:%06X",
-           Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
+  if(SelectAcftType>=0)
+  { snprintf(Info[Count++], sizeof(Info[0]), "Type: %s [%X]",
+             Parameters.AcftTypeName((uint8_t)SelectAcftType), SelectAcftType);
+    if(SaveFailed)
+    { snprintf(Info[Count++], sizeof(Info[0]), "Save failed");
+      snprintf(Info[Count++], sizeof(Info[0]), "Long: retry"); }
+    else
+    { snprintf(Info[Count++], sizeof(Info[0]), "Short: next");
+      snprintf(Info[Count++], sizeof(Info[0]), "Long: save"); } }
+  else
+  {
+    snprintf(Info[Count++], sizeof(Info[0]), "%s:%c:%06X",
+             Parameters.AcftTypeName(), Parameters.AddrTypeChar(), Parameters.Address);
 #ifdef WITH_BLE_SPP
   if(Parameters.BTname[0])
     snprintf(Info[Count++], sizeof(Info[0]), "BT:%s", Parameters.BTname);
@@ -313,6 +324,7 @@ int TFT_DrawID(bool WithAP)
   if(Parameters.Task[0])
     snprintf(Info[Count++], sizeof(Info[0]), "Task:%s", Parameters.Task);
   snprintf(Info[Count++], sizeof(Info[0]), "Bat:%5.3fV", (0.001/256)*BatteryVoltage);
+  }
 
   TFT.setTextColor(ST77XX_WHITE);
   TFT_SetMainFont();

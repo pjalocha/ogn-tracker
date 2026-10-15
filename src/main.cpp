@@ -540,6 +540,11 @@ static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint32_t TFT_IDScrollTick=0;
 static const uint32_t TFT_IDScrollPeriod=2000; // [ms] advance the ID page's information list
+#if defined(WITH_ESP32) && defined(Button_Pin)
+static bool TFT_AcftTypeSelect=0;
+static bool TFT_AcftTypeSaveFailed=0;
+static uint8_t TFT_AcftTypeCandidate=0;
+#endif
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
 static uint8_t  TFT_TTNView    = 0;       // 0=status, 1=replace confirmation, 2=QR, 3=error
 static uint8_t  TFT_TTNLastRegisterStatus=0xFF;
@@ -582,7 +587,13 @@ static void TFT_TTNStartRegistration(void)
 
 static int TFT_DrawPage(const GPS_Position *GPS)
 { // Serial.printf("TFT_DrawPage() TFT_Page:%d TFT_PageChange:%d\n", TFT_Page, TFT_PageChange);
-  if(TFT_Page==1) return TFT_DrawID();
+  if(TFT_Page==1)
+  {
+#if defined(WITH_ESP32) && defined(Button_Pin)
+    if(TFT_AcftTypeSelect)
+      return TFT_DrawID(0, TFT_AcftTypeCandidate, TFT_AcftTypeSaveFailed);
+#endif
+    return TFT_DrawID(); }
   if(TFT_Page==2) return TFT_DrawSat(GPS);
   if(TFT_Page==3) return TFT_DrawRF();
 #ifdef WITH_ST7789
@@ -895,6 +906,17 @@ static void OptButton_Init(void)
 static void PrimaryButton_Single(void)
 {
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
+#if defined(WITH_ESP32) && defined(Button_Pin)
+  if(TFT_AcftTypeSelect)
+  { TFT_AcftTypeCandidate=(TFT_AcftTypeCandidate+1)&0x0F;
+    TFT_AcftTypeSaveFailed=0;
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
+#endif
   if(TFT_PageOFF)
   { TFT_PageOFF=0;
     TFT_PageChange=1; }
@@ -1011,6 +1033,24 @@ static void PrimaryButton_PowerOff(void)
 
 static void PrimaryButton_Long(void)
 {
+#if defined(WITH_ESP32) && defined(Button_Pin) && (defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341))
+  if(TFT_Page==1 && TFT_AcftTypeSelect)
+  { uint8_t PreviousType=Parameters.AcftType;
+    Parameters.AcftType=TFT_AcftTypeCandidate;
+    if(Parameters.WriteToNVS()==ESP_OK)
+    { TFT_AcftTypeSelect=0;
+      TFT_AcftTypeSaveFailed=0;
+      TFT_IDScrollReset(); }
+    else
+    { Parameters.AcftType=PreviousType;
+      TFT_AcftTypeSaveFailed=1; }
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
+#endif
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
   if(TFT_Page==7 && TFT_TTNView==1)
   { TFT_TTNStartRegistration();
@@ -1042,6 +1082,21 @@ static void Button_Single(Button2 Butt) // callback when a single press on the b
 
 static void Button_Double(Button2 Butt)
 {
+#if defined(WITH_ESP32) && defined(Button_Pin) && (defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341))
+  if(TFT_Page==1)
+  { if(!TFT_AcftTypeSelect)
+    { TFT_AcftTypeSelect=1;
+      TFT_AcftTypeSaveFailed=0;
+      TFT_AcftTypeCandidate=Parameters.AcftType;
+      TFT_IDScrollReset(); }
+    TFT_PageOFF=0;
+    TFT_PageChange=1;
+#ifdef WITH_TFT_DIM
+    TFT_PageActive=millis();
+#endif
+    TFT_SetPowerSave(0);
+    return; }
+#endif
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
 #ifdef WITH_LORAWAN_DEBUG
   Serial.printf("TTN button double page=%u off=%u view=%u ready=%u hasKey=%u\n",
@@ -2259,7 +2314,11 @@ void loop()
   // if(GPS && !GPS->isTimeValid()) GPS==0;
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
   uint32_t IDScrollNow=millis();
-  if(TFT_Page==1 && !TFT_PageOFF)
+  if(TFT_Page==1 && !TFT_PageOFF
+#if defined(WITH_ESP32) && defined(Button_Pin)
+     && !TFT_AcftTypeSelect
+#endif
+    )
   { if(IDScrollNow-TFT_IDScrollTick>=TFT_IDScrollPeriod)
     { TFT_IDScrollTick=IDScrollNow;
       TFT_IDScrollNext();
