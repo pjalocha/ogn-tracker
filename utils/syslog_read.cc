@@ -62,6 +62,20 @@ static FILE *DataFile = 0;
 
 static LookOut<32> Look;
 
+static uint8_t LookRxProtocol(const char *RxMod)
+{ if(strcmp(RxMod, "FLR")==0) return LookRxProt_FLR;
+  if(strcmp(RxMod, "OGN")==0) return LookRxProt_OGN;
+  if(strcmp(RxMod, "LDR")==0) return LookRxProt_LDR;
+  if(strcmp(RxMod, "HDR")==0) return LookRxProt_HDR;
+  if(strcmp(RxMod, "PAW")==0) return LookRxProt_PAW;
+  return LookRxProt_MDR; }
+
+static uint8_t LookRxSignal(float RSSI)
+{ int16_t Code=(int16_t)(-2.0f*RSSI+0.5f);
+  if(Code<0) Code=0;
+  if(Code>255) Code=255;
+  return (uint8_t)Code; }
+
 static int ProcOwnPacket(OGN1_Packet &OwnPkt)
 { const LookOut_Target *Tgt=Look.ProcessOwn(OwnPkt, FileTime);
   if(Tgt && Look.WarnLevel)
@@ -70,7 +84,7 @@ static int ProcOwnPacket(OGN1_Packet &OwnPkt)
 
 static int ProcRxPacket(OGN1_Packet &RxPkt, uint8_t RxChan, float RxRSSI, const char *RxMod="OGN")
 { int Len=RxPkt.Print(TmpLine);
-  const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime);
+  const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime, LookRxProtocol(RxMod), LookRxSignal(RxRSSI));
   Len+=sprintf(TmpLine+Len, " %+6.1fdBm/%d", RxRSSI, RxChan);
   int32_t LatDist=0; int32_t LonDist=0; int32_t AltDist=0;
   int DistOK=0;
@@ -86,7 +100,7 @@ static int ProcRxPacket(OGN1_Packet &RxPkt, uint8_t RxChan, float RxRSSI, const 
 
 static int ProcRxPacket(ADSL_Packet &RxPkt, uint8_t RxChan, float RxRSSI, const char *RxMod="MDR")
 { int Len=RxPkt.Print(TmpLine);
-  const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime);
+  const LookOut_Target *Tgt=Look.ProcessTarget(RxPkt, FileTime, LookRxProtocol(RxMod), LookRxSignal(RxRSSI));
   Len+=sprintf(TmpLine+Len, " %+6.1fdBm/%d", RxRSSI, RxChan);
   int32_t LatDist=0; int32_t LonDist=0; int32_t AltDist=0;
   int DistOK=0;
