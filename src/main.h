@@ -98,6 +98,10 @@ esp_err_t ReadFromNVS(void *Blob, size_t BlobSize, const char *Name, const char 
 #include "thinknode-m5-pins.h"
 #endif
 
+#ifdef WITH_WIO_XIAO
+#include "wio-xiao-pins.h"
+#endif
+
 #ifdef WITH_M5STACK
 #include "m5stack-pins.h"
 #endif
