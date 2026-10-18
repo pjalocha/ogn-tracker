@@ -5,6 +5,9 @@
 #include "proc.h"
 #include "gps.h"
 #include "log.h"
+#ifdef WITH_ODID_RX
+#include "odid_rx.h"
+#endif
 
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
 #include <qrcode.h>
@@ -612,6 +615,36 @@ int TFT_DrawRFcounts(void)
 
   TFT_ClearTextLine(Vert);
   return 1; }
+
+#ifdef WITH_ODID_RX
+int TFT_DrawODIDcounts(void)
+{ char Line[32];
+  ODID_RX_Counters Counts;
+  ODID_RX_GetCounters(&Counts);
+
+  TFT.setTextColor(ST77XX_WHITE);
+  TFT_SetMainFont();
+  int Vert=TFT_TopVert;
+
+  sprintf(Line, "ALL: %lu", (unsigned long)Counts.All);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "BCN: %lu", (unsigned long)Counts.Beacon);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "NAN: %lu", (unsigned long)Counts.Nan);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line);
+  Vert+=TFT_LineVertTight;
+
+  sprintf(Line, "FID: %lu", (unsigned long)Counts.FrenchID);
+  TFT_ClearTextLine(Vert);
+  TFT.setCursor(2, Vert); TFT.print(Line);
+  TFT_ClearTextLine(Vert+TFT_LineVertTight);
+  return 1; }
+#endif
 
 int TFT_DrawRF(int8_t SelectTxPower, bool SaveFailed)
 { char Line[32];

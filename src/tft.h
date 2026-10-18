@@ -57,6 +57,9 @@ int TFT_DrawSatMap(void);
 int TFT_DrawSat(const GPS_Position *GPS);
 int TFT_DrawRF(int8_t SelectTxPower=-1, bool SaveFailed=0);
 int TFT_DrawRFcounts(void);
+#ifdef WITH_ODID_RX
+int TFT_DrawODIDcounts(void);
+#endif
 int TFT_DrawBaro(const GPS_Position *GPS);
 int TFT_DrawGPS(const GPS_Position *GPS);
 int TFT_DrawLoRaWAN(const GPS_Position *GPS);

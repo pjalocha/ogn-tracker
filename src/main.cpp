@@ -41,6 +41,10 @@ SemaphoreHandle_t BLE_Mutex;
   #endif
 #endif // WITH_WIFI
 
+#ifdef WITH_ODID_RX
+#include "odid_rx.h"
+#endif
+
 #ifdef WITH_AP
 #include "ap.h"
 #endif
@@ -535,7 +539,11 @@ void OGN_LED_Flash(void)
 
 #if defined(WITH_ST7735) || defined(WITH_ST7789) || defined(WITH_ILI9341)
 
+#ifdef WITH_ODID_RX
+const  uint8_t  TFT_Pages      = 11;      // include the Remote ID counters page
+#else
 const  uint8_t  TFT_Pages      = 10;      // number of LCD pages
+#endif
 static uint8_t  TFT_Page       = 0;       // page currently on display
 static uint8_t  TFT_PageChange = 0;       // signal the page has been changed
 static uint32_t TFT_IDScrollTick=0;
@@ -620,6 +628,9 @@ static int TFT_DrawPage(const GPS_Position *GPS)
 #endif
   if(TFT_Page==5) return TFT_DrawLookout();
   if(TFT_Page==9) return TFT_DrawNetwork();
+#ifdef WITH_ODID_RX
+  if(TFT_Page==10) return TFT_DrawODIDcounts();
+#endif
 #if defined(WITH_LORAWAN) && defined(WITH_HTIT_TRACKER) && defined(WITH_ST7735)
   if(TFT_Page==7)
   { if(TFT_TTNView==1) return TFT_DrawLoRaWANConfirm();
@@ -1861,6 +1872,12 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
 #endif
 #endif
 
+#ifdef WITH_ODID_RX
+  esp_err_t ODIDErr=ODID_RX_Init();
+  if(ODIDErr!=ESP_OK)
+    Serial.printf("ODID RX init failed: %d\n", ODIDErr);
+#endif
+
 #ifdef WITH_BT4_SPP
   if(!StartAP && Parameters.BTname[0])
   { int32_t Err=BT_SPP_Init();
@@ -1968,7 +1985,7 @@ Parameters.ReadFromFile("/spiffs/WIFI.CFG");
   if(StartAP)
     xTaskCreate(vTaskAP,  "AP",  5000, NULL, 0, NULL);
 #endif
-#if defined(WITH_WIFI) && !defined(WITH_AP)
+#if defined(WITH_WIFI) && !defined(WITH_AP) && !defined(WITH_ODID_RX)
   xTaskCreate(vTaskWIFI, "WIFI", 5000, NULL, 0, NULL);
 #endif
 #ifdef WITH_UPLOAD
@@ -2394,6 +2411,15 @@ void loop()
     if(Status!=TFT_TTNLastRegisterStatus)
     { TFT_TTNLastRegisterStatus=Status;
       TFT_PageChange=1; } }
+#endif
+#ifdef WITH_ODID_RX
+  static uint32_t ODIDCountDrawTick=0;
+  const uint32_t ODIDCountDrawNow=millis();
+  if(TFT_Page==10 && !TFT_PageOFF)
+  { if(ODIDCountDrawNow-ODIDCountDrawTick>=1000)
+    { ODIDCountDrawTick=ODIDCountDrawNow;
+      TFT_PageChange=1; } }
+  else ODIDCountDrawTick=ODIDCountDrawNow;
 #endif
   if(TFT_PageChange)
   { TFT_PageChange=0;

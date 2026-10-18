@@ -12,6 +12,10 @@
 
 #include "fifo.h"
 
+#ifdef WITH_ODID_RX
+#include "odid_rx.h"
+#endif
+
 #ifdef WITH_SDLOG
 #include "sdlog.h"
 #endif
@@ -1084,6 +1088,10 @@ void vTaskPROC(void* pvParameters)
 
   for( ; ; )
   { vTaskDelay(1);
+
+#ifdef WITH_ODID_RX
+    ODID_RX_ProcessPending();                                           // consume queued WiFi RID/FrenchID frames here
+#endif
 
     for( ; ; )
     { FSK_RxPacket *RxPkt = FSK_RxFIFO.getRead();                        // check for new received packets
