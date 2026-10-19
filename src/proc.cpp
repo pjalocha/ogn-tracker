@@ -854,7 +854,7 @@ static void DecodeRxOGN(FSK_RxPacket *RxPkt)
      RxPkt->ErrCount(), RxPacket->RxErr, Check, RxPacketIdx);
 #endif
   if(Check!=0 || RxPacket->RxErr>=15) return;                     // what limit on number of detected bit errors ?
-  RxProc_Count[Radio_SysID_OGN]++;
+  RxProc_Count[Radio_SysID_OGN]++;                                // count processed packets
   RxPacket->Packet.Dewhiten();
   ProcessRxOGN(RxPacket, RxPacketIdx, RxPkt->Time, LookRxProt_OGN); }
 
@@ -1065,6 +1065,8 @@ static void DecodeRxPacket(FANET_RxPacket *RxPkt)
 
 // -------------------------------------------------------------------------------------------------------------------
 
+// -------------------------------------------------------------------------------------------------------------------
+
 #ifdef __cplusplus
   extern "C"
 #endif
@@ -1090,7 +1092,18 @@ void vTaskPROC(void* pvParameters)
   { vTaskDelay(1);
 
 #ifdef WITH_ODID_RX
-    ODID_RX_ProcessPending();                                           // consume queued WiFi RID/FrenchID frames here
+  OGN_RxPacket<OGN_Packet> RIDPacket;
+  for(uint8_t RIDCount=0; RIDCount<8; RIDCount++)
+  { int Ret=ODID_RX_GetOGNPacket(RIDPacket, GPS_GeoidSepar/10);
+    if(Ret<0) break;
+    if(Ret==0) continue;
+    uint8_t RxPacketIdx=OGN_RelayQueue.getNew();      // reserve a slot only for a converted position
+    OGN_RxPacket<OGN_Packet> *RxPacket=OGN_RelayQueue[RxPacketIdx];
+    *RxPacket=RIDPacket;
+    // Serial.printf("RID OGN %d:%06lX #%u %ddBm [%2d]\n",
+    //               RxPacket->Packet.Header.AddrType, (unsigned long)RxPacket->Packet.Header.Address,
+    //               RxPacket->RxChan, -((int16_t)RxPacket->RxRSSI)/2, RxPacketIdx);
+    ProcessRxOGN(RxPacket, RxPacketIdx, TimeSync_Time(), LookRxProt_RID); }
 #endif
 
     for( ; ; )

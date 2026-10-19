@@ -25,7 +25,7 @@ const uint8_t LookRxProt_LDR = 3;
 const uint8_t LookRxProt_HDR = 4;
 const uint8_t LookRxProt_FNT = 5;
 const uint8_t LookRxProt_PAW = 6;
-const uint8_t LookRxProt_ADSB = 7;
+const uint8_t LookRxProt_RID = 7;
 
 // =======================================================================================================
 

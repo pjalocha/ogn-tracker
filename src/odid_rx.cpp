@@ -188,6 +188,146 @@ static void ODID_RX_PrintBeaconRecords(const uint8_t *Frame, uint16_t Length)
   }
 }
 
+static void ODID_RX_SetRxInfo(const ODID_RX_QueuedFrame &Frame,
+                              OGN_RxPacket<OGN1_Packet> &RxPacket)
+{ RxPacket.RxChan=ODID_RX_Channel;
+  int16_t RSSI=-2*(int16_t)Frame.RSSI;                 // OGN receive RSSI is in half-dBm units
+  if(RSSI<0) RSSI=0; else if(RSSI>255) RSSI=255;
+  RxPacket.RxRSSI=(uint8_t)RSSI;
+  RxPacket.RxErr=0;
+  RxPacket.Correct=1;
+  RxPacket.Warn=0;
+  RxPacket.Rank=0;
+  RxPacket.LatDist=0;
+  RxPacket.LonDist=0; }
+
+static bool ODID_RX_ConvertMessagePack(const uint8_t *Pack, uint16_t PackLen,
+                                       const ODID_RX_QueuedFrame &Frame,
+                                       OGN_RxPacket<OGN1_Packet> &RxPacket,
+                                       int16_t GeoidSepar)
+{ if(!Pack || PackLen<3 || (Pack[0]>>4)!=0x0F || (Pack[0]&0x0F)!=2 ||
+     Pack[1]!=sizeof(ODID_Packet)) return false;
+  const uint8_t Records=Pack[2];
+  const uint16_t Available=(PackLen-3)/sizeof(ODID_Packet);
+  if(Records>Available) return false;
+
+  uint64_t MAC=0;
+  for(uint8_t Idx=0; Idx<6; Idx++) MAC=(MAC<<8)|Frame.Frame[10+Idx]; // transmitter address
+  for(uint8_t Idx=0; Idx<Records; Idx++)
+  { ODID_Packet Record;
+    memcpy(&Record, Pack+3+(uint16_t)Idx*sizeof(Record), sizeof(Record));
+    if(!Record.isValid() || Record.Type!=ODID_Packet::PktType_Position) continue;
+    if(!Record.Write(RxPacket.Packet, MAC, GeoidSepar)) continue;
+    ODID_RX_SetRxInfo(Frame, RxPacket);
+    return true; }
+  return false;
+}
+
+// Find and convert the first usable position in this one Beacon frame.
+static bool ODID_RX_ConvertBeacon(const ODID_RX_QueuedFrame &Frame,
+                                  OGN_RxPacket<OGN1_Packet> &RxPacket,
+                                  int16_t GeoidSepar)
+{ const uint16_t End=(Frame.Length>=4) ? Frame.Length-4 : Frame.Length;
+  const uint16_t IEs=ODID_RX_HeaderSize+12;
+  if(End<IEs) return false;
+
+  uint16_t Offset=IEs;
+  while(Offset+2<=End)
+  { const uint8_t Id=Frame.Frame[Offset++];
+    const uint8_t IELen=Frame.Frame[Offset++];
+    const uint16_t DataOffset=Offset;
+    if(IELen>End-DataOffset) return false;
+    Offset+=IELen;
+    if(Id!=221 || IELen<8) continue;
+
+    const uint8_t *Data=Frame.Frame+DataOffset;
+    if(Data[0]!=0xFA || Data[1]!=0x0B || Data[2]!=0xBC || Data[3]!=0x0D) continue;
+    const uint8_t *Pack=Data+5;                      // skip OUI/type and message counter
+    const uint16_t PackLen=IELen-5;
+    if(ODID_RX_ConvertMessagePack(Pack, PackLen, Frame, RxPacket, GeoidSepar)) return true;
+  }
+  return false;
+}
+
+static bool ODID_RX_ConvertNAN(const ODID_RX_QueuedFrame &Frame,
+                               OGN_RxPacket<OGN1_Packet> &RxPacket,
+                               int16_t GeoidSepar)
+{ static const uint8_t NANHeader[6]={0x04, 0x09, 0x50, 0x6F, 0x9A, 0x13};
+  static const uint8_t ServiceId[6]={0x88, 0x69, 0x19, 0x9D, 0x92, 0x09};
+  const uint16_t End=(Frame.Length>=4) ? Frame.Length-4 : Frame.Length;
+  if(End<ODID_RX_HeaderSize+sizeof(NANHeader)) return false;
+  if(memcmp(Frame.Frame+ODID_RX_HeaderSize, NANHeader, sizeof(NANHeader))!=0) return false;
+
+  // NAN action-frame body: service-discovery header, then TLV attributes.
+  uint16_t Offset=ODID_RX_HeaderSize+sizeof(NANHeader);
+  while(Offset+3<=End)
+  { const uint8_t AttrId=Frame.Frame[Offset];
+    const uint16_t AttrLen=(uint16_t)Frame.Frame[Offset+1] |
+                           ((uint16_t)Frame.Frame[Offset+2]<<8);
+    Offset+=3;
+    const uint16_t AttrOffset=Offset;
+    if(AttrLen>End-AttrOffset) return false;
+    Offset+=AttrLen;
+    if(AttrId!=0x03 || AttrLen<10) continue;           // Service Descriptor
+
+    const uint8_t *Attr=Frame.Frame+AttrOffset;
+    if(memcmp(Attr, ServiceId, sizeof(ServiceId))!=0 || Attr[8]!=0x10) continue;
+    const uint8_t ServiceInfoLen=Attr[9];
+    if(ServiceInfoLen<4 || (uint16_t)(10+ServiceInfoLen)!=AttrLen) continue;
+
+    // Service Info is a one-byte message counter followed by the ODID pack.
+    const uint8_t *Pack=Attr+11;
+    const uint16_t PackLen=ServiceInfoLen-1;
+    if(ODID_RX_ConvertMessagePack(Pack, PackLen, Frame, RxPacket, GeoidSepar)) return true;
+  }
+  return false;
+}
+
+static bool ODID_RX_ConvertFrenchID(const ODID_RX_QueuedFrame &Frame,
+                                    OGN_RxPacket<OGN1_Packet> &RxPacket)
+{ const uint16_t End=(Frame.Length>=4) ? Frame.Length-4 : Frame.Length;
+  const uint16_t IEs=ODID_RX_HeaderSize+12;
+  if(End<IEs) return false;
+
+  uint64_t MAC=0;
+  for(uint8_t Idx=0; Idx<6; Idx++) MAC=(MAC<<8)|Frame.Frame[10+Idx]; // transmitter address
+
+  uint16_t Offset=IEs;
+  while(Offset+2<=End)
+  { const uint16_t IEOffset=Offset;
+    const uint8_t Id=Frame.Frame[Offset++];
+    const uint8_t IELen=Frame.Frame[Offset++];
+    const uint16_t DataOffset=Offset;
+    if(IELen>End-DataOffset) return false;
+    Offset+=IELen;
+    if(Id!=221 || IELen<3) continue;
+    const uint8_t *Data=Frame.Frame+DataOffset;
+    if(Data[0]!=0x6A || Data[1]!=0x5C || Data[2]!=0x35) continue;
+
+    FRID_Packet Record;
+    if(Record.Read(Frame.Frame+IEOffset)!=(int)IELen+2) continue;
+    if(!Record.Write(RxPacket.Packet, MAC)) continue;
+    ODID_RX_SetRxInfo(Frame, RxPacket);
+    return true; }
+  return false;
+}
+
+int ODID_RX_GetOGNPacket(OGN_RxPacket<OGN1_Packet> &RxPacket, int16_t GeoidSepar)
+{ if(!ODID_RX_Queue) return -1;
+  RxPacket.Clear();
+  RxPacket.RxChan=0;
+  RxPacket.RxRSSI=0;
+  static ODID_RX_QueuedFrame Frame;                  // keep the 512-byte frame off the PROC task stack
+  if(xQueueReceive(ODID_RX_Queue, &Frame, 0)!=pdTRUE) return -1;
+  if(Frame.Kind==ODID_RX_FrameBeacon)
+    return ODID_RX_ConvertBeacon(Frame, RxPacket, GeoidSepar) ? 1 : 0;
+  if(Frame.Kind==ODID_RX_FrameFrenchID)
+    return ODID_RX_ConvertFrenchID(Frame, RxPacket) ? 1 : 0;
+  if(Frame.Kind==ODID_RX_FrameNAN)
+    return ODID_RX_ConvertNAN(Frame, RxPacket, GeoidSepar) ? 1 : 0;
+  return 0;
+}
+
 void ODID_RX_ProcessPending(void)
 { if(!ODID_RX_Queue) return;
   static uint32_t ReportedDrops=0;

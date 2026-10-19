@@ -8,6 +8,8 @@
 
 #include <map>
 
+#include "ogn1.h"
+
 class FRID_Packet            // French Drone-ID packet content (not the packet structure)
 { public:
    union
@@ -45,16 +47,19 @@ class FRID_Packet            // French Drone-ID packet content (not the packet s
    { const uint8_t Sign[3] = { 0x6a, 0x5c, 0x35 };
      if(Data[0]!=0xDD) return 0;
      uint8_t Len=Data[1];
-     if(memcmp(Data+2, Sign, 3)!=0) return 0;
+     if(Len<3 || memcmp(Data+2, Sign, 3)!=0) return 0;
      int Ret=Read(Data+5, Len-3);
-     if(Ret<=0) return Ret;
+     if(Ret!=(Len-3)) return 0;
      return Ret+5; }
 
    int Read(const uint8_t *Data, uint8_t Len)
    { Clear();
      uint8_t Idx=0;
      for( ; Idx<Len; )
-     { uint8_t Ret=readElem(Data+Idx); if(Ret<2) break;
+     { if(Len-Idx<2) return 0;
+       uint8_t ElemLen=Data[Idx+1];
+       if(ElemLen==0 || ElemLen>32 || ElemLen>Len-Idx-2) return 0;
+       uint8_t Ret=readElem(Data+Idx); if(Ret<2 || Ret>Len-Idx) return 0;
        Idx+=Ret; }
      return Idx; }
 
@@ -62,17 +67,17 @@ class FRID_Packet            // French Drone-ID packet content (not the packet s
    { uint8_t Type=Data[0];                                       // element-type
      uint8_t Len =Data[1]; if(Len==0 || Len>32) return 0;        // element-length, not including the Type/Len bytes
      switch(Type)                                                // depending on the element-type: read the corresponding piece of data
-     { case  1: Version=Data[2]; hasVersion=1; break;
+     { case  1: if(Len!=1) return 0; Version=Data[2]; hasVersion=1; break;
        case  2: readIdent(Data+2, Len); identPSN=0; break;
        case  3: readIdent(Data+2, Len); identPSN=1; break;
-       case  4: Lat=readInt32(Data+2);     hasLat=1; break;
-       case  5: Lon=readInt32(Data+2);     hasLon=1; break;
-       case  6: Alt    =readInt16(Data+2); hasAlt=1; break;
-       case  7: Height =readInt16(Data+2); hasHeight=1; break;
-       case  8: OperLat=readInt32(Data+2); hasOperLat=1; break;
-       case  9: OperLon=readInt32(Data+2); hasOperLon=1; break;
-       case 10: Speed=Data[2];             hasSpeed=1; break;
-       case 11: Track=readInt16(Data+2);   hasTrack=1; break;
+       case  4: if(Len!=4) return 0; Lat=readInt32(Data+2);     hasLat=1; break;
+       case  5: if(Len!=4) return 0; Lon=readInt32(Data+2);     hasLon=1; break;
+       case  6: if(Len!=2) return 0; Alt=readInt16(Data+2);    hasAlt=1; break;
+       case  7: if(Len!=2) return 0; Height=readInt16(Data+2); hasHeight=1; break;
+       case  8: if(Len!=4) return 0; OperLat=readInt32(Data+2); hasOperLat=1; break;
+       case  9: if(Len!=4) return 0; OperLon=readInt32(Data+2); hasOperLon=1; break;
+       case 10: if(Len!=1) return 0; Speed=Data[2];             hasSpeed=1; break;
+       case 11: if(Len!=2) return 0; Track=readInt16(Data+2);   hasTrack=1; break;
        default: break; }
      return Len+2; }                                             // return the total number of processed bytes
 
@@ -89,6 +94,30 @@ class FRID_Packet            // French Drone-ID packet content (not the packet s
      for( ; Idx<32; Idx++)
        Ident[Idx]=0x00;
    }
+
+   int Write(OGN1_Packet &Packet, uint64_t MAC, uint8_t AcftType=0xD) // convert to an OGN packet
+   { if((hasVersion && Version!=1) || !hasLat || !hasLon || !hasAlt) return 0;
+     if(Lat<(-9000000) || Lat>9000000 || Lon<(-18000000) || Lon>18000000) return 0;
+     if(Lat==0 && Lon==0) return 0;                         // unknown position
+
+     Packet.Clear();
+     Packet.Header.Address=MAC&0xFFFFFF;                    // use the transmitter MAC as its 24-bit random ID
+     Packet.Header.AddrType=0;
+     Packet.calcAddrParity();
+     Packet.Position.AcftType=AcftType;
+     Packet.EncodeLatitude((int32_t)((int64_t)Lat*6));       // 1e-5 deg -> 1/600000 deg
+     Packet.EncodeLongitude((int32_t)((int64_t)Lon*6));
+     Packet.EncodeAltitude(Alt);                            // FRID altitude is AMSL in meters
+     Packet.Position.Time=63;                               // FRID carries no UTC position time
+     Packet.EncodeHeading(hasTrack && Track<=359 ? (int16_t)(Track*10) : 0);
+     Packet.EncodeSpeed(hasSpeed ? (int16_t)Speed*10 : 0);  // m/s -> 0.1 m/s
+     Packet.clrClimbRate();
+     Packet.Position.FixMode=1;
+     Packet.Position.FixQuality=1;
+     Packet.EncodeDOP(0xFF);                                // no position accuracy in FRID
+     Packet.clrTurnRate();
+     Packet.clrBaro();
+     return 1; }
 
 } __attribute__((__packed__));
 
@@ -233,7 +262,7 @@ class ODID_Packet                             // Open-Drone-ID packet (25 bytes)
      strncpy(SelfID.Name, Text, 23); }
 
    float getAlt(uint16_t Alt) const { return 0.5f*Alt-1000.0f; }          // [m]
-   float getAltBaro(void) const { return getAlt(Position.AltBaro); }      // [m]
+   float getAltBaro(void) const { return getAlt(Position.AltBaro); }      // [m] pressure altitude
    float getAltGeo(void)  const { return getAlt(Position.AltGeo); }       // [m]
    float getHeight(void)  const { return getAlt(Position.Height); }       // [m]
 
@@ -266,6 +295,63 @@ class ODID_Packet                             // Open-Drone-ID packet (25 bytes)
      if(Acc<2) return 63;
      const uint8_t Table[5] = { 45, 25, 10, 3, 1 };
      return Table[Acc-2]; }
+
+   // encode the position into an OGN packet, so we can do a relay
+   int Write(OGN1_Packet &Packet, uint64_t MAC, int16_t GeoidSepar, uint8_t AcftType=0xD) // convert to an OGN packet
+   { if(!isValid() || Type!=PktType_Position) return 0;    // only convert valid position packets
+     if(Position.Lat<(-900000000) || Position.Lat>900000000) return 0;
+     if(Position.Lon<(-1800000000) || Position.Lon>1800000000) return 0;
+     if(Position.Lat==0 && Position.Lon==0) return 0;      // OpenDroneID uses 0/0 for unknown position
+     if(Position.AltGeo==0) return 0;                      // HAE is required for OGN altitude
+
+     // RemoteID altitude is HAE, in half-meters with a 1000m bias. OGN
+     // altitude is integer meters AMSL, so remove the bias and geoid offset.
+     int32_t Alt=(int32_t)Position.AltGeo-2000;
+     Alt=(Alt>=0 ? (Alt+1)/2 : (Alt-1)/2);                 // nearest whole meter
+     Alt-=GeoidSepar;
+     if(Alt<0) Alt=0;
+
+     Packet.Clear();
+     Packet.Header.Address = MAC&0xFFFFFF;                 // take lower 24 bits of the MAC
+     Packet.Header.AddrType = 0;                           // we assign random ID assuming the MAC in RemoteID is random
+     Packet.calcAddrParity();
+     Packet.Position.AcftType = AcftType;
+     Packet.EncodeAltitude(Alt);                         // [m]
+     Packet.EncodeLatitude((int64_t)Position.Lat*3/50);   // 1e-7 deg -> 1/60000 deg
+     Packet.EncodeLongitude((int64_t)Position.Lon*3/50);
+
+     // OGN time is seconds within a minute; 63 means unavailable and makes
+     // LookOut fall back to the receive time.
+     Packet.Position.Time=(Position.TimeStamp<36000) ? (Position.TimeStamp/10)%60 : 63;
+     uint16_t Track=(Position.Track<=179) ? getTrack() : 360; // 0xFF is unavailable
+     Packet.EncodeHeading((Track<=359) ? (int16_t)(Track*10) : 0); // [deg] -> [0.1 deg]
+     float Speed=(Position.Speed==0xFF) ? 0.0f : getSpeed(); // 0xFF means unavailable
+     Packet.EncodeSpeed((int16_t)(Speed*10.0f+0.5f));     // [m/s] -> [0.1 m/s]
+     if(Position.Climb!=(-128))
+       Packet.EncodeClimbRate((int16_t)Position.Climb*5);  // [0.5 m/s] -> [0.1 m/s]
+     else
+       Packet.clrClimbRate();
+
+     Packet.Position.FixMode=1;
+     Packet.Position.FixQuality=1;
+     uint8_t HorAcc=getHorAcc();
+     if(HorAcc)
+     { int16_t Error=2*HorAcc;                          // OGN relative-position error is in half-meters
+       int16_t DOP=(5*Error-2)/2;                       // inverse of Acft_RelPos::Read's DOP mapping
+       if(DOP<0) DOP=0;
+       if(DOP>255) DOP=255;
+       Packet.EncodeDOP((uint8_t)DOP); }
+     else
+       Packet.EncodeDOP(0xFF);                          // unknown accuracy
+     Packet.clrTurnRate();
+     int32_t StdAlt = Position.AltBaro;
+     if(StdAlt>0)
+     { StdAlt-=2000;
+       StdAlt=(StdAlt>=0 ? (StdAlt+1)/2 : (StdAlt-1)/2); // nearest whole meter
+       Packet.EncodeStdAltitude(StdAlt); }
+     else
+       Packet.clrBaro();
+     return 1; }
 
    const char *getPktTypeName(void) const
    { const char *Name[16] = { "Basic-ID", "Pos", "Auth", "Self-ID", "System", "Oper-ID", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } ;

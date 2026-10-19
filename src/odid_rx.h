@@ -4,6 +4,7 @@
 
 #include "esp_err.h"
 #include <stdint.h>
+#include "ogn.h"
 
 typedef struct
 { uint32_t All;
@@ -18,8 +19,12 @@ esp_err_t ODID_RX_Init(void);
 esp_err_t ODID_RX_Start(void);
 esp_err_t ODID_RX_Stop(void);
 void ODID_RX_GetCounters(ODID_RX_Counters *Counters);
-// Drain recognized Remote ID and FrenchID frames from the sniffer queue in the
-// PROC task. The queued data is retained for later protocol decoding there.
+// Diagnostic-only drain/print. This consumes queued frames; do not call it
+// alongside ODID_RX_GetOGNPacket().
 void ODID_RX_ProcessPending(void);
+// Consume exactly one queued frame. Returns -1 when the queue is empty, 0 when
+// it has no usable position, and 1 when a Beacon/NAN/FrenchID position was
+// converted. GeoidSepar is in meters; FrenchID altitude is already AMSL.
+int ODID_RX_GetOGNPacket(OGN_RxPacket<OGN1_Packet> &Packet, int16_t GeoidSepar);
 
 #endif // WITH_ODID_RX
