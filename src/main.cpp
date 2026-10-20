@@ -217,11 +217,7 @@ int SPIFFS_Info(size_t &Total, size_t &Used, const char *Label)
   if(!SPIFFS_Mounted) return 0;
   if(Label==0) Label=SPIFFS_Label;
   FATFS *FS=0;
-#ifdef WITH_ESP32C3
   DWORD FreeClusters;
-#else
-  size_t FreeClusters;
-#endif
   int Ret = f_getfree("0:", &FreeClusters, &FS);
   // if(Ret=!FR_OK) return Ret;
   if(FS==0) return 0;
