@@ -20,10 +20,11 @@
 
 // #define DEBUG_PRINT
 
-// #ifdef DEBUG_PRINT
-static char Line[256];
+#ifdef DEBUG_PRINT
 static void CONS_HexDump(char Byte) { Format_Hex(CONS_UART_Write, (uint8_t)Byte); }
-// #endif
+#endif
+
+static char Line[256];
 
 // ----------------------------------------------------------------------------
 
@@ -83,7 +84,7 @@ static union
   } ;
 } GPS_Burst;
                                                                                                    // for the autobaud on the GPS port
-const int GPS_BurstTimeout = 100; // [ms]
+const int GPS_BurstTimeout = 50; // [ms]
 
 static uint32_t GPS_BaudRate = 115200;   // [bps] current baudrate on the GPS port
 static uint32_t GPS_nextBaudRate(void)   // produce next (possible) GPS baudrate (for autobaud)
@@ -497,8 +498,10 @@ static void GPS_BurstComplete(void)                                   // when GP
 #ifdef DEBUG_PRINT
   if(xSemaphoreTake(CONS_Mutex, 25))
   { GPS_Pos[GPS_PosIdx].PrintLine(Line);                                   // print out the GPS position in a single-line format
-    Serial.printf("GPS_BurstCompl: [%2d] Flags:%02X Err:%d\n%s",
-             GPS_PosIdx, GPS_Status.Flags, GPS_Pos[GPS_PosIdx].NMEAerrors, Line);
+    Serial.printf("GPS_BurstCompl: [%2d] Flags:%02X Err:%d [%ums:%us]\n%s",
+             GPS_PosIdx, GPS_Status.Flags, GPS_Pos[GPS_PosIdx].NMEAerrors,
+             GPS_TimeSync.sysTime, GPS_TimeSync.UTC,
+             Line);
     xSemaphoreGive(CONS_Mutex); }
 #endif
 #ifdef DEBUG_PRINT

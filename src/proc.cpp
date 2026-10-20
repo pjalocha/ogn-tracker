@@ -1160,7 +1160,7 @@ void vTaskPROC(void* pvParameters)
       if(Position && BestResid==0) break;
       vTaskDelay(20); }
 #endif
-#ifdef DEBUG_PRINT
+#ifdef DEBUG_PRINT  ///
     if(xSemaphoreTake(CONS_Mutex, 25))
     { Serial.printf("%10u:%4d GPS_getPosition([%u], %+d, %u, 0)\n", Time, msTime, BestIdx, BestResid, SlotTime%60);
       xSemaphoreGive(CONS_Mutex); }
