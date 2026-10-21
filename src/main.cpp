@@ -1465,7 +1465,11 @@ static void GPS_UART_Init(int BaudRate=115200)
 
 #ifdef LED_PCB_Pin
 static void LED_PCB_Init(void)  { pinMode(LED_PCB_Pin, OUTPUT); }
+#ifdef LED_PCB_Inv
+       void LED_PCB_On(bool ON) { digitalWrite(LED_PCB_Pin, !ON); }
+#else
        void LED_PCB_On(bool ON) { digitalWrite(LED_PCB_Pin, ON); }
+#endif
        void LED_PCB_Off(void)   { return LED_PCB_On(0); }
        void LED_PCB_Flash(uint8_t Time) { LED_PCB_On(1); delay(1); LED_PCB_On(0); }
 #else

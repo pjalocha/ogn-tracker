@@ -1,7 +1,10 @@
 #pragma once
 
 // Seeed XIAO ESP32-S3 with the Wio-SX1262 B2B module.
-// The GPS is connected to the XIAO UART pins and is used passively.
+// The GPS is connected to the XIAO UART RX and TX pins
+
+#define LED_PCB_Pin 21    // but it is low-active, we need extra code here.
+#define LED_PCB_Inv
 
 #define GPS_UART UART_NUM_1
 #define GPS_PinTx 43 // D6, XIAO TX -> GPS RX
