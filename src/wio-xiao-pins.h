@@ -9,7 +9,7 @@
 #define GPS_UART UART_NUM_1
 #define GPS_PinTx 43 // D6, XIAO TX -> GPS RX
 #define GPS_PinRx 44 // D7, XIAO RX <- GPS TX
-#define GPS_PinPPS 1  // D0, GPS PPS input
+#define GPS_PinPPS 4  // D3, GPS PPS input
 
 // I2C header pins for optional sensors (D4 SDA, D5 SCL).
 #define I2C_PinSDA 5
