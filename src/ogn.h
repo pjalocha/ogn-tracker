@@ -184,25 +184,27 @@ template <class OGNx_Packet=OGN1_Packet>
    uint32_t FEC[2];       // Gallager code: 48 check bits for 160 user bits
 
    union
-   { uint8_t State;       // state bits and small values
+   { uint16_t State;       // state bits and small values
      struct
      { // bool Saved   :1;   // has been already saved in internal storage
        // bool Ready   :1;   // is ready for transmission
        // bool Sent    :1;   // has already been transmitted out
-       bool Alloc   :1;   // allocated in a queue or list
-       bool Correct :1;   // correctly received or corrected by FEC
-       uint8_t RxErr:4;   // number of bit errors corrected upon reception
-       uint8_t Warn :2;   // LookOut warning level
+       bool Alloc    :1;   // allocated in a queue or list
+       bool Correct  :1;   // correctly received or corrected by FEC
+       uint8_t Warn  :2;   // LookOut warning level
+       uint8_t RxErr :4;   // number of bit errors corrected upon reception
+       uint8_t RxProt:4;   // if converted from another protocol
      } __attribute__((packed)) ;
    } ;
 
    uint8_t RxChan;        // RF channel where the packet was received
    uint8_t RxRSSI;        // [-0.5dBm]
-   uint8_t Rank;          // rank: low altitude and weak signal => high rank
 
    int16_t LatDist;       // [m] distance along the latitude
    int16_t LonDist;       // [m] distance along the longitude
-   // int16_t AltDist;       // [m]
+   int16_t AltDist;       // [m]
+
+   uint8_t Rank;          // rank: low altitude and weak signal => high rank
 
   public:
 
@@ -241,7 +243,7 @@ template <class OGNx_Packet=OGN1_Packet>
 
    uint8_t PosTime(void) const { return Packet.Position.Time; }
 
-   void calcRelayRank(int32_t RxAltitude)                               // [m] altitude of reception
+   void calcRelayRank(void)
    { if(Packet.Header.Emergency) { Rank=0xFF; return; }                 // emergency packets always highest rank
      Rank=0;
      if(Packet.Header.NonPos)     return;                               // only relay position packets
@@ -250,13 +252,12 @@ template <class OGNx_Packet=OGN1_Packet>
      if(RxRSSI>128)                                                     // [-0.5dB] weaker signal => higher rank
        Rank += (RxRSSI-128)>>2;                                         // 1point/2dB less signal
      if(Packet.Header.Encrypted)  return;                               // for exncrypted packets we only take signal strength
-     RxAltitude -= Packet.DecodeAltitude();                             // [m] receiver altitude - target altitude
-     if(RxAltitude>0)                                                   // 
-       Rank += RxAltitude>>6;                                           // 1points/64m of altitude below
+     if(AltDist<0)                                                      //
+       Rank += (-AltDist)>>6;                                           // 1points/64m of altitude below
      int16_t ClimbRate = Packet.DecodeClimbRate();                      // [0.1m/s] higher sink rate => higher rank
      if(ClimbRate<0)
        Rank += (-ClimbRate)>>3;                                         // 1point/0.8m/s of sink
-   }
+     Rank+=1; }                                                         // always some minimal rank
 
    uint8_t ReadPOGNT(const char *NMEA)
    { uint8_t Len=0;
