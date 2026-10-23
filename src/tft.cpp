@@ -805,7 +805,10 @@ int TFT_DrawLog(const GPS_Position *GPS)
     ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
     Line[0]=0;
     // if(FlashLog_FileName[0]) sprintf(Line, "%s", FlashLog_FileName+strlen(FlashLog_Path)+1);
-    if(FlashLog_FileTime) { sprintf(Line, "File: "); Format_HHMMSS(Line+6, FlashLog_FileTime); Line[6+6]=0; }
+    if(FlashLog_FileTime)
+    { sprintf(Line, "File: ");
+      Format_HHMMSS(Line+6, FlashLog_FileTime);
+      Line[6+6]='Z'; Line[6+7]=0; }
     ClearLine(Vert); TFT.setCursor(2, Vert); TFT.print(Line); Vert+=TFT_LineVertTight;
     Line[0]=0;
     if(FlashLog_FileFlush) sprintf(Line, "Size:%5dkB", (FlashLog_FileFlush+512)>>10);

@@ -42,6 +42,8 @@ static GDL90_REPORT    GDL_REPORT;
 #include "mesht-proto.h"
 #endif
 
+// #define DEBUG_RID
+
 #if defined(WITH_THINKNODE_M5) || defined(WITH_EPAPER)
 uint8_t AlarmThresh = 4;              // 0: all alarms, 1: only 1 or higher, 2: only 2 or higher, 3: only three or higher, 4: all blocked
 #elif defined(WITH_WIO_TRACKER)
@@ -1112,13 +1114,13 @@ void vTaskPROC(void* pvParameters)
       int Ret=ODID_RX_GetPacket(*RxPacket, GPS_GeoidSepar/10);
       if(Ret<0) break;
       if(Ret==0) continue;
+      RxPacket->RxProt = LookRxProt_RID;
       // *RxPacket=RIDPacketADSL;
 #ifdef DEBUG_RID
       Serial.printf("RID ADSL %02X:%06lX #%u %ddBm [%2d]\n",
                     RxPacket->Packet.getAddrType(), (unsigned long)RxPacket->Packet.getAddress(),
                     RxPacket->RxChan, -((int16_t)RxPacket->RxRSSI)/2, RxPacketIdx);
 #endif
-      RxPacket->RxProt = LookRxProt_RID;
       ProcessRxADSL(RxPacket, RxPacketIdx, TimeSync_Time(), 1); }
     else
     { ///
@@ -1127,13 +1129,13 @@ void vTaskPROC(void* pvParameters)
       int Ret=ODID_RX_GetPacket(*RxPacket, GPS_GeoidSepar/10);
       if(Ret<0) break;
       if(Ret==0) continue;
+      RxPacket->RxProt = LookRxProt_RID;
       // *RxPacket=RIDPacketOGN;
 #ifdef DEBUG_RID
       Serial.printf("RID OGN1  %d:%06lX #%u %ddBm [%2d]\n",
                     RxPacket->Packet.Header.AddrType, (unsigned long)RxPacket->Packet.Header.Address,
                     RxPacket->RxChan, -((int16_t)RxPacket->RxRSSI)/2, RxPacketIdx);
 #endif
-      RxPacket->RxProt = LookRxProt_RID;
       ProcessRxOGN(RxPacket, RxPacketIdx, TimeSync_Time()); }
     RelayADSL = !RelayADSL; }
 #endif
