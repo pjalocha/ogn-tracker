@@ -9,6 +9,7 @@
 #include <map>
 
 #include "ogn1.h"
+#include "adsl.h"
 
 class FRID_Packet            // French Drone-ID packet content (not the packet structure)
 { public:
@@ -94,6 +95,29 @@ class FRID_Packet            // French Drone-ID packet content (not the packet s
      for( ; Idx<32; Idx++)
        Ident[Idx]=0x00;
    }
+
+   int Write(ADSL_Packet &Packet, uint64_t MAC, int16_t GeoidSepar, uint8_t AcftType=0xD) // convert to an ADS-L packet
+   { if((hasVersion && Version!=1) || !hasLat || !hasLon || !hasAlt) return 0;
+     if(Lat<(-9000000) || Lat>9000000 || Lon<(-18000000) || Lon>18000000) return 0;
+     if(Lat==0 && Lon==0) return 0;                        // unknown position
+
+     Packet.Init();
+     Packet.setAddress(MAC&0xFFFFFF);                     // use the transmitter MAC as its 24-bit random ID
+     Packet.setAddrTable(4);
+     Packet.setAcftTypeOGN(AcftType);
+     Packet.setLatUBX(Lat*100);                           // 1e-5 deg -> 1e-7 deg -> ADS-L coordinates
+     Packet.setLonUBX(Lon*100);
+     Packet.setAlt((int32_t)Alt+GeoidSepar);              // FRID altitude is AMSL; ADS-L altitude is HAE
+     Packet.TimeStamp=60;                                 // FRID carries no position time
+
+     if(hasTrack && Track<=359)
+       Packet.setTrack((Track*0x200+180)/360);             // degrees -> ADS-L 9-bit circle
+     if(hasSpeed)
+       Packet.setSpeed((uint16_t)Speed*4);                 // [m/s] -> [0.25 m/s]
+     else
+       Packet.clrSpeed();
+     Packet.clrClimb();
+     return 1; }
 
    int Write(OGN1_Packet &Packet, uint64_t MAC, uint8_t AcftType=0xD) // convert to an OGN packet
    { if((hasVersion && Version!=1) || !hasLat || !hasLon || !hasAlt) return 0;
@@ -295,6 +319,59 @@ class ODID_Packet                             // Open-Drone-ID packet (25 bytes)
      if(Acc<2) return 63;
      const uint8_t Table[5] = { 45, 25, 10, 3, 1 };
      return Table[Acc-2]; }
+
+   // encode the position into an ADS-L packet, so we can do a relay
+   int Write(ADSL_Packet &Packet, uint64_t MAC, uint8_t AcftType=0xD) // convert to an ADS-L packet
+   { if(!isValid() || Type!=PktType_Position) return 0;    // only convert valid position packets
+     if(Position.Lat<(-900000000) || Position.Lat>900000000) return 0;
+     if(Position.Lon<(-1800000000) || Position.Lon>1800000000) return 0;
+     if(Position.Lat==0 && Position.Lon==0) return 0;      // OpenDroneID uses 0/0 for unknown position
+     if(Position.AltGeo==0) return 0;                      // zero denotes unavailable HAE altitude
+
+     Packet.Init();
+     Packet.setAddress(MAC&0xFFFFFF);                     // use the transmitter MAC as its 24-bit random ID
+     Packet.setAddrTable(4);
+     Packet.setAcftTypeOGN(AcftType);
+
+     // ADS-L altitude is HAE in whole meters; RemoteID uses half-meters with a 1000m bias.
+     int32_t Alt=(int32_t)Position.AltGeo-2000;
+     Alt=(Alt>=0 ? (Alt+1)/2 : (Alt-1)/2);                 // round to nearest whole meter
+     Packet.setAlt(Alt);
+     Packet.setLatUBX(Position.Lat);                      // [1e-7 deg] -> ADS-L FANET coordinates
+     Packet.setLonUBX(Position.Lon);
+
+     // ADS-L time is quarter-seconds within a 15-second cycle. RemoteID time
+     // is in tenths of a second since the hour; 0xFFFF/out-of-range is unavailable.
+     if(Position.TimeStamp<36000)
+     { uint16_t Time=(Position.TimeStamp%150)*4;
+       Time=(Time+5)/10;
+       Packet.TimeStamp=Time%60; }
+     else
+       Packet.TimeStamp=60;
+
+     if(Position.Track<=179)
+     { uint16_t Track=getTrack();
+       Packet.setTrack((Track*0x200+180)/360); }           // degrees -> ADS-L 9-bit circle
+     if(Position.Speed!=0xFF)
+     { uint16_t Speed=Position.SpeedMult ? (3*Position.Speed+255) : Position.Speed;
+       Packet.setSpeed(Speed); }                          // native speed encoding -> [0.25 m/s]
+     else
+       Packet.clrSpeed();
+     if(Position.Climb!=(-128))
+       Packet.setClimb((int16_t)Position.Climb*4);         // [0.5 m/s] -> [0.125 m/s]
+     else
+       Packet.clrClimb();
+
+     if(Position.Status==1) Packet.FlightState=1;           // ground
+     else if(Position.Status==2) Packet.FlightState=2;      // airborne
+
+     uint8_t HorAcc=getHorAcc();
+     if(HorAcc) Packet.setHorAcc(HorAcc);
+     uint8_t VerAcc=getVertAcc();
+     if(VerAcc) Packet.setVerAcc(VerAcc);
+     if(Position.SpeedAcc>=1 && Position.SpeedAcc<=4)
+       Packet.VelAccuracy=(Position.SpeedAcc>=3) ? 3 : Position.SpeedAcc;
+     return 1; }
 
    // encode the position into an OGN packet, so we can do a relay
    int Write(OGN1_Packet &Packet, uint64_t MAC, int16_t GeoidSepar, uint8_t AcftType=0xD) // convert to an OGN packet
