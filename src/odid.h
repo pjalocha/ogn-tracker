@@ -170,7 +170,7 @@ class ODID_Packet                             // Open-Drone-ID packet (25 bytes)
   union
   { uint8_t Header;                          // when 0xFF then this packet is not filled in with actual data
     struct
-    { uint8_t Version :4;                    // = 2 (for now always version #2)
+    { uint8_t Version :4;                    // = 2 (for now always version #2) but some systems tranmit 1
       uint8_t Type    :4;                    // = 0..5
     } __attribute__((__packed__));
   } ;
@@ -262,7 +262,7 @@ class ODID_Packet                             // Open-Drone-ID packet (25 bytes)
 
   public:
    void setInvalid(void) { Header=0xFF; }
-   bool isValid(void) const { return Type<=5 && Version==2; }
+   bool isValid(void) const { return Type<=5 && Version<0xF ; }
 
    void Clean(uint8_t Type, uint8_t Version=2)
    { this->Type=Type; this->Version=Version;

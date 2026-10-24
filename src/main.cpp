@@ -2290,15 +2290,24 @@ static void PrintWiFi(void)
     Format_SignDec(CONS_UART_Write, RSSI);
     Format_String(CONS_UART_Write, " dBm"); }
   Format_String(CONS_UART_Write, "\n");
-  xSemaphoreGive(CONS_Mutex);
-}
+  xSemaphoreGive(CONS_Mutex); }
 #endif // WITH_WIFI
+
+#ifdef WITH_ODID_RX
+void PrintRID(void)
+{ ODID_RX_Counters Counts;
+  ODID_RX_GetCounters(&Counts);
+  if(!xSemaphoreTake(CONS_Mutex, 100)) return;
+  Serial.printf("All:%lu BCN:%lu NAN:%lu FID:%lu\n", Counts.All, Counts.Beacon, Counts.Nan, Counts.FrenchID);
+  xSemaphoreGive(CONS_Mutex); }
+#endif
 
 static int ProcessInput(void)
 {
   const uint8_t CtrlB = 'B'-'@';
   const uint8_t CtrlC = 'C'-'@';
   const uint8_t CtrlF = 'F'-'@';
+  const uint8_t CtrlI = 'I'-'@';
   const uint8_t CtrlL = 'L'-'@';
   const uint8_t CtrlO = 'O'-'@';
   const uint8_t CtrlP = 'P'-'@';
@@ -2321,6 +2330,9 @@ static int ProcessInput(void)
 #endif
 #ifdef WITH_LOOKOUT
     if(Byte==CtrlT) ListTraffic();                                 // if Ctrl-T: print traffic
+#endif
+#ifdef WITH_ODID_RX
+    if(Byte==CtrlI) PrintRID();                                 // if Ctrl-T: print traffic
 #endif
     if(Byte==CtrlX) ProcessCtrlX();                                // double Ctrl-X restarts the system
 #endif // of WITH_GPS_UBX_PASS

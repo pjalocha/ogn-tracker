@@ -155,7 +155,7 @@ static void ODID_RX_PrintBeaconRecords(const uint8_t *Frame, uint16_t Length)
         const uint8_t Counter=Data[4];
         const uint8_t *Pack=Data+5;
         const uint16_t PackLen=IELen-5;
-        if((Pack[0]>>4)!=0x0F || (Pack[0]&0x0F)!=2 || PackLen<3 || Pack[1]!=sizeof(ODID_Packet))
+        if((Pack[0]>>4)!=0x0F /* || (Pack[0]&0x0F)!=2 */ || PackLen<3 || Pack[1]!=sizeof(ODID_Packet))
         { Serial.printf("RID ODID pack malformed counter=%u len=%u header=%02X\n",
                         Counter, PackLen, Pack[0]);
           return; }
@@ -205,7 +205,9 @@ static bool ODID_RX_ConvertMessagePack(const uint8_t *Pack, uint16_t PackLen,
                                        const ODID_RX_QueuedFrame &Frame,
                                        OGN_RxPacket<OGN1_Packet> &RxPacket,
                                        int16_t GeoidSepar)
-{ if(!Pack || PackLen<3 || (Pack[0]>>4)!=0x0F || (Pack[0]&0x0F)!=2 ||
+{ // Serial.printf("ODID_RX_ConvertMessagePack(OGN) [%d] %02X%02X%02X%02X\n", (int)PackLen, Pack[0], Pack[1], Pack[2], Pack[3]); ///
+
+  if(!Pack || PackLen<3 || (Pack[0]>>4)!=0x0F || // (Pack[0]&0x0F)!=2
      Pack[1]!=sizeof(ODID_Packet)) return false;
   const uint8_t Records=Pack[2];
   const uint16_t Available=(PackLen-3)/sizeof(ODID_Packet);
@@ -226,7 +228,9 @@ static bool ODID_RX_ConvertMessagePack(const uint8_t *Pack, uint16_t PackLen,
 static bool ODID_RX_ConvertMessagePack(const uint8_t *Pack, uint16_t PackLen,
                                        const ODID_RX_QueuedFrame &Frame,
                                        ADSL_Packet &RxPacket)
-{ if(!Pack || PackLen<3 || (Pack[0]>>4)!=0x0F || (Pack[0]&0x0F)!=2 ||
+{ // Serial.printf("ODID_RX_ConvertMessagePack(ADSL) [%d] %02X%02X%02X%02X\n", (int)PackLen, Pack[0], Pack[1], Pack[2], Pack[3]); ///
+
+  if(!Pack || PackLen<3 || (Pack[0]>>4)!=0x0F || // (Pack[0]&0x0F)!=2 ||
      Pack[1]!=sizeof(ODID_Packet)) return false;
   const uint8_t Records=Pack[2];
   const uint16_t Available=(PackLen-3)/sizeof(ODID_Packet);
@@ -447,6 +451,7 @@ int ODID_RX_GetPacket(ADSL_RxPacket &RxPacket, int16_t GeoidSepar)
     Converted=ODID_RX_ConvertFrenchID(Frame, RxPacket.Packet, GeoidSepar);
   else if(Frame.Kind==ODID_RX_FrameNAN)
     Converted=ODID_RX_ConvertNAN(Frame, RxPacket.Packet, GeoidSepar);
+  // Serial.printf("ODID_RX_GetPacket(ADSL) Converted:%d\n", Converted);
   if(!Converted) return 0;
   ODID_RX_SetRxInfo(Frame, RxPacket);
   return 1; }
@@ -458,6 +463,7 @@ int ODID_RX_GetPacket(OGN_RxPacket<OGN1_Packet> &RxPacket, int16_t GeoidSepar)
   RxPacket.RxRSSI=0;
   static ODID_RX_QueuedFrame Frame;                  // keep the 512-byte frame off the PROC task stack
   if(xQueueReceive(ODID_RX_Queue, &Frame, 0)!=pdTRUE) return -1;
+  // Serial.printf("ODID_RX_GetPacket(OGN)\n");
   if(Frame.Kind==ODID_RX_FrameBeacon)
     return ODID_RX_ConvertBeacon(Frame, RxPacket, GeoidSepar) ? 1 : 0;
   if(Frame.Kind==ODID_RX_FrameFrenchID)

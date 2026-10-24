@@ -1103,41 +1103,42 @@ void vTaskPROC(void* pvParameters)
   { vTaskDelay(1);
 
 #ifdef WITH_ODID_RX
-  // OGN_RxPacket<OGN_Packet> RIDPacketOGN;
-  // ADSL_RxPacket RIDPacketADSL;
-  static bool RelayADSL=0;
-  for( ; ; )
-  { if(RelayADSL && Parameters.FreqPlan<=1)
-    { ///
-      uint8_t RxPacketIdx=ADSL_RelayQueue.getNew();      // reserve a slot only for a converted position
-      ADSL_RxPacket *RxPacket=ADSL_RelayQueue[RxPacketIdx];
-      int Ret=ODID_RX_GetPacket(*RxPacket, GPS_GeoidSepar/10);
-      if(Ret<0) break;
-      if(Ret==0) continue;
-      RxPacket->RxProt = LookRxProt_RID;
-      // *RxPacket=RIDPacketADSL;
+    // OGN_RxPacket<OGN_Packet> RIDPacketOGN;
+    // ADSL_RxPacket RIDPacketADSL;
+    static bool RelayADSL=0;
+    for( ; ; )
+    { RelayADSL = !RelayADSL;
+      if(RelayADSL && Parameters.FreqPlan<=1)
+      { ///
+        uint8_t RxPacketIdx=ADSL_RelayQueue.getNew();      // reserve a slot only for a converted position
+        ADSL_RxPacket *RxPacket=ADSL_RelayQueue[RxPacketIdx];
+        int Ret=ODID_RX_GetPacket(*RxPacket, GPS_GeoidSepar/10);
+        if(Ret<0) break;
+        if(Ret==0) continue;
+        RxPacket->RxProt = LookRxProt_RID;
+        // *RxPacket=RIDPacketADSL;
 #ifdef DEBUG_RID
-      Serial.printf("RID ADSL %02X:%06lX #%u %ddBm [%2d]\n",
+        Serial.printf("RID ADSL %02X:%06lX #%u %ddBm [%2d]\n",
                     RxPacket->Packet.getAddrType(), (unsigned long)RxPacket->Packet.getAddress(),
                     RxPacket->RxChan, -((int16_t)RxPacket->RxRSSI)/2, RxPacketIdx);
 #endif
-      ProcessRxADSL(RxPacket, RxPacketIdx, TimeSync_Time(), 1); }
-    else
-    { ///
-      uint8_t RxPacketIdx=OGN_RelayQueue.getNew();      // reserve a slot only for a converted position
-      OGN_RxPacket<OGN_Packet> *RxPacket=OGN_RelayQueue[RxPacketIdx];
-      int Ret=ODID_RX_GetPacket(*RxPacket, GPS_GeoidSepar/10);
-      if(Ret<0) break;
-      if(Ret==0) continue;
-      RxPacket->RxProt = LookRxProt_RID;
-      // *RxPacket=RIDPacketOGN;
+        ProcessRxADSL(RxPacket, RxPacketIdx, TimeSync_Time(), 1); }
+      else
+      { ///
+        uint8_t RxPacketIdx=OGN_RelayQueue.getNew();      // reserve a slot only for a converted position
+        OGN_RxPacket<OGN_Packet> *RxPacket=OGN_RelayQueue[RxPacketIdx];
+        int Ret=ODID_RX_GetPacket(*RxPacket, GPS_GeoidSepar/10);
+        if(Ret<0) break;
+        if(Ret==0) continue;
+        RxPacket->RxProt = LookRxProt_RID;
+        // *RxPacket=RIDPacketOGN;
 #ifdef DEBUG_RID
-      Serial.printf("RID OGN1  %d:%06lX #%u %ddBm [%2d]\n",
+        Serial.printf("RID OGN1  %d:%06lX #%u %ddBm [%2d]\n",
                     RxPacket->Packet.Header.AddrType, (unsigned long)RxPacket->Packet.Header.Address,
                     RxPacket->RxChan, -((int16_t)RxPacket->RxRSSI)/2, RxPacketIdx);
 #endif
-      ProcessRxOGN(RxPacket, RxPacketIdx, TimeSync_Time()); }
-    RelayADSL = !RelayADSL; }
+        ProcessRxOGN(RxPacket, RxPacketIdx, TimeSync_Time()); }
+    }
 #endif
 
     for( ; ; )
