@@ -67,6 +67,9 @@ class __attribute__((packed, aligned(4))) PAW_Packet
      return 3; }                              // OGN-type
 
    bool isPos(void) const { return Sync==0x24; }
+   bool isUplink    (void) const { return Relay!=0; }
+   bool isUplinkOGN (void) const { return Relay==1; }
+   bool isUplinkMLAT(void) const { return Relay==5; }
    // uint32_t getAddress(void) const { return Address>>8; }              // remove the sync '$'
    // void     setAddress(uint32_t Addr) { Address = (Addr<<8) | 0x24; }  // set new address and set the '$' sync char
 
@@ -80,16 +83,23 @@ class __attribute__((packed, aligned(4))) PAW_Packet
    void Read(const uint8_t *Data) { memcpy(Byte, Data, Size); }
 
    int Write(OGN1_Packet &Packet)                          // convert to an OGN packet
-   { Packet.HeaderWord=0;
+   { if(!isPos()) return 0;
+     if(!isUplink() && !isUplinkOGN() && !isUplinkMLAT()) return 0;
+     bool RevCoord = isUplinkMLAT();
+     Packet.HeaderWord=0;
      Packet.Header.Address = Address;
      Packet.Header.AddrType = Address<0xD00000?1:3;        // ICAO or OGN address-type ?
      Packet.calcAddrParity();
-     Packet.Position.AcftType = AcftType;
+     Packet.Position.AcftType = RevCoord?0:AcftType;
      Packet.EncodeAltitude(Altitude);
      Packet.EncodeHeading(Heading*10);
      Packet.EncodeSpeed(((uint32_t)Speed*5270+512)>>10);    // [knot] => [0.1m/s]
-     Packet.EncodeLatitude(600000.0f*Latitude);
-     Packet.EncodeLongitude(600000.0f*Longitude);
+     if(RevCoord)
+     { Packet.EncodeLatitude(600000.0f*Longitude);
+       Packet.EncodeLongitude(600000.0f*Latitude); }
+     else
+     { Packet.EncodeLatitude(600000.0f*Latitude);
+       Packet.EncodeLongitude(600000.0f*Longitude); }
      Packet.Position.FixMode=1;
      Packet.Position.FixQuality=1;
      Packet.EncodeDOP(10);
@@ -116,6 +126,9 @@ class __attribute__((packed, aligned(4))) PAW_Packet
 
    int WriteStxJSON(char *JSON) const
    { int Len=0;
+     if(!isPos()) return Len;
+     if(!isUplink() && !isUplinkOGN() && !isUplinkMLAT()) return Len;
+     bool RevCoord = isUplinkMLAT();
      Len+=Format_String(JSON+Len, "\"addr\":\"");
      Len+=Format_Hex(JSON+Len, (uint8_t) (Address>>16));
      Len+=Format_Hex(JSON+Len, (uint16_t)(Address));
@@ -123,20 +136,27 @@ class __attribute__((packed, aligned(4))) PAW_Packet
      Len+=Format_String(JSON+Len, ",\"addr_type\":");
      JSON[Len++] = HexDigit(getAddrType());
      Len+=Format_String(JSON+Len, ",\"acft_type\":\"");
-     JSON[Len++] = HexDigit(AcftType);
+     JSON[Len++] = HexDigit(RevCoord ? 0:AcftType);
      JSON[Len++]='\"';
      Len+=Format_String(JSON+Len, ",\"acft_cat\":\"");           // GDL90 aircraft category
                           // no-info, glider, tow, heli, parachute, drop-plane, hang-glider, para-glider, powered, jet, gyro, balloon, Zeppelin, UAV, ground vehicle, static } ;
      const uint8_t AcftCat[16] = { 0,      9,   1,    7,        11,          1,          12,          12,       1,   2,   7,      10,       10,  14, 18, 19 } ;
      Len+=Format_Hex(JSON+Len, AcftCat[AcftType]);
      JSON[Len++]='\"';
+
+     Len+=Format_String(JSON+Len, ",\"raw_bytes\":\"");
+     Len+=Format_HexBytes(JSON+Len, Byte, Size);
+     JSON[Len++]='\"';
+
      // uint32_t PosTime=Time; if(nsTime<300000000) PosTime--;
      // Len+=Format_String(JSON+Len, ",\"time\":");
      // Len+=Format_UnsDec(JSON+Len, PosTime);
      // int64_t RxTime=(int64_t)Time-PosTime; RxTime*=1000; RxTime+=nsTime/1000000;
      // Len+=Format_String(JSON+Len, ",\"rx_time\":");
      // Len+=Format_SignDec(JSON+Len, RxTime, 4, 3, 1);
-     Len+=sprintf(JSON+Len, ",\"lat_deg\":%8.7f,\"lon_deg\":%8.7f,\"alt_msl_m\":%d", Latitude, Longitude, Altitude);
+     if(RevCoord) Len+=sprintf(JSON+Len, ",\"lat_deg\":%8.7f,\"lon_deg\":%8.7f", Longitude, Latitude);
+             else Len+=sprintf(JSON+Len, ",\"lat_deg\":%8.7f,\"lon_deg\":%8.7f", Latitude, Longitude);
+     Len+=sprintf(JSON+Len, ",\"alt_msl_m\":%d", Altitude);
      Len+=sprintf(JSON+Len, ",\"track_deg\":%d,\"speed_mps\":%3.1f", Heading, 0.514*Speed);
      return Len; }
 
@@ -186,12 +206,12 @@ class __attribute__((packed, aligned(4))) PAW_Packet
        CRC ^= Packet[Idx];
      return CRC; }
 
-   static uint8_t CRC8(uint8_t *Packet, int Len, uint8_t CRC=0x71)  // external PAW packet checksum with 0x71 seed
+   static uint8_t CRC8(const uint8_t *Packet, int Len, uint8_t CRC=0x71)  // external PAW packet checksum with 0x71 seed
    { for(int Idx=0; Idx<Len; Idx++)
        CRC = CRC8(Packet[Idx], CRC);
      return CRC; }
 
-   uint8_t CRC8(void) { return CRC8(Byte, Size, 0x71); }            // calc. external CRC8 for the packet, Poly = 107
+   uint8_t CRC8(void) const { return CRC8(Byte, Size, 0x71); }            // calc. external CRC8 for the packet, Poly = 107
 
 // #define WITH_CRC8_TABLE
 #ifdef WITH_CRC8_TABLE      // CRC8 with a lookup table: probably faster

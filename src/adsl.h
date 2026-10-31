@@ -337,8 +337,15 @@ class __attribute__((packed, aligned(4))) ADSL_Packet
      Len+=Format_HHMMSS(Msg+Len, Time);
      Msg[Len++] = 'h';
      if(isTelemetry())
-     { Msg[Len++]=' ';
-       Len+=Print(Msg+Len);
+     { if(Telemetry.Header.TelemType==0)
+         Len+=PrintTelemetry(Msg+Len);
+       else if(Telemetry.Header.TelemType==1)
+         Len+=PrintInfo(Msg+Len);
+       else if(Telemetry.Header.TelemType==2)
+         Len+=PrintFlight(Msg+Len, Time);
+       else if(Telemetry.Header.TelemType==3)
+         Len+=PrintGNSS(Msg+Len);
+       Msg[Len]=0;
        return Len; }
      if(!isPos) return 0;
 
@@ -1183,10 +1190,7 @@ class __attribute__((packed, aligned(4))) ADSL_RxPacket
    union
    { uint16_t State;         // state bits and small values
      struct __attribute__((packed))
-     { // bool Saved   :1;   // has been already saved in internal storage
-       // bool Ready   :1;   // is ready for transmission
-       // bool Sent    :1;   // has already been transmitted out
-       bool Alloc   :1;   // allocated in a queue or list
+     { bool Alloc   :1;   // allocated in a queue or list
        bool Correct :1;   // correctly received or corrected by FEC
        uint8_t Warn :2;   // LookOut warning level
        uint8_t RxErr:4;   // number of bit errors corrected upon reception
@@ -1194,8 +1198,8 @@ class __attribute__((packed, aligned(4))) ADSL_RxPacket
      } ;
    } ;
 
-   uint8_t RxChan;        // RF channel where the packet was received
-   uint8_t RxRSSI;        // [-0.5dBm]
+   uint8_t  RxChan;        // RF channel where the packet was received
+   uint8_t  RxRSSI;        // [-0.5dBm]
 
    int16_t LatDist;       // [m] distance along the latitude
    int16_t LonDist;       // [m] distance along the longitude

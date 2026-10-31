@@ -66,6 +66,10 @@ esp_err_t ReadFromNVS(void *Blob, size_t BlobSize, const char *Name, const char 
 #include "heltec-lora32-pins.h"
 #endif
 
+#ifdef WITH_HELTEC
+#include "heltec-pins.h"
+#endif
+
 #ifdef WITH_TBEAM07
 #include "t-beam-v07-pins.h"
 #endif
