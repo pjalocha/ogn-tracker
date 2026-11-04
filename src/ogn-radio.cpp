@@ -1598,8 +1598,8 @@ void Radio_Task(void *Parms)
     else                                                                   // US/Canda/Australia/South America
     { Odd = Count1s(TimeRef.UTC);
       TxPwr+=13; TxPkt=OGN_Pkt;
-      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
-         else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
+      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR_ADSL; }
+         else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
     }
 
     msTime = TimeRef.getFracTime(millis());
@@ -1653,8 +1653,8 @@ void Radio_Task(void *Parms)
     else
     { Odd = !Odd;
       TxPwr+=13; TxPkt=OGN_Pkt;
-      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR; }
-         else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN; }
+      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR_ADL; }
+         else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
     }
 
          if(SlotLen<(WANnearRx ? 20 : 100)) SlotLen=WANnearRx ? 20 : 100;
