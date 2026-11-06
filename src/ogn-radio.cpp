@@ -401,7 +401,7 @@ static int Radio_SysSYNC(const uint8_t * &SYNC, uint8_t &PktLen, uint8_t SysID)
   { PktLen=24;                                                    // SX1276 HDR: fixed 24-byte ADS-L packet
     if(SyncLen<3) SyncLen=3; }                                    // fixed mode includes the 0x18 byte in SYNC
 #endif
-  return SyncLen; }
+  return SyncLen; }                                               // [bytes] Sync length
 
 // =======================================================================================================
 // Errors:
