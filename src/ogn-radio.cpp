@@ -1653,7 +1653,7 @@ void Radio_Task(void *Parms)
     else
     { Odd = !Odd;
       TxPwr+=13; TxPkt=OGN_Pkt;
-      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR_ADL; }
+      if(Odd) { TxChan=FLR_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_FLR_ADSL; }
          else { TxChan=OGN_Chan; TxProt=Radio_SysID_OGN; RxProt=Radio_SysID_OGN_ADSL; }
     }
 
