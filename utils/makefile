@@ -1,4 +1,4 @@
-all:		serial_dump read_log tlg2aprs aprs2igc syslog_read
+all:		serial_dump read_log tlg2aprs aprs2igc aprs2gpx syslog_read
 
 serial_dump:	serial_dump.cc
 	g++ -Wall -Wno-misleading-indentation -I../src -O2 -o serial_dump serial_dump.cc ../src/format.cpp
@@ -12,6 +12,9 @@ tlg2aprs:	tlg2aprs.cc
 aprs2igc:	aprs2igc.cc
 	g++ -Wall -Wno-misleading-indentation -O2 -o aprs2igc -I../src aprs2igc.cc ../src/format.cpp ../src/ognconv.cpp
 
+aprs2gpx:	aprs2gpx.cc
+	g++ -Wall -Wno-misleading-indentation -O2 -o aprs2gpx aprs2gpx.cc
+
 ttn-reg:	ttn-reg.cc
 	g++ -std=c++11 -Wall -O2 -o ttn-reg -I../src/ ttn-reg.cc -ljpeg -ldl
 
@@ -23,4 +26,4 @@ syslog_read:	syslog_read.cc
              ../src/format.cpp ../src/ognconv.cpp ../src/intmath.cpp ../src/crc1021.cpp ../src/ldpc.cpp ../src/bitcount.cpp
 
 clean:
-	rm serial_dump read_log aprs2igc syslog_read
+	rm serial_dump read_log aprs2igc aprs2gpx syslog_read
